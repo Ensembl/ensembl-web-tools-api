@@ -1,0 +1,20 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: ensembl-tools-api-deployment
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ensembl-tools-api
+    spec:
+      imagePullSecrets:
+        - name: ensemblweb-pull-secret
+      containers:
+      - name: ensembl-tools-api
+        image: <DOCKER_IMAGE>
+        command: ["uvicorn", "app.main:app", "--proxy-headers", "--host", "0.0.0.0", "--port", "8013"]
+        ports:
+          - containerPort: 8013
+        imagePullPolicy: Always

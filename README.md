@@ -26,4 +26,4 @@ See the documentation for usage: `http://localhost/docs`
 
 ### Deployment
 
-The `k8s` directory includes service/ingress templates for intergration to Ensembl 2020 client and Kustomize templates for deployment in GitLab CI/CD pipeline.
+The service/ingress templates in `k8s` directory root are stored in `ensembl-k8s-manifests` repo and used for integration to Ensembl 2020 review apps CI/CD pipeline in `ensembl-client` repo. Rest of the configuration files (in `base` and `overlays` subdirs) are used to deploy updates in Tools API (see `.gitlab-ci.yml`).

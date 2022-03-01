@@ -3,4 +3,3 @@ kind: Kustomization
 namespace: ensembl-stage
 bases:
   - ../../base
-  - ingress.yaml

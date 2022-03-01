@@ -3,4 +3,3 @@ kind: Kustomization
 namespace: ensembl-prod
 resources:
   - ../../base
-  - ingress.yaml

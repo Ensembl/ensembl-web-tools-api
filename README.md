@@ -26,4 +26,4 @@ See the documentation for usage: `http://localhost/docs`
 
 ### Deployment
 
-The service/ingress templates in `k8s` directory root are stored in `ensembl-k8s-manifests` repo and used for integration to Ensembl 2020 review apps CI/CD pipeline in `ensembl-client` repo. Rest of the configuration files (in `base` and `overlays` subdirs) are used to deploy updates in Tools API (see `.gitlab-ci.yml`).
+The service/ingress templates in `k8s` directory root are stored in `ensembl-k8s-manifests` repo and used for integration to Ensembl 2020 review apps CI/CD pipeline in `ensembl-client` repo. Rest of the configuration files (in `base` and `overlays` subdirs) are used to deploy updates in Tools API (see `.gitlab-ci.yml`; ingress applied manually).

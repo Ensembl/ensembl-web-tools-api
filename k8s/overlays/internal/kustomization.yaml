@@ -3,12 +3,4 @@ kind: Kustomization
 namespace: ensembl-internal
 resources:
   - ../../base
-  - ../../base/ingress.yaml
-patches:
-  - target:
-      kind: Ingress
-      name: ensembl-tools-api-ingress
-    patch: |-
-      - op: replace
-        path: /spec/rules/0/host
-        value: internal-2020.ensembl.org
+  - ingress.yaml

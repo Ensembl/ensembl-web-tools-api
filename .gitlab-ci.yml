@@ -73,7 +73,6 @@ Dev:HX:
     - cd k8s/overlays/development
   only:
     - main
-  when: manual
 
 Staging:HX:
   extends: .deploy
@@ -83,7 +82,6 @@ Staging:HX:
     - cd k8s/overlays/staging
   only:
     - main
-  when: manual
 
 Staging:HL:
   extends: .deploy
@@ -93,7 +91,6 @@ Staging:HL:
     - cd k8s/overlays/staging
   only:
     - main
-  when: manual
 
 Internal:HX:
   extends: .deploy
@@ -103,7 +100,6 @@ Internal:HX:
     - cd k8s/overlays/internal
   only:
     - main
-  when: manual
 
 Internal:HL:
   extends: .deploy
@@ -113,7 +109,6 @@ Internal:HL:
     - cd k8s/overlays/internal
   only:
     - main
-  when: manual
 
 Production:HX:
   extends: .deploy
@@ -123,8 +118,6 @@ Production:HX:
     - cd k8s/overlays/production
   only:
     - main
-  when: manual
-
 Production:HL:
   extends: .deploy
   environment:
@@ -133,4 +126,3 @@ Production:HL:
     - cd k8s/overlays/production
   only:
     - main
-  when: manual

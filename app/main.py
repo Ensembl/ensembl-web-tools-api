@@ -18,7 +18,7 @@ async def shutdown_event():
   await app.client_session.close()
 
 # Endpoint for serving the BLAST config
-@app.get('/tools/blast/config')
+@app.get('/blast/config')
 async def serve_config():
   with open('data/blast_config.json') as f:
    config = json.load(f)
@@ -59,11 +59,11 @@ class BlastJob(BaseModel):
   parameters: BlastParams
 
 # Endpoint for submitting a BLAST job to jDispatcher
-@app.post('/tools/blast/job')
+@app.post('/blast/job')
 async def run_blast(incoming: BlastJob, response: Response):
   payload = jsonable_encoder(incoming)
   # Map db/species to index file
-  dbroot = '/hps/nobackup2/production/ensembl/ensembl2020/tools/blast/e104'
+  dbroot = 'ensembl/ensembl2020/tools/blast/e104'
   dbfile = f"{dbroot}/{payload['genomeIds'][0]}/{payload['parameters']['database']}" #uses prevalidated data
   payload['parameters']['database'] = dbfile
   payload['parameters']['sequence'] = payload['querySequences'][0]  
@@ -75,10 +75,10 @@ async def run_blast(incoming: BlastJob, response: Response):
       return {'jobIds': [content]}
     else:
       response.status_code = resp.status
-      return content
+      return {'message': content}
 
 # General proxy for jDispatcher Blast REST API endpoints
-@app.get("/tools/blast/{path:path}")
+@app.get("/blast/{path:path}")
 async def blast_proxy(path: str, response: Response):
   url = f"https://www.ebi.ac.uk/Tools/services/rest/ncbiblast/{path}"
   async with app.client_session.get(url) as resp:

@@ -59,10 +59,8 @@ Review:HX:
     - kustomize edit set label environment:${CI_COMMIT_REF_SLUG}
     - kustomize edit set namesuffix ${CI_COMMIT_REF_SLUG}
     - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
-
   except:
     - main
-    - master
 
 # Deploy main branch to dev, staging, internal, live
 Dev:HX:
@@ -118,6 +116,7 @@ Production:HX:
     - cd k8s/overlays/production
   only:
     - main
+
 Production:HL:
   extends: .deploy
   environment:

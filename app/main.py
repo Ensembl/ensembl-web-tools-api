@@ -62,9 +62,12 @@ class BlastJob(BaseModel):
 @app.post('/blast/job')
 async def run_blast(incoming: BlastJob, response: Response):
   payload = jsonable_encoder(incoming)
-  # Map db/species to index file
+  # Infer target db filepath from prevalidated input
   dbroot = 'ensembl/ensembl2020/tools/blast/e104'
-  dbfile = f"{dbroot}/{payload['genomeIds'][0]}/{payload['parameters']['database']}" #uses prevalidated data
+  genomeid = payload['genomeIds'][0]
+  dbtype = payload['parameters']['database']
+  suffix = f'{dbtype}.toplevel.fa' if dbtype == 'dna' else f'{dbtype}.all.fa'
+  dbfile = f'{dbroot}/{genomeid}/{dbtype}/{genomeid}.{suffix}'
   payload['parameters']['database'] = dbfile
   payload['parameters']['sequence'] = payload['querySequences'][0]  
   # Submit the job

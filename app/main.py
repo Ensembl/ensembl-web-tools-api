@@ -1,10 +1,9 @@
 from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel
+from pydantic import BaseModel, Extra
 from enum import Enum
 import json
 from aiohttp import ClientSession
-
 
 app = FastAPI()
 
@@ -47,7 +46,7 @@ class GenomeId(str, Enum):
   wheat = 'triticum_aestivum_GCA_900519105_1'
   human38 = 'homo_sapiens_GCA_000001405_28'
 
-class BlastParams(BaseModel):
+class BlastParams(BaseModel, extra=Extra.allow):
   email: str | None = 'blast2020@ebi.ac.uk'
   title: str | None = ''
   program: Program
@@ -63,15 +62,14 @@ class BlastJob(BaseModel):
 async def run_blast(incoming: BlastJob, response: Response):
   payload = jsonable_encoder(incoming)
   # Infer target db filepath from prevalidated input
-  dbroot = 'ensembl/ensembl2020/tools/blast/e104'
   genomeid = payload['genomeIds'][0]
   dbtype = payload['parameters']['database']
-  suffix = f'{dbtype}.toplevel.fa' if dbtype == 'dna' else f'{dbtype}.all.fa'
-  dbfile = f'{dbroot}/{genomeid}/{dbtype}/{genomeid}.{suffix}'
+  suffix = f'{dbtype}.toplevel' if dbtype == 'dna' else f'{dbtype}.all'
+  dbfile = f'ensembl/{genomeid}/{dbtype}/{genomeid}.{suffix}'
   payload['parameters']['database'] = dbfile
-  payload['parameters']['sequence'] = payload['querySequences'][0]  
+  payload['parameters']['sequence'] = payload['querySequences'][0]
   # Submit the job
-  url = 'https://www.ebi.ac.uk/Tools/services/rest/ncbiblast/run'
+  url = 'http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/run'
   async with app.client_session.post(url, data = payload['parameters']) as resp:
     content = await resp.text()
     if resp.status == 200:
@@ -83,7 +81,7 @@ async def run_blast(incoming: BlastJob, response: Response):
 # General proxy for jDispatcher Blast REST API endpoints
 @app.get("/blast/{path:path}")
 async def blast_proxy(path: str, response: Response):
-  url = f"https://www.ebi.ac.uk/Tools/services/rest/ncbiblast/{path}"
+  url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/{path}"
   async with app.client_session.get(url) as resp:
     response.status_code = resp.status
     return await resp.text()

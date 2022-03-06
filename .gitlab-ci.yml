@@ -41,6 +41,7 @@ Test:
     - pip install fastapi
     - pip install pytest
     - pip install requests
+    - pip install aiohttp
   script:
     - pytest --junitxml=report.xml
   artifacts:

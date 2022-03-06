@@ -37,8 +37,10 @@ stages:
 Test:
   stage: test
   image: python:3.10
-  script:
+  before_script:
+    - pip install fastapi
     - pip install pytest
+  script:
     - pytest
 
 # Build the docker image

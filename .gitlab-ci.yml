@@ -40,8 +40,13 @@ Test:
   before_script:
     - pip install fastapi
     - pip install pytest
+    - pip install requests
   script:
-    - pytest
+    - pytest --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
 
 # Build the docker image
 Docker:

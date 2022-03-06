@@ -57,20 +57,24 @@ class BlastJob(BaseModel):
   querySequences: list[str]
   parameters: BlastParams
 
-# Endpoint for submitting a BLAST job to jDispatcher
-@app.post('/blast/job')
-async def run_blast(incoming: BlastJob, response: Response):
-  payload = jsonable_encoder(incoming)
-  # Infer target db filepath from prevalidated input
+# Process job submission payload
+def process_job_payload(payload):
+  # Payload validated by BlastJob datamodel
   genomeid = payload['genomeIds'][0]
   dbtype = payload['parameters']['database']
   suffix = f'{dbtype}.toplevel' if dbtype == 'dna' else f'{dbtype}.all'
+  # Infer target db filepath
   dbfile = f'ensembl/{genomeid}/{dbtype}/{genomeid}.{suffix}'
   payload['parameters']['database'] = dbfile
   payload['parameters']['sequence'] = payload['querySequences'][0]
-  # Submit the job
+  return payload['parameters']
+
+# Endpoint for submitting a BLAST job to jDispatcher
+@app.post('/blast/job')
+async def run_blast(incoming: BlastJob, response: Response):
+  outgoing = process_job_payload(jsonable_encoder(incoming))
   url = 'http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/run'
-  async with app.client_session.post(url, data = payload['parameters']) as resp:
+  async with app.client_session.post(url, data = outgoing) as resp:
     content = await resp.text()
     if resp.status == 200:
       return {'jobIds': [content]}
@@ -78,11 +82,11 @@ async def run_blast(incoming: BlastJob, response: Response):
       response.status_code = resp.status
       return {'message': content}
 
-# General proxy for jDispatcher Blast REST API endpoints
+# General proxy for jDispatcher BLAST REST API endpoints
 @app.get("/blast/{path:path}")
 async def blast_proxy(path: str, response: Response):
   url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/{path}"
-  async with app.client_session.get(url) as resp:
+  async with app.client_session.get(url, headers = {'Accept': 'application/json'}) as resp:
     response.status_code = resp.status
     return await resp.text()
 

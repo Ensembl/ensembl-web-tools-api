@@ -19,11 +19,30 @@ variables:
   DOCKER_IMAGE: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}
 
 stages:
+  - test
   - build
   - deploy
 
-# Template to build the docker image
-.build:
+# Deployment template
+.deploy:
+  stage: deploy
+  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:0.4
+  before_script:
+    - cd k8s/base
+  script:
+    - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
+    - kustomize build . | kubectl apply -f -
+
+# Run Tests
+Test:
+  stage: test
+  image: python:3.10
+  script:
+    - pip install pytest
+    - pytest
+
+# Build the docker image
+Docker:
   stage: build
   image: docker
   services:
@@ -36,20 +55,7 @@ stages:
     - docker rmi ${DOCKER_IMAGE}
     - docker logout $CI_REGISTRY
 
-.deploy:
-  stage: deploy
-  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:0.4
-  before_script:
-    - cd k8s/base
-
-  script:
-    - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
-    - kustomize build . | kubectl apply -f -
-
-Docker:
-  extends: .build
-
-# Template to deploy review apps with kustomize
+# Deploy review app from feature branch
 Review:HX:
   extends: .deploy
   environment:

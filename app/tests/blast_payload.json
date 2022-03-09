@@ -1,11 +1,10 @@
 {
-"genomeIds": ["caenorhabditis_elegans_GCA_000002985_3"],
-"querySequences": ["MPIGSKERPTFFEIFKTRCNKADLGPISLNWFEELSS"],
+"genomeIds": ["caenorhabditis_elegans_GCA_000002985_3", "plasmodium_falciparum_GCA_000002765_2"],
+"querySequences": ["MPIGSKERPTFFEIFKTRCNKADLGPISLNWFEELSS", "MPIGSKERPTFKTRCNKADLGPI"],
 "parameters":
 	{
 		"stype": "protein",
 		"program": "blastp",
-		"sequence": "MPIGSKERPTFFEIFKTRCNKADLGPISLNWFEELSS",
 		"alignments": "150",
 		"dropoff": "0",
 		"exp": "100",

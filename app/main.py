@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Extra
-from enum import Enum
-import json
 from aiohttp import ClientSession
+from enum import Enum
+import asyncio
+import secrets
+import json
 
 app = FastAPI()
 
@@ -57,30 +59,37 @@ class BlastJob(BaseModel):
   querySequences: list[str]
   parameters: BlastParams
 
-# Process job submission payload
-def process_job_payload(payload):
-  # Payload validated by BlastJob datamodel
-  genomeid = payload['genomeIds'][0]
+# Process BLAST job submission payload
+def process_blast_payload(payload):
+  # Input payload conforms to BlastJob datamodel
   dbtype = payload['parameters']['database']
   suffix = f'{dbtype}.toplevel' if dbtype == 'dna' else f'{dbtype}.all'
-  # Infer target db filepath
-  dbfile = f'ensembl/{genomeid}/{dbtype}/{genomeid}.{suffix}'
-  payload['parameters']['database'] = dbfile
-  payload['parameters']['sequence'] = payload['querySequences'][0]
-  return payload['parameters']
+  dbfiles = []
+  # Infer filepaths for target databases
+  for genomeid in payload['genomeIds']:
+    dbfiles.append(f'ensembl/{genomeid}/{dbtype}/{genomeid}.{suffix}')
+  payload['parameters']['database'] = dbfiles
+  return (payload['parameters'], payload['querySequences'])
+
+async def run_blast(query_seq, params):
+  params['sequence'] = query_seq
+  url = 'http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/run'
+  async with app.client_session.post(url, data = params) as resp:
+    content = await resp.text()
+    if resp.status == 200:
+      return {'jobId': content}
+    else:
+      return {'error': content}
 
 # Endpoint for submitting a BLAST job to jDispatcher
 @app.post('/blast/job')
-async def run_blast(incoming: BlastJob, response: Response):
-  outgoing = process_job_payload(jsonable_encoder(incoming))
-  url = 'http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/run'
-  async with app.client_session.post(url, data = outgoing) as resp:
-    content = await resp.text()
-    if resp.status == 200:
-      return {'jobIds': [content]}
-    else:
-      response.status_code = resp.status
-      return {'message': content}
+async def submit_blast(payload: BlastJob):
+  params, sequences = process_blast_payload(jsonable_encoder(payload))
+  # Submit concurrent BLAST jobs (one for each query sequence)
+  blast_tasks = [run_blast(seq, params) for seq in sequences]
+  jobs = await asyncio.gather(*blast_tasks)
+  return {'submissionId': secrets.token_urlsafe(16), 'jobs': jobs}
+  
 
 # General proxy for jDispatcher BLAST REST API endpoints
 @app.get("/blast/{path:path}")
@@ -89,4 +98,3 @@ async def blast_proxy(path: str, response: Response):
   async with app.client_session.get(url, headers = {'Accept': 'application/json'}) as resp:
     response.status_code = resp.status
     return await resp.text()
-

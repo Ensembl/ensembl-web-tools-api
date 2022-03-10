@@ -1,4 +1,3 @@
-from typing import Tuple
 from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError

@@ -44,7 +44,7 @@ Test:
     - pip install aiohttp
   script:
     - pytest --cov --junitxml=report.xml
-  coverage: '/TOTAL:.+/'
+  coverage: '/^TOTAL.+?(\d+\%)$/'
   artifacts:
     when: always
     reports:

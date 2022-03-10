@@ -1,0 +1,19 @@
+{
+"genomeIds": ["caenorhabditis_elegans_GCA_000002985_3"],
+"querySequences": ["MPIGSKERPTFFEIFKTRCNKADLGPISLNWFEELSS"],
+"parameters":
+	{
+		"stype": "protein",
+		"program": "blastp",
+		"alignments": "150",
+		"dropoff": "0",
+		"exp": "100",
+		"filter": "T",
+		"gapalign": "1",
+		"gapext": "2",
+		"gapopen": "5",
+		"match_scores": "1,-3",
+		"scores": "50",
+		"database": "pep"
+	}
+}

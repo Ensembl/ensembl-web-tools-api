@@ -6,7 +6,7 @@ A FastAPI app providing the tools backend microservice for Ensembl 2020 client.
 
 - `/api/tools/blast/config`
 - `/api/tools/blast/job`
-- `/api/tools/blast/jobs/:api_path` (e.g. `jobs/status/:id`, see [API docs]('https://www.ebi.ac.uk/Tools/common/tools/help/index.html?tool=ncbiblast') for details)
+- `/api/tools/blast/jobs/:api_path` (e.g. `jobs/status/:id`, see [API docs](https://www.ebi.ac.uk/Tools/common/tools/help/index.html?tool=ncbiblast) for details)
 
 ### Setup
 

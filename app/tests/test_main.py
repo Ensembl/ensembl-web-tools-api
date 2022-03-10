@@ -48,7 +48,9 @@ def test_blast_job_data_error(blast_payload):
 		del blast_payload['querySequences']
 		response = client.post('/blast/job', json=blast_payload)
 		assert response.status_code == 422
-		assert 'detail' in response.json()
+		resp = response.json()
+		assert 'error' in resp
+		assert 'validation error' in resp['error']
 
 # Test job submission with jDispatcher error
 def test_blast_job_jd_error(blast_payload):
@@ -62,13 +64,20 @@ def test_blast_job_jd_error(blast_payload):
 # Test jDispatcher BLAST proxy endpoint
 def test_blast_proxy_success():
 	with TestClient(app) as client:
-		response = client.get('/blast/parameters')
+		response = client.get('/blast/jobs/parameters')
 		assert response.status_code == 200
 		assert 'parameters' in response.json()
 
 # Test JD proxy error response
 def test_blast_proxy_error():
 	with TestClient(app) as client:
+		response = client.get('/blast/jobs/status/invalid-id')
+		assert response.status_code == 406
+		assert 'error' in response.json()
+
+# Test invalid endpoint error response
+def test_404_error():
+	with TestClient(app) as client:
 		response = client.get('/blast/invalid_path')
 		assert response.status_code == 404
-		assert 'error' in response.json()
+		assert response.json() == {'error': 'Invalid endpoint'}

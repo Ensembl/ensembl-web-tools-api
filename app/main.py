@@ -1,11 +1,15 @@
+from typing import Tuple
 from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Extra
 from aiohttp import ClientSession
 from enum import Enum
 import asyncio
 import secrets
 import json
+import re
 
 app = FastAPI()
 
@@ -18,9 +22,19 @@ async def startup_event():
 async def shutdown_event():
   await app.client_session.close()
 
+# Override response for input payload validation error
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exception):
+  return JSONResponse(content={'error': str(exception)}, status_code=422)
+
+# Override 404 response
+@app.exception_handler(404)
+async def invalid_path_handler(request, exception):
+  return JSONResponse(content={'error': 'Invalid endpoint'}, status_code=404)
+
 # Endpoint for serving the BLAST config
 @app.get('/blast/config')
-async def serve_config():
+async def serve_config() -> dict:
   with open('data/blast_config.json') as f:
    config = json.load(f)
   return config
@@ -60,7 +74,7 @@ class BlastJob(BaseModel):
   parameters: BlastParams
 
 # Process BLAST job submission payload
-def process_blast_payload(payload):
+def process_blast_payload(payload) -> tuple([dict, list]):
   # Input payload conforms to BlastJob datamodel
   dbtype = payload['parameters']['database']
   suffix = f'{dbtype}.toplevel' if dbtype == 'dna' else f'{dbtype}.all'
@@ -71,7 +85,7 @@ def process_blast_payload(payload):
   payload['parameters']['database'] = dbfiles
   return (payload['parameters'], payload['querySequences'])
 
-async def run_blast(query_seq, params):
+async def run_blast(query_seq, params) -> dict:
   params['sequence'] = query_seq
   url = 'http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/run'
   async with app.client_session.post(url, data = params) as resp:
@@ -79,11 +93,13 @@ async def run_blast(query_seq, params):
     if resp.status == 200:
       return {'jobId': content}
     else:
+      # Strip xhtml tags from the response message
+      content = re.sub('<.*?>', '', content)
       return {'error': content}
 
 # Endpoint for submitting a BLAST job to jDispatcher
 @app.post('/blast/job')
-async def submit_blast(payload: BlastJob):
+async def submit_blast(payload: BlastJob) -> dict:
   params, sequences = process_blast_payload(jsonable_encoder(payload))
   # Submit concurrent BLAST jobs (one for each query sequence)
   blast_tasks = [run_blast(seq, params) for seq in sequences]
@@ -92,8 +108,8 @@ async def submit_blast(payload: BlastJob):
   
 
 # General proxy for jDispatcher BLAST REST API endpoints
-@app.get("/blast/{path:path}")
-async def blast_proxy(path: str, response: Response):
+@app.get("/blast/jobs/{path:path}")
+async def blast_proxy(path: str, response: Response) -> dict:
   url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/{path}"
   async with app.client_session.get(url, headers = {'Accept': 'application/json'}) as resp:
     response.status_code = resp.status
@@ -101,6 +117,8 @@ async def blast_proxy(path: str, response: Response):
     if resp.status == 200:
       return content
     else:
-      if not content:
+      if content:
+        content = re.sub('<.*?>', '', content)
+      else:
         content = f"Invalid JD endpoint: {path}"
       return {'error': content}

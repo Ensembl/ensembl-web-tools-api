@@ -39,11 +39,12 @@ Test:
   image: python:3.10
   before_script:
     - pip install fastapi
-    - pip install pytest
+    - pip install pytest-cov
     - pip install requests
     - pip install aiohttp
   script:
-    - pytest --junitxml=report.xml
+    - pytest --cov --junitxml=report.xml
+  coverage: '/TOTAL:.+ \d+%/'
   artifacts:
     when: always
     reports:

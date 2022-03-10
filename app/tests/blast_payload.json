@@ -1,6 +1,6 @@
 {
-"genomeIds": ["caenorhabditis_elegans_GCA_000002985_3", "plasmodium_falciparum_GCA_000002765_2"],
-"querySequences": ["MPIGSKERPTFFEIFKTRCNKADLGPISLNWFEELSS", "MPIGSKERPTFKTRCNKADLGPI"],
+"genomeIds": ["caenorhabditis_elegans_GCA_000002985_3"],
+"querySequences": ["MPIGSKERPTFFEIFKTRCNKADLGPISLNWFEELSS"],
 "parameters":
 	{
 		"stype": "protein",

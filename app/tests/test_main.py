@@ -13,7 +13,7 @@ def test_read_config():
 	assert response.status_code == 200
 	assert response.json() == config
 
-# Load example job payload
+# Load example BLAST job payload
 @pytest.fixture
 def blast_payload():
 	with open('app/tests/blast_payload.json') as f:
@@ -30,6 +30,9 @@ def test_process_blast_payload(blast_payload):
 # Test job submission with correct payload
 def test_blast_job(blast_payload):
 	with TestClient(app) as client: #include @startup hook
+		# Add data for multi-job submission
+		blast_payload['genomeIds'].append('plasmodium_falciparum_GCA_000002765_2')
+		blast_payload['querySequences'].append('MPIGSKERPTFKTRCNKADLGPI')
 		response = client.post('/blast/job', json=blast_payload)
 		assert response.status_code == 200
 		resp = response.json()
@@ -56,9 +59,16 @@ def test_blast_job_jd_error(blast_payload):
 		assert response.status_code == 200
 		assert 'error' in response.json()['jobs'][0]
 
-# Test jDispatcher proxy endpoint
-def test_blast_proxy():
+# Test jDispatcher BLAST proxy endpoint
+def test_blast_proxy_success():
 	with TestClient(app) as client:
 		response = client.get('/blast/parameters')
 		assert response.status_code == 200
 		assert 'parameters' in response.json()
+
+# Test JD proxy error response
+def test_blast_proxy_error():
+	with TestClient(app) as client:
+		response = client.get('/blast/invalid_path')
+		assert response.status_code == 404
+		assert 'error' in response.json()

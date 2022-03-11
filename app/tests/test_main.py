@@ -64,15 +64,15 @@ def test_blast_job_jd_error(blast_payload):
 # Test jDispatcher BLAST proxy endpoint
 def test_blast_proxy_success():
 	with TestClient(app) as client:
-		response = client.get('/blast/jobs/parameters')
+		response = client.get('/blast/jobs/status/jobid')
 		assert response.status_code == 200
-		assert 'parameters' in response.json()
+		assert 'status' in response.json()
 
 # Test JD proxy error response
 def test_blast_proxy_error():
 	with TestClient(app) as client:
-		response = client.get('/blast/jobs/status/invalid-id')
-		assert response.status_code == 406
+		response = client.get('/blast/jobs/na/na')
+		assert response.status_code == 404
 		assert 'error' in response.json()
 
 # Test invalid endpoint error response

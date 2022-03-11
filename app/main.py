@@ -93,7 +93,7 @@ async def run_blast(query_seq, params) -> dict:
       return {'jobId': content}
     else:
       # Strip xhtml tags from the response message
-      content = re.sub('<.*?>', '', content)
+      content = re.sub('<.*?>|\n+', '', content)
       return {'error': content}
 
 # Endpoint for submitting a BLAST job to jDispatcher
@@ -106,18 +106,17 @@ async def submit_blast(payload: BlastJob) -> dict:
   return {'submissionId': secrets.token_urlsafe(16), 'jobs': jobs}
   
 
-# General proxy for jDispatcher BLAST REST API endpoints
-@app.get("/blast/jobs/{path:path}")
-async def blast_proxy(path: str, response: Response) -> dict:
-  url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/{path}"
-  async with app.client_session.get(url, headers = {'Accept': 'application/json'}) as resp:
+# Proxy for JD BLAST REST API endpoints (/status/:id, /result/:id/:type)
+@app.get("/blast/jobs/{action}/{params:path}")
+async def blast_proxy(action: str, params: str, response: Response) -> dict:
+  url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/{action}/{params}"
+  async with app.client_session.get(url) as resp:
     response.status_code = resp.status
     content = await resp.text()
+    content = re.sub('<.*?>|\n+', '', content)
     if resp.status == 200:
-      return content
+      return {action: content}
     else:
-      if content:
-        content = re.sub('<.*?>', '', content)
-      else:
-        content = f"Invalid JD endpoint: {path}"
+      if not content:
+        content = f"Invalid JD endpoint: /{action}/{params}"
       return {'error': content}

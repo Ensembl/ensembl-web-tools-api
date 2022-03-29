@@ -130,6 +130,7 @@ Production:HX:
     - cd k8s/overlays/production
   only:
     - main
+  when: manual
 
 Production:HL:
   extends: .deploy
@@ -139,3 +140,4 @@ Production:HL:
     - cd k8s/overlays/production
   only:
     - main
+  when: manual

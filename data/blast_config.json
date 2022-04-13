@@ -708,7 +708,7 @@
     "database": "dna"
   },
   "presets": {
-    "label": "Search sensitivity",
+    "label": "Sensitivity",
     "defaultPreset": "normal",
     "options": [
       {

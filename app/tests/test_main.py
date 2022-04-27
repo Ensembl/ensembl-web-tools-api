@@ -88,12 +88,24 @@ def test_blast_job_jd_error(blast_payload):
 		assert 'genome_id' in job
 		assert 'error' in job
 
-# Test jDispatcher BLAST proxy endpoint
-def test_blast_proxy_success():
+# Test BLAST job status endpoint
+def test_blast_job_status():
 	with TestClient(app) as client:
 		response = client.get('/blast/jobs/status/ncbiblast-12345')
 		assert response.status_code == 200
-		assert response.json() == {'status': 'NOT_FOUND'}
+		assert 'status' in response.json()
+
+# Test multiple jobs status endpoint
+def test_blast_job_statuses():
+	with TestClient(app) as client:
+		job_ids = {'job_ids': ['ncbiblast-1234', 'ncbiblast-5678']}
+		response = client.post('/blast/jobs/status', json=job_ids)
+		assert response.status_code == 200
+		resp = response.json()
+		assert 'statuses' in resp
+		assert len(resp['statuses']) == 2
+		assert 'job_id' in resp['statuses'][0]
+		assert 'status' in resp['statuses'][0]
 
 # Test JD proxy error response
 def test_blast_proxy_error():

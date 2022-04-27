@@ -77,6 +77,9 @@ class BlastJob(BaseModel):
   query_sequences: list[QuerySequence]
   parameters: BlastParams
 
+class JobIDs(BaseModel):
+  job_ids: list[str]
+
 # Infer the target species index file for BLAST payload
 def get_blast_filename(genome_id: str, db_type: str) -> str:
   suffix = f'{db_type}.toplevel' if db_type == 'dna' else f'{db_type}.all'
@@ -108,14 +111,28 @@ async def submit_blast(payload: BlastJob) -> dict:
       blast_jobs.append(run_blast(query, payload['parameters'], genome_id, db_type))
   job_results = await asyncio.gather(*blast_jobs)
   return {'submission_id': secrets.token_urlsafe(16), 'jobs': job_results}
-  
+
+# Endpoint for querying a job status
+@app.get("/blast/jobs/status/{job_id}")
+async def blast_job_status(job_id: str) -> dict:
+  resp = await blast_proxy('status', job_id)
+  resp['job_id'] = job_id
+  return resp
+
+# Endpoint for querying multiple job statuses
+@app.post("/blast/jobs/status")
+async def blast_job_statuses(payload: JobIDs) -> dict:
+  payload = jsonable_encoder(payload)
+  status_requests = [blast_job_status(job_id) for job_id in payload['job_ids']]
+  statuses = await asyncio.gather(*status_requests)
+  return {'statuses': statuses}
 
 # Proxy for JD BLAST REST API endpoints (/status/:id, /result/:id/:type)
 @app.get("/blast/jobs/{action}/{params:path}")
-async def blast_proxy(action: str, params: str, response: Response) -> dict:
+async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
   url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/{action}/{params}"
   async with app.client_session.get(url) as resp:
-    response.status_code = resp.status
+    if response: response.status_code = resp.status
     if params.endswith('json'):
       content = await resp.json()
     else:
@@ -124,7 +141,8 @@ async def blast_proxy(action: str, params: str, response: Response) -> dict:
       return {action: content}
     else:
       if content:
-        content = re.sub('<.*?>|\n+', '', content)
+        content = re.sub('<.*?>', '', content)
+        content = re.sub('\n+', '. ', content)
       else:
         content = f"Invalid JD endpoint: /{action}/{params}"
       return {'error': content}

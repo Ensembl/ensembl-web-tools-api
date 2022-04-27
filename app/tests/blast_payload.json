@@ -1,6 +1,6 @@
 {
 "genomeIds": ["caenorhabditis_elegans_GCA_000002985_3"],
-"querySequences": ["MPIGSKERPTFFEIFKTRCNKADLGPISLNWFEELSS"],
+"querySequences": [{ "id": 1, "value": "MPIGSKERPTFFEIFKTRCNKADLGPISLNWFEELSS"}],
 "parameters":
 	{
 		"stype": "protein",

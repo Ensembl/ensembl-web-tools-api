@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 import json
 import pytest
 from ..main import app
-from ..main import process_blast_payload
+from ..main import get_blast_filename
 
 # Test config endpoint
 def test_read_config():
@@ -19,30 +19,51 @@ def blast_payload():
 	with open('app/tests/blast_payload.json') as f:
 		return json.load(f)
 
+# Test BLAST index filename inference
+def test_get_blast_filename(blast_payload):
+	genome_id = blast_payload['genomeIds'][0]
+	db_type = 'pep'
+	filename = get_blast_filename(genome_id, db_type)
+	assert filename == f'ensembl/{genome_id}/{db_type}/{genome_id}.{db_type}.all'
+	db_type = 'dna'
+	filename = get_blast_filename(genome_id, db_type)
+	assert filename.endswith(f'{db_type}.toplevel') 
 
-# Test job payload processing
-def test_process_blast_payload(blast_payload):
-	params, sequences = process_blast_payload(blast_payload)
-	assert len(params['database']) == len(blast_payload['genomeIds'])
-	assert blast_payload['genomeIds'][0] in params['database'][0]
-	assert sequences == blast_payload['querySequences']
-
-# Test job submission with correct payload
+# Test single BLAST job submission with a valid payload
 def test_blast_job(blast_payload):
 	with TestClient(app) as client: #include @startup hook
-		# Add data for multi-job submission
-		blast_payload['genomeIds'].append('plasmodium_falciparum_GCA_000002765_2')
-		blast_payload['querySequences'].append('MPIGSKERPTFKTRCNKADLGPI')
 		response = client.post('/blast/job', json=blast_payload)
 		assert response.status_code == 200
 		resp = response.json()
 		assert 'submissionId' in resp
 		assert 'jobs' in resp
-		assert len(resp['jobs']) == len(blast_payload['querySequences'])
-		assert 'jobId' in resp['jobs'][0]
-		assert resp['jobs'][0]['jobId'].startswith('ncbiblast-')
+		assert len(resp['jobs']) == 1
+		job = resp['jobs'][0]
+		assert 'sequence_id' in job
+		assert 'genome_id' in job
+		assert 'job_id' in job
+		assert job['job_id'].startswith('ncbiblast-')
+		assert 'sequence_id' in job and job['sequence_id'] == 1
 
-# Test job submission with payload validation error
+# Test multiple BLAST job submission with a valid payload
+def test_blast_job(blast_payload):
+	with TestClient(app) as client:
+		blast_payload['genomeIds'].append('plasmodium_falciparum_GCA_000002765_2')
+		blast_payload['querySequences'].append({'id': 2, 'value': 'MPIGSKERPTFKTRCNKADLGPI'})
+		response = client.post('/blast/job', json=blast_payload)
+		assert response.status_code == 200
+		resp = response.json()
+		assert 'submissionId' in resp
+		assert 'jobs' in resp
+		assert len(resp['jobs']) == 4
+		job = resp['jobs'][3]
+		assert 'sequence_id' in job
+		assert 'genome_id' in job
+		assert 'job_id' in job
+		assert job['job_id'].startswith('ncbiblast-')
+		assert 'sequence_id' in job and job['sequence_id'] == 2
+
+# Test incoming payload validation for BLAST job submission
 def test_blast_job_data_error(blast_payload):
 	with TestClient(app) as client:
 		del blast_payload['querySequences']
@@ -59,14 +80,20 @@ def test_blast_job_jd_error(blast_payload):
 		blast_payload['parameters']['stype'] = 'dna'
 		response = client.post('/blast/job', json=blast_payload)
 		assert response.status_code == 200
-		assert 'error' in response.json()['jobs'][0]
+		resp = response.json()
+		assert 'jobs' in resp
+		assert len(resp['jobs']) == 1
+		job = resp['jobs'][0]
+		assert 'sequence_id' in job
+		assert 'genome_id' in job
+		assert 'error' in job
 
 # Test jDispatcher BLAST proxy endpoint
 def test_blast_proxy_success():
 	with TestClient(app) as client:
-		response = client.get('/blast/jobs/status/jobid')
+		response = client.get('/blast/jobs/status/ncbiblast-12345')
 		assert response.status_code == 200
-		assert 'status' in response.json()
+		assert response.json() == {'status': 'NOT_FOUND'}
 
 # Test JD proxy error response
 def test_blast_proxy_error():

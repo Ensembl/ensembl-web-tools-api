@@ -73,8 +73,8 @@ class QuerySequence(BaseModel):
   value: str
 
 class BlastJob(BaseModel):
-  genomeIds: list[GenomeId]
-  querySequences: list[QuerySequence]
+  genome_ids: list[GenomeId]
+  query_sequences: list[QuerySequence]
   parameters: BlastParams
 
 # Infer the target species index file for BLAST payload
@@ -103,11 +103,11 @@ async def submit_blast(payload: BlastJob) -> dict:
   db_type = payload['parameters']['database']
   blast_jobs = []
   # Submit multiple concurrent BLAST jobs (one for each query seq. / target species combination)
-  for query in payload['querySequences']:
-    for genome_id in payload['genomeIds']:
+  for query in payload['query_sequences']:
+    for genome_id in payload['genome_ids']:
       blast_jobs.append(run_blast(query, payload['parameters'], genome_id, db_type))
   job_results = await asyncio.gather(*blast_jobs)
-  return {'submissionId': secrets.token_urlsafe(16), 'jobs': job_results}
+  return {'submission_id': secrets.token_urlsafe(16), 'jobs': job_results}
   
 
 # Proxy for JD BLAST REST API endpoints (/status/:id, /result/:id/:type)

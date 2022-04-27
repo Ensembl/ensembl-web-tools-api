@@ -21,7 +21,7 @@ def blast_payload():
 
 # Test BLAST index filename inference
 def test_get_blast_filename(blast_payload):
-	genome_id = blast_payload['genomeIds'][0]
+	genome_id = blast_payload['genome_ids'][0]
 	db_type = 'pep'
 	filename = get_blast_filename(genome_id, db_type)
 	assert filename == f'ensembl/{genome_id}/{db_type}/{genome_id}.{db_type}.all'
@@ -35,7 +35,7 @@ def test_blast_job(blast_payload):
 		response = client.post('/blast/job', json=blast_payload)
 		assert response.status_code == 200
 		resp = response.json()
-		assert 'submissionId' in resp
+		assert 'submission_id' in resp
 		assert 'jobs' in resp
 		assert len(resp['jobs']) == 1
 		job = resp['jobs'][0]
@@ -46,14 +46,14 @@ def test_blast_job(blast_payload):
 		assert 'sequence_id' in job and job['sequence_id'] == 1
 
 # Test multiple BLAST job submission with a valid payload
-def test_blast_job(blast_payload):
+def test_blast_jobs(blast_payload):
 	with TestClient(app) as client:
-		blast_payload['genomeIds'].append('plasmodium_falciparum_GCA_000002765_2')
-		blast_payload['querySequences'].append({'id': 2, 'value': 'MPIGSKERPTFKTRCNKADLGPI'})
+		blast_payload['genome_ids'].append('plasmodium_falciparum_GCA_000002765_2')
+		blast_payload['query_sequences'].append({'id': 2, 'value': 'MPIGSKERPTFKTRCNKADLGPI'})
 		response = client.post('/blast/job', json=blast_payload)
 		assert response.status_code == 200
 		resp = response.json()
-		assert 'submissionId' in resp
+		assert 'submission_id' in resp
 		assert 'jobs' in resp
 		assert len(resp['jobs']) == 4
 		job = resp['jobs'][3]
@@ -66,7 +66,7 @@ def test_blast_job(blast_payload):
 # Test incoming payload validation for BLAST job submission
 def test_blast_job_data_error(blast_payload):
 	with TestClient(app) as client:
-		del blast_payload['querySequences']
+		del blast_payload['query_sequences']
 		response = client.post('/blast/job', json=blast_payload)
 		assert response.status_code == 422
 		resp = response.json()

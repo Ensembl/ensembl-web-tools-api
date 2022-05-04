@@ -1,3 +1,4 @@
+from urllib import response
 from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -52,6 +53,12 @@ class DbType(str, Enum):
   dna = 'dna'
   protein = 'pep'
 
+class BlastParams(BaseModel, extra=Extra.allow):
+  email: str | None = 'blast2020@ebi.ac.uk'
+  title: str | None = ''
+  program: Program
+  database: DbType
+
 class GenomeId(str, Enum):
   celegans = 'caenorhabditis_elegans_GCA_000002985_3'
   plasmodium = 'plasmodium_falciparum_GCA_000002765_2'
@@ -61,57 +68,71 @@ class GenomeId(str, Enum):
   wheat = 'triticum_aestivum_GCA_900519105_1'
   human38 = 'homo_sapiens_GCA_000001405_28'
 
-class BlastParams(BaseModel, extra=Extra.allow):
-  email: str | None = 'blast2020@ebi.ac.uk'
-  title: str | None = ''
-  program: Program
-  database: DbType
+class QuerySequence(BaseModel):
+  id: int
+  value: str
 
 class BlastJob(BaseModel):
-  genomeIds: list[GenomeId]
-  querySequences: list[str]
+  genome_ids: list[GenomeId]
+  query_sequences: list[QuerySequence]
   parameters: BlastParams
 
-# Process BLAST job submission payload
-def process_blast_payload(payload) -> tuple([dict, list]):
-  # Input payload conforms to BlastJob datamodel
-  dbtype = payload['parameters']['database']
-  suffix = f'{dbtype}.toplevel' if dbtype == 'dna' else f'{dbtype}.all'
-  dbfiles = []
-  # Infer filepaths for target databases
-  for genomeid in payload['genomeIds']:
-    dbfiles.append(f'ensembl/{genomeid}/{dbtype}/{genomeid}.{suffix}')
-  payload['parameters']['database'] = dbfiles
-  return (payload['parameters'], payload['querySequences'])
+class JobIDs(BaseModel):
+  job_ids: list[str]
 
-async def run_blast(query_seq, params) -> dict:
-  params['sequence'] = query_seq
+# Infer the target species index file for BLAST payload
+def get_blast_filename(genome_id: str, db_type: str) -> str:
+  suffix = f'{db_type}.toplevel' if db_type == 'dna' else f'{db_type}.all'
+  return f'ensembl/{genome_id}/{db_type}/{genome_id}.{suffix}'
+
+# Submit a BLAST job to JD. Returns a resolvable for fetching the response.
+async def run_blast(query: dict, blast_payload: dict, genome_id: str, db_type: str) -> dict:
+  blast_payload['sequence'] = query['value']
+  blast_payload['database'] = get_blast_filename(genome_id, db_type)
   url = 'http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/run'
-  async with app.client_session.post(url, data = params) as resp:
-    content = await resp.text()
+  async with app.client_session.post(url, data = blast_payload) as resp:
+    response = await resp.text()
     if resp.status == 200:
-      return {'jobId': content}
+      return {'sequence_id': query['id'], 'genome_id': genome_id, 'job_id': response}
     else:
       # Strip xhtml tags from the response message
-      content = re.sub('<.*?>|\n+', '', content)
-      return {'error': content}
+      response = re.sub('<.*?>|\n+', '', response)
+      return {'sequence_id': query['id'], 'genome_id': genome_id, 'error': response}
 
-# Endpoint for submitting a BLAST job to jDispatcher
+# Endpoint for submitting BLAST jobs to jDispatcher
 @app.post('/blast/job')
 async def submit_blast(payload: BlastJob) -> dict:
-  params, sequences = process_blast_payload(jsonable_encoder(payload))
-  # Submit concurrent BLAST jobs (one for each query sequence)
-  blast_tasks = [run_blast(seq, params) for seq in sequences]
-  jobs = await asyncio.gather(*blast_tasks)
-  return {'submissionId': secrets.token_urlsafe(16), 'jobs': jobs}
-  
+  payload = jsonable_encoder(payload)
+  db_type = payload['parameters']['database']
+  blast_jobs = []
+  # Submit multiple concurrent BLAST jobs (one for each query seq. / target species combination)
+  for query in payload['query_sequences']:
+    for genome_id in payload['genome_ids']:
+      blast_jobs.append(run_blast(query, payload['parameters'], genome_id, db_type))
+  job_results = await asyncio.gather(*blast_jobs)
+  return {'submission_id': secrets.token_urlsafe(16), 'jobs': job_results}
+
+# Endpoint for querying a job status
+@app.get("/blast/jobs/status/{job_id}")
+async def blast_job_status(job_id: str) -> dict:
+  resp = await blast_proxy('status', job_id)
+  resp['job_id'] = job_id
+  return resp
+
+# Endpoint for querying multiple job statuses
+@app.post("/blast/jobs/status")
+async def blast_job_statuses(payload: JobIDs) -> dict:
+  payload = jsonable_encoder(payload)
+  status_requests = [blast_job_status(job_id) for job_id in payload['job_ids']]
+  statuses = await asyncio.gather(*status_requests)
+  return {'statuses': statuses}
 
 # Proxy for JD BLAST REST API endpoints (/status/:id, /result/:id/:type)
 @app.get("/blast/jobs/{action}/{params:path}")
-async def blast_proxy(action: str, params: str, response: Response) -> dict:
+async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
   url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/{action}/{params}"
   async with app.client_session.get(url) as resp:
-    response.status_code = resp.status
+    if response: response.status_code = resp.status
     if params.endswith('json'):
       content = await resp.json()
     else:
@@ -120,7 +141,8 @@ async def blast_proxy(action: str, params: str, response: Response) -> dict:
       return {action: content}
     else:
       if content:
-        content = re.sub('<.*?>|\n+', '', content)
+        content = re.sub('<.*?>', '', content)
+        content = re.sub('\n+', '. ', content)
       else:
         content = f"Invalid JD endpoint: /{action}/{params}"
       return {'error': content}

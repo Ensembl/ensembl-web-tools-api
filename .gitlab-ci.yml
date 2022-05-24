@@ -64,25 +64,42 @@ Docker:
     - docker rmi ${DOCKER_IMAGE}
     - docker logout $CI_REGISTRY
 
-# Deploy feature branch to hx-dev env. (for ens-client review apps)
+# Deploy feature branch (for specific review apps)
 Review:HX:
   extends: .deploy
   environment:
-    name : wp-hx-dev
+    name: wp-hx-dev
+    on_stop: Stop_review
   before_script:
-    - cd k8s/overlays/review
+    - cd k8s/overlays/development
     - kustomize edit set label environment:${CI_COMMIT_REF_SLUG}
-    - kustomize edit set namesuffix ${CI_COMMIT_REF_SLUG}
+    - kustomize edit set namesuffix -- -${CI_COMMIT_REF_SLUG}
   except:
     - main
 
-# Deploy main branch to dev, staging, internal, live
+# Stop feature branch review app (cleanup resources) 
+Stop_review:
+  stage: deploy
+  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:0.4
+  environment:
+    name: wp-hx-dev
+    action: stop
+  variables:
+    GIT_STRATEGY: none
+  when: manual
+  script:
+  - kubectl delete service ensembl-tools-api-svc-${CI_COMMIT_REF_SLUG}
+  - kubectl delete deploy ensembl-tools-api-deployment-${CI_COMMIT_REF_SLUG}
+
+# Deploy main branch to HX/HL dev, staging, internal, and (manually) to live
 Dev:HX:
   extends: .deploy
   environment:
     name: wp-hx-dev-ing
   before_script:
     - cd k8s/overlays/development
+    - kustomize edit set label environment:dev
+    - kustomize edit set namesuffix -dev
   only:
     - main
 

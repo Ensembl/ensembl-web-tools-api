@@ -1,3 +1,4 @@
+# The ingress manifest used by ensembl-client review apps in ensembl-k8s-manifests repo
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:

@@ -1,3 +1,4 @@
+# The service manifest used by ensembl-client review apps in ensembl-k8s-manifests repo
 apiVersion: v1
 kind: Service
 metadata:

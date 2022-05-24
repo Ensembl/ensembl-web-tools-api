@@ -99,7 +99,7 @@ Dev:HX:
   before_script:
     - cd k8s/overlays/development
     - kustomize edit set label environment:dev
-    - kustomize edit set namesuffix -dev
+    - kustomize edit set namesuffix -- -dev
   only:
     - main
 

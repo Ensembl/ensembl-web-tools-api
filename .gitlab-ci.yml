@@ -95,7 +95,7 @@ Stop_review:
 Dev:HX:
   extends: .deploy
   environment:
-    name: wp-hx-dev-ing
+    name: wp-hx-dev
   before_script:
     - cd k8s/overlays/development
     - kustomize edit set label environment:dev

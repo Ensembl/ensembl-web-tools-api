@@ -4,7 +4,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Extra
-from aiohttp import ClientSession
+from aiohttp import ClientSession, client_exceptions
 from enum import Enum
 import asyncio
 import secrets
@@ -32,13 +32,17 @@ async def validation_exception_handler(request, exception):
 async def invalid_path_handler(request, exception):
   return JSONResponse(content={'error': 'Invalid endpoint'}, status_code=404)
 
+# Handle connection errors to jDispatcher
+@app.exception_handler(client_exceptions.ClientConnectorError)
+async def upstream_connection_handler(request, exception):
+  return JSONResponse(content={'error': 'Cannot connect to jDispatcher'}, status_code=500)
+
 # Endpoint for serving the BLAST config
 @app.get('/blast/config')
 async def serve_config() -> dict:
   with open('data/blast_config.json') as f:
    config = json.load(f)
   return config
-
 
 # Validate job submission payload
 class Program(str, Enum):

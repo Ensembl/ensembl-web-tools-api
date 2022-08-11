@@ -4,7 +4,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Extra
-from aiohttp import ClientSession
+from aiohttp import ClientSession, client_exceptions
 from enum import Enum
 import asyncio
 import secrets
@@ -32,13 +32,17 @@ async def validation_exception_handler(request, exception):
 async def invalid_path_handler(request, exception):
   return JSONResponse(content={'error': 'Invalid endpoint'}, status_code=404)
 
+# Handle connection errors to jDispatcher
+@app.exception_handler(client_exceptions.ClientConnectorError)
+async def upstream_connection_handler(request, exception):
+  return JSONResponse(content={'error': 'Cannot connect to jDispatcher'}, status_code=500)
+
 # Endpoint for serving the BLAST config
 @app.get('/blast/config')
 async def serve_config() -> dict:
   with open('data/blast_config.json') as f:
    config = json.load(f)
   return config
-
 
 # Validate job submission payload
 class Program(str, Enum):
@@ -132,17 +136,24 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
   url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/{action}/{params}"
   async with app.client_session.get(url) as resp:
-    if response: response.status_code = resp.status
+    if response: response.status_code = resp.status #forward the status code from JD
+    content = await resp.text()
     if params.endswith('json'):
-      content = await resp.json()
-    else:
-      content = await resp.text()
+      try:
+        content = json.loads(content)
+      except ValueError:
+        pass
     if resp.status == 200:
       return {action: content}
     else:
       if content:
+        # Clean JD error message for JSON
         content = re.sub('<.*?>', '', content)
+        content = content.strip()
         content = re.sub('\n+', '. ', content)
+        # Fix JD response status code (400->404)
+        if("not found" in content):
+          response.status_code = 404
       else:
         content = f"Invalid JD endpoint: /{action}/{params}"
       return {'error': content}

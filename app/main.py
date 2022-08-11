@@ -132,16 +132,19 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
   url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/{action}/{params}"
   async with app.client_session.get(url) as resp:
-    if response: response.status_code = resp.status
+    if response: response.status_code = resp.status #forward the status code from JD
+    content = await resp.text()
     if params.endswith('json'):
-      content = await resp.json()
-    else:
-      content = await resp.text()
+      try:
+        content = json.loads(content)
+      except ValueError:
+          pass
     if resp.status == 200:
       return {action: content}
     else:
       if content:
         content = re.sub('<.*?>', '', content)
+        content = content.strip()
         content = re.sub('\n+', '. ', content)
       else:
         content = f"Invalid JD endpoint: /{action}/{params}"

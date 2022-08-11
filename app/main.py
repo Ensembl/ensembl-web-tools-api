@@ -138,14 +138,18 @@ async def blast_proxy(action: str, params: str, response: Response = None) -> di
       try:
         content = json.loads(content)
       except ValueError:
-          pass
+        pass
     if resp.status == 200:
       return {action: content}
     else:
       if content:
+        # Clean JD error message for JSON
         content = re.sub('<.*?>', '', content)
         content = content.strip()
         content = re.sub('\n+', '. ', content)
+        # Fix JD response status code (400->404)
+        if("not found" in content):
+          response.status_code = 404
       else:
         content = f"Invalid JD endpoint: /{action}/{params}"
       return {'error': content}

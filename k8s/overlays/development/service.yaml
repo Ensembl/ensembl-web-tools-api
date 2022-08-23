@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ensembl-tools-api-dev-svc
+  labels:
+    app: ensembl-tools-api-dev-svc
+spec:
+  selector:
+    app: ensembl-tools-api
+  type: ClusterIP
+  ports:
+    - port: 8013
+      protocol: TCP
+      targetPort: 8013

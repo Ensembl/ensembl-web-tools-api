@@ -101,7 +101,7 @@ async def run_blast(query: dict, blast_payload: dict, genome_id: str, db_type: s
     else:
       # Strip xhtml tags from the response message
       response = re.sub('<.*?>|\n+', '', response)
-      return {'sequence_id': query['id'], 'genome_id': genome_id, 'error': response}
+      return {'sequence_id': query['id'], 'genome_id': genome_id, 'error': response, 'status': resp.status}
 
 # Endpoint for submitting BLAST jobs to jDispatcher
 @app.post('/blast/job')

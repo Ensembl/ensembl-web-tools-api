@@ -89,9 +89,11 @@ Stop_review:
   variables:
     GIT_STRATEGY: none
   when: manual
+  except:
+    - main
   script:
-  - kubectl delete service ensembl-tools-api-svc-${CI_COMMIT_REF_SLUG}
-  - kubectl delete deploy ensembl-tools-api-deployment-${CI_COMMIT_REF_SLUG}
+    - kubectl delete service ensembl-tools-api-svc-${CI_COMMIT_REF_SLUG}
+    - kubectl delete deploy ensembl-tools-api-deployment-${CI_COMMIT_REF_SLUG}
 
 # Deploy main branch to HX/HL dev, staging, internal, and (manually) to live
 Dev:HX:

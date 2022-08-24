@@ -49,6 +49,8 @@ Test:
     when: always
     reports:
       junit: report.xml
+  except:
+    - /^skiptest\/.*$/
 
 # Build the docker image
 Docker:

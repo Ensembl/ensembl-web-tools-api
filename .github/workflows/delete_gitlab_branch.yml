@@ -12,9 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TOKEN: ${{ secrets.GITLAB_TOKEN }}
-      REPO: ${{ github.event.repository.name }}
+      REPO: ensembl-web%2F${{ github.event.repository.name }}
       BRANCH: ${{ github.event.ref }}
     steps:
       - name: Send branch delete request
         run: |
-          curl --request DELETE --header "PRIVATE-TOKEN: $TOKEN" "https://gitlab.com/api/v4/projects/ensembl-web/$REPO/repository/branches/$BRANCH"
+          BRANCH=${BRANCH//\//%2F}
+          curl --request DELETE --header "PRIVATE-TOKEN: $TOKEN" "https://gitlab.com/api/v4/projects/$REPO/repository/branches/$BRANCH"

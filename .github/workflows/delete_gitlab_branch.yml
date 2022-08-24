@@ -18,4 +18,4 @@ jobs:
       - name: Send branch delete request
         run: |
           BRANCH=${BRANCH//\//%2F}
-          curl --request DELETE --header "PRIVATE-TOKEN: $TOKEN" "https://gitlab.com/api/v4/projects/$REPO/repository/branches/$BRANCH"
+          curl --request DELETE --header "PRIVATE-TOKEN: $TOKEN" "https://gitlab.ebi.ac.uk/api/v4/projects/$REPO/repository/branches/$BRANCH"

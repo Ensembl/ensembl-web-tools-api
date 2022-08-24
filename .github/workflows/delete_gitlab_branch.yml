@@ -1,15 +1,20 @@
 name: Delete removed GitHub branch from GitLab remote
 
-on: [delete]
+on:
+  delete:
+    branches-igore:
+      - main
+      - dev
 
 jobs:
   branch-delete:
+    if: github.event.ref_type == 'branch'
     runs-on: ubuntu-latest
+    env:
+      TOKEN: ${{ secrets.GITLAB_TOKEN }}
+      REPO: ${{ github.event.repository.name }}
+      BRANCH: ${{ github.event.ref }}
     steps:
-      - run: |-
-          REPO=${{ github.event.repository.name }}
-          PROJECT="ensembl-web%2F${REPO}"
-          if [ "${{ github.event.ref_type }}" == "branch" ]; then
-            BRANCH="${{ github.event.ref }}"
-            curl --request DELETE --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" "https://gitlab.com/api/v4/projects/${PROJECT}/repository/branches/${BRANCH}"
-          fi
+      - name: Send branch delete request
+        run: |
+          curl --request DELETE --header "PRIVATE-TOKEN: $TOKEN" "https://gitlab.com/api/v4/projects/ensembl-web/$REPO/repository/branches/$BRANCH"

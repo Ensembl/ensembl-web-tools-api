@@ -2,7 +2,7 @@ name: Delete removed GitHub branch from GitLab remote
 
 on:
   delete:
-    branches-igore:
+    branches-ignore:
       - main
       - dev
 

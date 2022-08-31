@@ -6,12 +6,12 @@ from ..main import get_blast_filename
 
 # Test config endpoint
 def test_read_config():
-	client = TestClient(app)
-	with open('data/blast_config.json') as f:
-		config = json.load(f)
-	response = client.get('/blast/config')
-	assert response.status_code == 200
-	assert response.json() == config
+	with TestClient(app) as client: #include @startup hook
+		with open('data/blast_config.json') as f:
+			config = json.load(f)
+		response = client.get('/blast/config')
+		assert response.status_code == 200
+		assert response.json() == config
 
 # Load example BLAST job payload
 @pytest.fixture
@@ -31,7 +31,7 @@ def test_get_blast_filename(blast_payload):
 
 # Test single BLAST job submission with a valid payload
 def test_blast_job(blast_payload):
-	with TestClient(app) as client: #include @startup hook
+	with TestClient(app) as client:
 		response = client.post('/blast/job', json=blast_payload)
 		assert response.status_code == 200
 		resp = response.json()

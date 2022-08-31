@@ -3,7 +3,7 @@ from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Extra
+from pydantic import BaseModel, Extra, validator
 from aiohttp import ClientSession, client_exceptions
 from enum import Enum
 import asyncio
@@ -65,23 +65,19 @@ class BlastParams(BaseModel, extra=Extra.allow):
   program: Program
   database: DbType
 
-class GenomeId(str, Enum):
-  celegans = 'caenorhabditis_elegans_GCA_000002985_3'
-  plasmodium = 'plasmodium_falciparum_GCA_000002765_2'
-  ecoli = 'escherichia_coli_str_k_12_substr_mg1655_gca_000005845_GCA_000005845_2'
-  yeast = 'saccharomyces_cerevisiae_GCA_000146045_2'
-  human37 = 'homo_sapiens_GCA_000001405_14'
-  wheat = 'triticum_aestivum_GCA_900519105_1'
-  human38 = 'homo_sapiens_GCA_000001405_28'
-
 class QuerySequence(BaseModel):
   id: int
   value: str
 
 class BlastJob(BaseModel):
-  genome_ids: list[GenomeId]
+  genome_ids: list[str]
   query_sequences: list[QuerySequence]
   parameters: BlastParams
+
+  @validator('genome_ids', each_item=True) # Check each genome id
+  def check_genome_id(cls, uuid):
+    assert uuid in app.genome_ids, f'{uuid} is not a valid genome ID'
+    return uuid
 
 class JobIDs(BaseModel):
   job_ids: list[str]

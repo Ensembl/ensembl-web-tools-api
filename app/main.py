@@ -13,10 +13,14 @@ import re
 
 app = FastAPI()
 
-# Setup persistent session for making http requests
+# Setup data cache and downstream requests session
 @app.on_event('startup')
 async def startup_event():
   app.client_session = ClientSession()
+  with open('data/blast_config.json') as f:
+    app.blast_config = json.load(f)
+  with open('data/genome_ids.json') as f:
+    app.genome_ids = json.load(f)
 
 @app.on_event('shutdown')
 async def shutdown_event():
@@ -40,9 +44,7 @@ async def upstream_connection_handler(request, exception):
 # Endpoint for serving the BLAST config
 @app.get('/blast/config')
 async def serve_config() -> dict:
-  with open('data/blast_config.json') as f:
-   config = json.load(f)
-  return config
+  return app.blast_config
 
 # Validate job submission payload
 class Program(str, Enum):

@@ -85,7 +85,7 @@ class JobIDs(BaseModel):
 # Infer the target species index file for BLAST payload
 def get_blast_filename(genome_id: str, db_type: str) -> str:
   suffix = f'{db_type}.toplevel' if db_type == 'dna' else f'{db_type}.all'
-  return f'ensembl/{genome_id}/{db_type}/{genome_id}.{suffix}'
+  return f'ensembl/{app.genome_ids[genome_id]}/{db_type}/{app.genome_ids[genome_id]}.{suffix}'
 
 # Submit a BLAST job to JD. Returns a resolvable for fetching the response.
 async def run_blast(query: dict, blast_payload: dict, genome_id: str, db_type: str) -> dict:
@@ -118,6 +118,7 @@ async def submit_blast(payload: BlastJob) -> dict:
 @app.get("/blast/jobs/status/{job_id}")
 async def blast_job_status(job_id: str) -> dict:
   resp = await blast_proxy('status', job_id)
+  #if resp['status'] == 'NOT_FOUND': response.status_code = 404
   resp['job_id'] = job_id
   return resp
 

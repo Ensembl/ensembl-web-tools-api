@@ -78,6 +78,7 @@ Review:HX:
     - kustomize edit set namesuffix -- -${CI_COMMIT_REF_SLUG}
   except:
     - main
+    - dev
 
 # Stop feature branch review app (cleanup resources) 
 Stop_review:
@@ -91,11 +92,12 @@ Stop_review:
   when: manual
   except:
     - main
+    - dev
   script:
     - kubectl delete service ensembl-tools-api-svc-${CI_COMMIT_REF_SLUG}
     - kubectl delete deploy ensembl-tools-api-deployment-${CI_COMMIT_REF_SLUG}
 
-# Deploy main branch to HX/HL dev, staging, internal, and (manually) to live
+# Deploy main branch to HX dev (default BE for review apps)
 Dev:HX:
   extends: .deploy
   environment:
@@ -106,6 +108,7 @@ Dev:HX:
   only:
     - main
 
+# Deploy dev branch to staging
 Staging:HX:
   extends: .deploy
   environment:
@@ -113,7 +116,7 @@ Staging:HX:
   before_script:
     - cd k8s/overlays/staging
   only:
-    - main
+    - dev
 
 Staging:HL:
   extends: .deploy
@@ -122,8 +125,9 @@ Staging:HL:
   before_script:
     - cd k8s/overlays/staging
   only:
-    - main
+    - dev
 
+# Deploy main branch to internal
 Internal:HX:
   extends: .deploy
   environment:
@@ -142,6 +146,7 @@ Internal:HL:
   only:
     - main
 
+# Deploy main to production (manual confirmation)
 Production:HX:
   extends: .deploy
   environment:

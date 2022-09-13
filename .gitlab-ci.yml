@@ -38,10 +38,7 @@ Test:
   stage: test
   image: python:3.10
   before_script:
-    - pip install fastapi
-    - pip install pytest-cov
-    - pip install requests
-    - pip install aiohttp
+    - pip install app/tests/requirements.txt
   script:
     - pytest --cov --junitxml=report.xml
   coverage: '/^TOTAL.+?(\d+\%)$/'
@@ -73,7 +70,7 @@ Review:HX:
     name: wp-hx-dev
     on_stop: Stop_review
   before_script:
-    - cd k8s/overlays/development
+    - cd k8s/overlays/review
     - kustomize edit set label environment:${CI_COMMIT_REF_SLUG}
     - kustomize edit set namesuffix -- -${CI_COMMIT_REF_SLUG}
   except:

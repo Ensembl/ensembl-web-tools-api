@@ -38,7 +38,7 @@ Test:
   stage: test
   image: python:3.10
   before_script:
-    - pip install app/tests/requirements.txt
+    - pip install -r app/tests/requirements.txt
   script:
     - pytest --cov --junitxml=report.xml
   coverage: '/^TOTAL.+?(\d+\%)$/'

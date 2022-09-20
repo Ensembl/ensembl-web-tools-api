@@ -3,7 +3,7 @@ from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Extra
+from pydantic import BaseModel, Extra, validator
 from aiohttp import ClientSession, client_exceptions
 from enum import Enum
 import asyncio
@@ -13,10 +13,14 @@ import re
 
 app = FastAPI()
 
-# Setup persistent session for making http requests
+# Setup data cache and downstream requests session
 @app.on_event('startup')
 async def startup_event():
   app.client_session = ClientSession()
+  with open('data/blast_config.json') as f:
+    app.blast_config = json.load(f)
+  with open('data/genome_ids.json') as f:
+    app.genome_ids = json.load(f)
 
 @app.on_event('shutdown')
 async def shutdown_event():
@@ -40,9 +44,7 @@ async def upstream_connection_handler(request, exception):
 # Endpoint for serving the BLAST config
 @app.get('/blast/config')
 async def serve_config() -> dict:
-  with open('data/blast_config.json') as f:
-   config = json.load(f)
-  return config
+  return app.blast_config
 
 # Validate job submission payload
 class Program(str, Enum):
@@ -63,23 +65,19 @@ class BlastParams(BaseModel, extra=Extra.allow):
   program: Program
   database: DbType
 
-class GenomeId(str, Enum):
-  celegans = 'caenorhabditis_elegans_GCA_000002985_3'
-  plasmodium = 'plasmodium_falciparum_GCA_000002765_2'
-  ecoli = 'escherichia_coli_str_k_12_substr_mg1655_gca_000005845_GCA_000005845_2'
-  yeast = 'saccharomyces_cerevisiae_GCA_000146045_2'
-  human37 = 'homo_sapiens_GCA_000001405_14'
-  wheat = 'triticum_aestivum_GCA_900519105_1'
-  human38 = 'homo_sapiens_GCA_000001405_28'
-
 class QuerySequence(BaseModel):
   id: int
   value: str
 
 class BlastJob(BaseModel):
-  genome_ids: list[GenomeId]
+  genome_ids: list[str]
   query_sequences: list[QuerySequence]
   parameters: BlastParams
+
+  @validator('genome_ids', each_item=True) # Check each genome id
+  def check_genome_id(cls, uuid):
+    assert uuid in app.genome_ids, f'{uuid} is not a valid genome ID'
+    return uuid
 
 class JobIDs(BaseModel):
   job_ids: list[str]
@@ -87,13 +85,13 @@ class JobIDs(BaseModel):
 # Infer the target species index file for BLAST payload
 def get_blast_filename(genome_id: str, db_type: str) -> str:
   suffix = f'{db_type}.toplevel' if db_type == 'dna' else f'{db_type}.all'
-  return f'ensembl/{genome_id}/{db_type}/{genome_id}.{suffix}'
+  return f'ensembl/{app.genome_ids[genome_id]}/{db_type}/{app.genome_ids[genome_id]}.{suffix}'
 
 # Submit a BLAST job to JD. Returns a resolvable for fetching the response.
 async def run_blast(query: dict, blast_payload: dict, genome_id: str, db_type: str) -> dict:
   blast_payload['sequence'] = query['value']
   blast_payload['database'] = get_blast_filename(genome_id, db_type)
-  url = 'http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/run'
+  url = 'http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/run'
   async with app.client_session.post(url, data = blast_payload) as resp:
     response = await resp.text()
     if resp.status == 200:
@@ -120,6 +118,7 @@ async def submit_blast(payload: BlastJob) -> dict:
 @app.get("/blast/jobs/status/{job_id}")
 async def blast_job_status(job_id: str) -> dict:
   resp = await blast_proxy('status', job_id)
+  #if resp['status'] == 'NOT_FOUND': response.status_code = 404
   resp['job_id'] = job_id
   return resp
 
@@ -134,7 +133,7 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 # Proxy for JD BLAST REST API endpoints (/status/:id, /result/:id/:type)
 @app.get("/blast/jobs/{action}/{params:path}")
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
-  url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast/{action}/{params}"
+  url = f"http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/{action}/{params}"
   async with app.client_session.get(url) as resp:
     if response: response.status_code = resp.status #forward the status code from JD
     content = await resp.text()

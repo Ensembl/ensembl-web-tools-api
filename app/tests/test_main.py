@@ -6,12 +6,12 @@ from ..main import get_blast_filename
 
 # Test config endpoint
 def test_read_config():
-	client = TestClient(app)
-	with open('data/blast_config.json') as f:
-		config = json.load(f)
-	response = client.get('/blast/config')
-	assert response.status_code == 200
-	assert response.json() == config
+	with TestClient(app) as client: #include @startup hook
+		with open('data/blast_config.json') as f:
+			config = json.load(f)
+		response = client.get('/blast/config')
+		assert response.status_code == 200
+		assert response.json() == config
 
 # Load example BLAST job payload
 @pytest.fixture
@@ -21,17 +21,20 @@ def blast_payload():
 
 # Test BLAST index filename inference
 def test_get_blast_filename(blast_payload):
+	with open('data/genome_ids.json') as f:
+		id_map = json.load(f)
 	genome_id = blast_payload['genome_ids'][0]
+	gca_id = id_map[genome_id]
 	db_type = 'pep'
 	filename = get_blast_filename(genome_id, db_type)
-	assert filename == f'ensembl/{genome_id}/{db_type}/{genome_id}.{db_type}.all'
+	assert filename == f'ensembl/{gca_id}/{db_type}/{gca_id}.{db_type}.all'
 	db_type = 'dna'
 	filename = get_blast_filename(genome_id, db_type)
 	assert filename.endswith(f'{db_type}.toplevel') 
 
 # Test single BLAST job submission with a valid payload
 def test_blast_job(blast_payload):
-	with TestClient(app) as client: #include @startup hook
+	with TestClient(app) as client:
 		response = client.post('/blast/job', json=blast_payload)
 		assert response.status_code == 200
 		resp = response.json()
@@ -42,13 +45,13 @@ def test_blast_job(blast_payload):
 		assert 'sequence_id' in job
 		assert 'genome_id' in job
 		assert 'job_id' in job
-		assert job['job_id'].startswith('ncbiblast-')
+		assert job['job_id'].startswith('ncbiblast')
 		assert 'sequence_id' in job and job['sequence_id'] == 1
 
 # Test multiple BLAST job submission with a valid payload
 def test_blast_jobs(blast_payload):
 	with TestClient(app) as client:
-		blast_payload['genome_ids'].append('plasmodium_falciparum_GCA_000002765_2')
+		blast_payload['genome_ids'].append(blast_payload['genome_ids'][0])
 		blast_payload['query_sequences'].append({'id': 2, 'value': 'MPIGSKERPTFKTRCNKADLGPI'})
 		response = client.post('/blast/job', json=blast_payload)
 		assert response.status_code == 200
@@ -57,10 +60,8 @@ def test_blast_jobs(blast_payload):
 		assert 'jobs' in resp
 		assert len(resp['jobs']) == 4
 		job = resp['jobs'][3]
-		assert 'sequence_id' in job
-		assert 'genome_id' in job
-		assert 'job_id' in job
-		assert job['job_id'].startswith('ncbiblast-')
+		assert 'genome_id' in job and job['genome_id'] == blast_payload['genome_ids'][0]
+		assert 'job_id' in job and job['job_id'].startswith('ncbiblast')
 		assert 'sequence_id' in job and job['sequence_id'] == 2
 
 # Test incoming payload validation for BLAST job submission
@@ -91,11 +92,12 @@ def test_blast_job_jd_error(blast_payload):
 # Test BLAST job status endpoint
 def test_blast_job_status():
 	with TestClient(app) as client:
-		response = client.get('/blast/jobs/status/ncbiblast-12345')
+		response = client.get('/blast/jobs/status/ncbiblast_ensembl-12345')
 		assert response.status_code == 200
 		assert 'status' in response.json()
 
 # Test multiple jobs status endpoint
+# Example job id: ncbiblast_ensembl-R20220907-111749-0693-28451168-np2
 def test_blast_job_statuses():
 	with TestClient(app) as client:
 		job_ids = {'job_ids': ['ncbiblast-1234', 'ncbiblast-5678']}

@@ -1,4 +1,4 @@
 fastapi
-requests
+httpx
 aiohttp
 pytest-cov

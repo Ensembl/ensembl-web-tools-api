@@ -66,6 +66,7 @@ class Program(str, Enum):
 class DbType(str, Enum):
     cdna = "cdna"
     dna = "dna"
+    dna_sm = "dna_sm"
     protein = "pep"
 
 

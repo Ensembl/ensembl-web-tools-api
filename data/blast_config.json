@@ -6,6 +6,10 @@
       "type": "select",
       "options": [
         {
+          "label": "Genomic sequence (softmasked)",
+          "value": "dna_sm"
+        },
+        {
           "label": "Genomic sequence",
           "value": "dna"
         },
@@ -349,11 +353,11 @@
         {
           "label": "4,-5",
           "value": "4,-5"
-        },        
+        },
         {
           "label": "5,-4",
           "value": "5,-4"
-        }        
+        }
       ]
     },
     "wordsize": {
@@ -534,7 +538,7 @@
         {
           "label": "7",
           "value": "7"
-        },        
+        },
         {
           "label": "8",
           "value": "8"
@@ -542,7 +546,7 @@
         {
           "label": "9",
           "value": "9"
-        },        
+        },
         {
           "label": "10",
           "value": "10"
@@ -598,27 +602,36 @@
     {
       "sequence_type": "dna",
       "database_type": "dna",
-      "programs": ["blastn", "tblastx"]
+      "programs": [
+        "blastn",
+        "tblastx"
+      ]
     },
     {
       "sequence_type": "dna",
       "database_type": "protein",
-      "programs": ["blastx"]
+      "programs": [
+        "blastx"
+      ]
     },
     {
       "sequence_type": "protein",
       "database_type": "dna",
-      "programs": ["tblastn"]
+      "programs": [
+        "tblastn"
+      ]
     },
     {
       "sequence_type": "protein",
       "database_type": "protein",
-      "programs": ["blastp"]
+      "programs": [
+        "blastp"
+      ]
     }
   ],
   "programs_parameters_override": {
     "wordsize": {
-      "blastn" : {
+      "blastn": {
         "options": [
           {
             "label": "2",
@@ -663,10 +676,12 @@
           {
             "label": "12",
             "value": "12"
-          },        {
+          },
+          {
             "label": "13",
             "value": "13"
-          },        {
+          },
+          {
             "label": "14",
             "value": "14"
           },

@@ -99,7 +99,7 @@ class JobIDs(BaseModel):
 
 # Infer the target species index file for BLAST payload
 def get_blast_filename(genome_id: str, db_type: str) -> str:
-    suffix = f"{db_type}.toplevel" if db_type == "dna" else f"{db_type}.all"
+    suffix = f"{db_type}.toplevel" if db_type.startswith("dna") else f"{db_type}.all"
     return f"ensembl/{app.genome_ids[genome_id]}/{db_type}/{app.genome_ids[genome_id]}.{suffix}"
 
 

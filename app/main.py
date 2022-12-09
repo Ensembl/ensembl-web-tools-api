@@ -109,7 +109,7 @@ async def run_blast(
 ) -> dict:
     blast_payload["sequence"] = query["value"]
     blast_payload["database"] = get_blast_filename(genome_id, db_type)
-    url = "http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/run"
+    url = "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/run"
     async with app.client_session.post(url, data=blast_payload) as resp:
         response = await resp.text()
         if resp.status == 200:
@@ -166,7 +166,9 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 # Proxy for JD BLAST REST API endpoints (/status/:id, /result/:id/:type)
 @app.get("/blast/jobs/{action}/{params:path}")
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
-    url = f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/{action}/{params}"
+    url = (
+        f"http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/{action}/{params}"
+    )
     async with app.client_session.get(url) as resp:
         if response:
             response.status_code = resp.status  # forward the status code from JD

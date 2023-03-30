@@ -109,7 +109,7 @@ async def run_blast(
 ) -> dict:
     blast_payload["sequence"] = query["value"]
     blast_payload["database"] = get_blast_filename(genome_id, db_type)
-    url = "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/run"
+    url = "http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/run"
     async with app.client_session.post(url, data=blast_payload) as resp:
         response = await resp.text()
         if resp.status == 200:

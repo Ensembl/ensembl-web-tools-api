@@ -167,7 +167,7 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 @app.get("/blast/jobs/{action}/{params:path}")
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
     url = (
-        f"http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/{action}/{params}"
+        f"http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/{action}/{params}"
     )
     async with app.client_session.get(url) as resp:
         if response:

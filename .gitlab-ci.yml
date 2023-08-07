@@ -33,7 +33,7 @@ stages:
     - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
     - kustomize build . | kubectl apply -f -
 
-.deploy-wp40:
+.deploy-newk8s:
   stage: deploy
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:0.6
   script:
@@ -42,6 +42,9 @@ stages:
     - cd ensembl-k8s-manifests/ensembl-web-tools-api
     - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
     - kubectl apply -k ./
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"'
+  when: manual
 
 # Run Tests
 Test:
@@ -175,9 +178,33 @@ Production:HL:
   when: manual
 
 Live:wp40:HL:
-  extends: .deploy-wp40
+  extends: .deploy-newk8s
   environment:
     name: wp40-hl-prod
-  rules:
-    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"'
   when: manual
+
+Staging:WP40:HL:
+  extends: .deploy-newk8s
+  environment:
+    name: wp40-hl-staging
+
+Internal:WP40:HL:
+  extends: .deploy-newk8s
+  environment:
+    name: wp40-hl-internal
+
+Dev:WP40:HL:
+  extends: .deploy-newk8s
+  environment:
+    name: wp40-hl-dev
+
+Dev:WP41:HX:
+  extends: .deploy-newk8s
+  environment:
+    name: wp41-hx-dev
+
+Prod:WP41:HX:
+  extends: .deploy-newk8s
+  environment:
+    name: wp41-hx-prod
+

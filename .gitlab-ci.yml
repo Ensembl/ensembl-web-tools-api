@@ -181,12 +181,13 @@ Live:wp40:HL:
   extends: .deploy-newk8s
   environment:
     name: wp40-hl-prod
-  when: manual
 
 Staging:WP40:HL:
   extends: .deploy-newk8s
   environment:
     name: wp40-hl-staging
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"'
 
 Internal:WP40:HL:
   extends: .deploy-newk8s

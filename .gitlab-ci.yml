@@ -181,3 +181,43 @@ Live:wp40:HL:
   rules:
     - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"'
   when: manual
+
+Staging:WP40:HL:
+  extends: .deploy-wp40
+  environment:
+    name: wp40-hl-staging
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "toolsAPI-k8s-deploy"'
+  when: manual
+
+Internal:WP40:HL:
+  extends: .deploy-wp40
+  environment:
+    name: wp40-hl-internal
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "toolsAPI-k8s-deploy"'
+  when: manual
+
+Dev:WP40:HL:
+  extends: .deploy-wp40
+  environment:
+    name: wp40-hl-dev
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "toolsAPI-k8s-deploy"'
+  when: manual
+
+Dev:WP41:HX:
+  extends: .deploy-wp40
+  environment:
+    name: wp41-hx-dev
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "toolsAPI-k8s-deploy"'
+  when: manual
+
+Prod:WP41:HX:
+  extends: .deploy-wp40
+  environment:
+    name: wp41-hx-prod
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "toolsAPI-k8s-deploy"'
+  when: manual

@@ -177,7 +177,7 @@ Production:HL:
     - main
   when: manual
 
-Live:wp40:HL:
+Prod:wp40:HL:
   extends: .deploy-newk8s
   environment:
     name: wp40-hl-prod
@@ -197,12 +197,12 @@ Internal:WP40:HL:
 Dev:WP40:HL:
   extends: .deploy-newk8s
   environment:
-    name: wp40-hl-dev
+    name: wp40-hl-development
 
 Dev:WP41:HX:
   extends: .deploy-newk8s
   environment:
-    name: wp41-hx-dev
+    name: wp41-hx-development
 
 Prod:WP41:HX:
   extends: .deploy-newk8s

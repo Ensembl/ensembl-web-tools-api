@@ -18,8 +18,8 @@ def blast_payload():
 	with open('app/tests/blast_payload.json') as f:
 		return json.load(f)
 
-# Test BLAST index filename inference
-def test_get_blast_filepath(blast_payload):
+# Test BLAST database path inference
+def test_get_db_path(blast_payload):
 	genome_id = blast_payload['genome_ids'][0]
 	filename = get_db_path(genome_id, 'dna_sm')
 	assert filename == f'ensembl/{genome_id}/softmasked'

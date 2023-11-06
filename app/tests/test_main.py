@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 import json
 import pytest
-from ..main import app, get_db_path, validation_exception_handler
+from ..main import app, get_db_path
 
 # Test config endpoint
 def test_read_config():

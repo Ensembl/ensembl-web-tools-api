@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from urllib import response
 from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
@@ -12,20 +13,17 @@ import secrets
 import json
 import re
 
-app = FastAPI()
-
-# Setup data cache and downstream requests session
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: setup data cache and requests session
     app.client_session = ClientSession()
     with open("data/blast_config.json") as f:
         app.blast_config = json.load(f)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
+    yield
+    # Shutdown: close requests session
     await app.client_session.close()
 
+app = FastAPI(lifespan=lifespan)
 
 # Override response for input payload validation error
 @app.exception_handler(RequestValidationError)

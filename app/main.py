@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Extra, validator
 from aiohttp import ClientSession, client_exceptions
 from enum import Enum
+from uuid import UUID
 import asyncio
 import secrets
 import json
@@ -19,8 +20,6 @@ async def startup_event():
     app.client_session = ClientSession()
     with open("data/blast_config.json") as f:
         app.blast_config = json.load(f)
-    with open("data/genome_ids.json") as f:
-        app.genome_ids = json.load(f)
 
 
 @app.on_event("shutdown")
@@ -83,24 +82,19 @@ class QuerySequence(BaseModel):
 
 
 class BlastJob(BaseModel):
-    genome_ids: list[str]
+    genome_ids: list[UUID]
     query_sequences: list[QuerySequence]
     parameters: BlastParams
-
-    @validator("genome_ids", each_item=True)  # Check each genome id
-    def check_genome_id(cls, uuid):
-        assert uuid in app.genome_ids, f"{uuid} is not a valid genome ID"
-        return uuid
 
 
 class JobIDs(BaseModel):
     job_ids: list[str]
 
 
-# Infer the target species index file for BLAST payload
-def get_blast_filename(genome_id: str, db_type: str) -> str:
-    suffix = f"{db_type}.toplevel" if db_type.startswith("dna") else f"{db_type}.all"
-    return f"ensembl/{app.genome_ids[genome_id]}/{db_type}/{app.genome_ids[genome_id]}.{suffix}"
+# Infer the target db path for BLAST job
+def get_db_path(genome_id: str, db_type: str) -> str:
+    suffix_map = {"dna": "unmasked", "dna_sm": "softmasked"} #dna/dna_sm/cdna/pep
+    return f"ensembl/{genome_id}/{suffix_map.get(db_type, db_type)}"
 
 
 # Submit a BLAST job to JD. Returns a resolvable for fetching the response.
@@ -108,8 +102,8 @@ async def run_blast(
     query: dict, blast_payload: dict, genome_id: str, db_type: str
 ) -> dict:
     blast_payload["sequence"] = query["value"]
-    blast_payload["database"] = get_blast_filename(genome_id, db_type)
-    url = "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/run"
+    blast_payload["database"] = get_db_path(genome_id, db_type)
+    url = "http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/run"
     async with app.client_session.post(url, data=blast_payload) as resp:
         response = await resp.text()
         if resp.status == 200:

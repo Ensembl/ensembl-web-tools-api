@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 import json
 import pytest
 from ..main import app
-from ..main import get_blast_filename
+from ..main import get_db_path
 
 # Test config endpoint
 def test_read_config():
@@ -20,17 +20,12 @@ def blast_payload():
 		return json.load(f)
 
 # Test BLAST index filename inference
-def test_get_blast_filename(blast_payload):
-	with open('data/genome_ids.json') as f:
-		id_map = json.load(f)
+def test_get_blast_filepath(blast_payload):
 	genome_id = blast_payload['genome_ids'][0]
-	gca_id = id_map[genome_id]
-	db_type = 'pep'
-	filename = get_blast_filename(genome_id, db_type)
-	assert filename == f'ensembl/{gca_id}/{db_type}/{gca_id}.{db_type}.all'
-	db_type = 'dna'
-	filename = get_blast_filename(genome_id, db_type)
-	assert filename.endswith(f'{db_type}.toplevel') 
+	filename = get_db_path(genome_id, 'dna_sm')
+	assert filename == f'ensembl/{genome_id}/softmasked'
+	filename = get_db_path(genome_id, 'pep')
+	assert filename.endswith('pep')
 
 # Test single BLAST job submission with a valid payload
 def test_blast_job(blast_payload):

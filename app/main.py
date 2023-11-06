@@ -27,8 +27,8 @@ app = FastAPI(lifespan=lifespan)
 
 # Override response for input payload validation error
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exception):
-    return JSONResponse(content={"error": str(exception)}, status_code=422)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(content={"error": ";".join(f"{err['loc']}:{err['msg']}" for err in exc.errors())}, status_code=422)
 
 
 # Override 404 response
@@ -67,7 +67,7 @@ class DbType(str, Enum):
     protein = "pep"
 
 
-class BlastParams(BaseModel, extra=Extra.allow):
+class BlastParams(BaseModel, extra='allow'):
     email: str | None = "blast2020@ebi.ac.uk"
     title: str | None = ""
     program: Program

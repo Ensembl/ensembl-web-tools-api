@@ -66,7 +66,7 @@ def test_blast_job_data_error(blast_payload):
 		assert response.status_code == 422
 		resp = response.json()
 		assert 'error' in resp
-		assert 'validation error' in resp['error']
+		assert 'Field required' in resp['error']
 
 # Test job submission with jDispatcher error
 def test_blast_job_jd_error(blast_payload):

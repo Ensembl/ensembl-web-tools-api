@@ -6,7 +6,7 @@ from ..main import get_db_path
 
 # Test config endpoint
 def test_read_config():
-	with TestClient(app) as client: #include @startup hook
+	with TestClient(app, raise_server_exceptions=False) as client: #include @startup hook
 		with open('data/blast_config.json') as f:
 			config = json.load(f)
 		response = client.get('/blast/config')

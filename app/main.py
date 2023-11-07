@@ -97,7 +97,7 @@ def get_db_path(genome_id: str, db_type: str) -> str:
 
 
 # Submit a BLAST job to JD. Returns a resolvable for fetching the response.
-blast_url = os.environ.get("BLAST_URL", "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl")
+blast_url = os.environ.get("BLAST_URL", "http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl")
 async def run_blast(
     query: dict, blast_payload: dict, genome_id: str, db_type: str
 ) -> dict:

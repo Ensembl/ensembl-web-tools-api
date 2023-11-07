@@ -1,8 +1,7 @@
 from fastapi.testclient import TestClient
 import json
 import pytest
-from ..main import app
-from ..main import get_blast_filename
+from ..main import app, get_db_path
 
 # Test config endpoint
 def test_read_config():
@@ -19,18 +18,13 @@ def blast_payload():
 	with open('app/tests/blast_payload.json') as f:
 		return json.load(f)
 
-# Test BLAST index filename inference
-def test_get_blast_filename(blast_payload):
-	with open('data/genome_ids.json') as f:
-		id_map = json.load(f)
+# Test BLAST database path inference
+def test_get_db_path(blast_payload):
 	genome_id = blast_payload['genome_ids'][0]
-	gca_id = id_map[genome_id]
-	db_type = 'pep'
-	filename = get_blast_filename(genome_id, db_type)
-	assert filename == f'ensembl/{gca_id}/{db_type}/{gca_id}.{db_type}.all'
-	db_type = 'dna'
-	filename = get_blast_filename(genome_id, db_type)
-	assert filename.endswith(f'{db_type}.toplevel') 
+	filename = get_db_path(genome_id, 'dna_sm')
+	assert filename == f'ensembl/{genome_id}/softmasked'
+	filename = get_db_path(genome_id, 'pep')
+	assert filename.endswith('pep')
 
 # Test single BLAST job submission with a valid payload
 def test_blast_job(blast_payload):
@@ -72,9 +66,7 @@ def test_blast_job_data_error(blast_payload):
 		assert response.status_code == 422
 		resp = response.json()
 		assert 'error' in resp
-		# The response format has changed and it is failing at this statement
-		# ENSWBSITES-2066		
-		# assert 'validation error' in resp['error']
+		assert 'Field required' in resp['error']
 
 # Test job submission with jDispatcher error
 def test_blast_job_jd_error(blast_payload):

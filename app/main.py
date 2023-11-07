@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from urllib import response
 from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
@@ -6,32 +7,29 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Extra, validator
 from aiohttp import ClientSession, client_exceptions
 from enum import Enum
+from uuid import UUID
 import asyncio
 import secrets
 import json
 import re
+import os
 
-app = FastAPI()
-
-# Setup data cache and downstream requests session
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: setup data cache and requests session
     app.client_session = ClientSession()
     with open("data/blast_config.json") as f:
         app.blast_config = json.load(f)
-    with open("data/genome_ids.json") as f:
-        app.genome_ids = json.load(f)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
+    yield
+    # Shutdown: close requests session
     await app.client_session.close()
 
+app = FastAPI(lifespan=lifespan)
 
 # Override response for input payload validation error
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exception):
-    return JSONResponse(content={"error": str(exception)}, status_code=422)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(content={"error": ";".join(f"{err['loc']}:{err['msg']}" for err in exc.errors())}, status_code=422)
 
 
 # Override 404 response
@@ -70,7 +68,7 @@ class DbType(str, Enum):
     protein = "pep"
 
 
-class BlastParams(BaseModel, extra=Extra.allow):
+class BlastParams(BaseModel, extra='allow'):
     email: str | None = "blast2020@ebi.ac.uk"
     title: str | None = ""
     program: Program
@@ -83,33 +81,29 @@ class QuerySequence(BaseModel):
 
 
 class BlastJob(BaseModel):
-    genome_ids: list[str]
+    genome_ids: list[UUID]
     query_sequences: list[QuerySequence]
     parameters: BlastParams
-
-    @validator("genome_ids", each_item=True)  # Check each genome id
-    def check_genome_id(cls, uuid):
-        assert uuid in app.genome_ids, f"{uuid} is not a valid genome ID"
-        return uuid
 
 
 class JobIDs(BaseModel):
     job_ids: list[str]
 
 
-# Infer the target species index file for BLAST payload
-def get_blast_filename(genome_id: str, db_type: str) -> str:
-    suffix = f"{db_type}.toplevel" if db_type.startswith("dna") else f"{db_type}.all"
-    return f"ensembl/{app.genome_ids[genome_id]}/{db_type}/{app.genome_ids[genome_id]}.{suffix}"
+# Infer the target db path for BLAST job
+suffix_map = {"dna": "unmasked", "dna_sm": "softmasked"} #dna/dna_sm/cdna/pep
+def get_db_path(genome_id: str, db_type: str) -> str:
+    return f"ensembl/{genome_id}/{suffix_map.get(db_type, db_type)}"
 
 
 # Submit a BLAST job to JD. Returns a resolvable for fetching the response.
+blast_url = os.environ.get("BLAST_URL", "http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl")
 async def run_blast(
     query: dict, blast_payload: dict, genome_id: str, db_type: str
 ) -> dict:
     blast_payload["sequence"] = query["value"]
-    blast_payload["database"] = get_blast_filename(genome_id, db_type)
-    url = "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/run"
+    blast_payload["database"] = get_db_path(genome_id, db_type)
+    url = f"{blast_url}/run"
     async with app.client_session.post(url, data=blast_payload) as resp:
         response = await resp.text()
         if resp.status == 200:
@@ -149,7 +143,7 @@ async def submit_blast(payload: BlastJob) -> dict:
 @app.get("/blast/jobs/status/{job_id}")
 async def blast_job_status(job_id: str) -> dict:
     resp = await blast_proxy("status", job_id)
-    # if resp['status'] == 'NOT_FOUND': response.status_code = 404
+    if resp['status'] == 'NOT_FOUND': response.status_code = 404
     resp["job_id"] = job_id
     return resp
 
@@ -166,9 +160,7 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 # Proxy for JD BLAST REST API endpoints (/status/:id, /result/:id/:type)
 @app.get("/blast/jobs/{action}/{params:path}")
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
-    url = (
-        f"http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/{action}/{params}"
-    )
+    url = f"{blast_url}/{action}/{params}"
     async with app.client_session.get(url) as resp:
         if response:
             response.status_code = resp.status  # forward the status code from JD

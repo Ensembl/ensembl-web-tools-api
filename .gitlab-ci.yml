@@ -86,6 +86,9 @@ Review:HX:
     - cd k8s/overlays/review
     - kustomize edit set label environment:${CI_COMMIT_REF_SLUG}
     - kustomize edit set namesuffix -- -${CI_COMMIT_REF_SLUG}
+  after_script:
+    - kubectl set env deployment/ensembl-tools-api-deployment-${CI_COMMIT_REF_SLUG}  
+      --from configmap/ensembl-tools-api-review-configmap
   except:
     - main
     - dev

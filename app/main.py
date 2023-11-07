@@ -12,6 +12,7 @@ import asyncio
 import secrets
 import json
 import re
+import os
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -90,18 +91,19 @@ class JobIDs(BaseModel):
 
 
 # Infer the target db path for BLAST job
+suffix_map = {"dna": "unmasked", "dna_sm": "softmasked"} #dna/dna_sm/cdna/pep
 def get_db_path(genome_id: str, db_type: str) -> str:
-    suffix_map = {"dna": "unmasked", "dna_sm": "softmasked"} #dna/dna_sm/cdna/pep
     return f"ensembl/{genome_id}/{suffix_map.get(db_type, db_type)}"
 
 
 # Submit a BLAST job to JD. Returns a resolvable for fetching the response.
+blast_url = os.environ.get("BLAST_URL", "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl")
 async def run_blast(
     query: dict, blast_payload: dict, genome_id: str, db_type: str
 ) -> dict:
     blast_payload["sequence"] = query["value"]
     blast_payload["database"] = get_db_path(genome_id, db_type)
-    url = "http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/run"
+    url = f"{blast_url}/run"
     async with app.client_session.post(url, data=blast_payload) as resp:
         response = await resp.text()
         if resp.status == 200:
@@ -141,7 +143,7 @@ async def submit_blast(payload: BlastJob) -> dict:
 @app.get("/blast/jobs/status/{job_id}")
 async def blast_job_status(job_id: str) -> dict:
     resp = await blast_proxy("status", job_id)
-    # if resp['status'] == 'NOT_FOUND': response.status_code = 404
+    if resp['status'] == 'NOT_FOUND': response.status_code = 404
     resp["job_id"] = job_id
     return resp
 
@@ -158,9 +160,7 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 # Proxy for JD BLAST REST API endpoints (/status/:id, /result/:id/:type)
 @app.get("/blast/jobs/{action}/{params:path}")
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
-    url = (
-        f"http://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl/{action}/{params}"
-    )
+    url = f"{blast_url}/{action}/{params}"
     async with app.client_session.get(url) as resp:
         if response:
             response.status_code = resp.status  # forward the status code from JD

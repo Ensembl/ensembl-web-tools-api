@@ -143,6 +143,11 @@ Dev:WP40:HL:
   environment:
     name: wp40-hl-development
 
+Dev:WP51:HL:
+  extends: .deploy-newk8s
+  environment:
+    name: wp51-hl-development
+
 Dev:WP41:HX:
   extends: .deploy-newk8s
   environment:

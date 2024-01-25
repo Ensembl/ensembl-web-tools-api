@@ -147,6 +147,8 @@ Dev:WP51:HL:
   extends: .deploy-newk8s
   environment:
     name: wp51-hl-development
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "review-on-newk8s"'
 
 Dev:WP41:HX:
   extends: .deploy-newk8s

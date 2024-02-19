@@ -23,19 +23,9 @@ stages:
   - build
   - deploy
 
-# Deployment template
 .deploy:
   stage: deploy
-  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:0.4
-  before_script:
-    - cd k8s/base
-  script:
-    - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
-    - kustomize build . | kubectl apply -f -
-
-.deploy-newk8s:
-  stage: deploy
-  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:0.6
+  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   script:
     - git clone https://gitlab.ebi.ac.uk/ensembl-web/ensembl-k8s-manifests.git
     - git -C ensembl-k8s-manifests/ checkout k8s123-migration
@@ -96,7 +86,7 @@ Review:HX:
 # Stop feature branch review app (cleanup resources) 
 Stop_review:
   stage: deploy
-  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:0.4
+  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   environment:
     name: wp-hx-dev
     action: stop
@@ -110,53 +100,31 @@ Stop_review:
     - kubectl delete service ensembl-tools-api-svc-${CI_COMMIT_REF_SLUG}
     - kubectl delete deploy ensembl-tools-api-deployment-${CI_COMMIT_REF_SLUG}
 
-# Deploy main branch to HX dev (default BE for review apps)
-Dev:HX:
-  extends: .deploy
-  environment:
-    name: wp-hx-dev
-  before_script:
-    - cd k8s/overlays/development
-    - kustomize edit set label environment:dev
-  only:
-    - main
-
 Prod:wp40:HL:
-  extends: .deploy-newk8s
+  extends: .deploy
   environment:
     name: wp40-hl-prod
 
+Prod:WP41:HX:
+  extends: .deploy
+  environment:
+    name: wp41-hx-prod
+
 Staging:WP40:HL:
-  extends: .deploy-newk8s
+  extends: .deploy
   environment:
     name: wp40-hl-staging
   rules:
     - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"'
 
 Internal:WP40:HL:
-  extends: .deploy-newk8s
+  extends: .deploy
   environment:
     name: wp40-hl-internal
 
-Dev:WP40:HL:
-  extends: .deploy-newk8s
-  environment:
-    name: wp40-hl-development
-
 Dev:WP51:HL:
-  extends: .deploy-newk8s
+  extends: .deploy
   environment:
     name: wp51-hl-development
-  rules:
-    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "review-on-newk8s"'
 
-Dev:WP41:HX:
-  extends: .deploy-newk8s
-  environment:
-    name: wp41-hx-development
-
-Prod:WP41:HX:
-  extends: .deploy-newk8s
-  environment:
-    name: wp41-hx-prod
 

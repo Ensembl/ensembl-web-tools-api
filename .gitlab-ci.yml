@@ -70,7 +70,9 @@ Docker:
 Review:HX:
   extends: .deploy
   environment:
-    name: wp-hx-dev
+    name: wp51-hl-development
+    kubernetes:
+      namespace: ${CI_COMMIT_REF_SLUG}
     on_stop: Stop_review
   before_script:
     - cd k8s/overlays/review
@@ -79,26 +81,28 @@ Review:HX:
   after_script:
     - kubectl set env deployment/ensembl-tools-api-deployment-${CI_COMMIT_REF_SLUG}  
       --from configmap/ensembl-tools-api-review-configmap
-  except:
-    - main
-    - dev
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "main"'
 
 # Stop feature branch review app (cleanup resources) 
 Stop_review:
   stage: deploy
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   environment:
-    name: wp-hx-dev
+    name: wp51-hl-development
     action: stop
+    kubernetes:
+      namespace: ${CI_COMMIT_REF_SLUG}
   variables:
     GIT_STRATEGY: none
-  when: manual
-  except:
-    - main
-    - dev
+  
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "main"'
+      when: manual
+
   script:
-    - kubectl delete service ensembl-tools-api-svc-${CI_COMMIT_REF_SLUG}
-    - kubectl delete deploy ensembl-tools-api-deployment-${CI_COMMIT_REF_SLUG}
+    - kubectl delete service ensembl-tools-api-svc
+    - kubectl delete deploy ensembl-tools-api-deployment
 
 Prod:wp40:HL:
   extends: .deploy
@@ -126,5 +130,3 @@ Dev:WP51:HL:
   extends: .deploy
   environment:
     name: wp51-hl-development
-
-

@@ -23,12 +23,12 @@ stages:
   - build
   - deploy
 
-.deploy-template: &deploy-rules
+.deploy-rules:
   rules:
     - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"'
       when: always
 
-.deploy-template-branches: &deploy-rules-branches
+.deploy-branch-rules:
   rules:
     - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "master" || $CI_COMMIT_BRANCH != "dev")'
       when: always
@@ -79,8 +79,9 @@ Docker:
 
 # Deploy feature branch (for specific review apps)
 Review:
-  extends: .deploy
-  <<: *deploy-rules-branches
+  extends: 
+    - .deploy
+    - .deploy-branch-rules
   environment:
     name: development
   variables: 
@@ -91,8 +92,8 @@ Review:
 
 # Stop feature branch review app (cleanup resources) 
 Stop_review:
+  extends: .deploy-branch-rules
   stage: deploy
-  <<: *deploy-rules-branches
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   environment:
     name: development
@@ -105,8 +106,9 @@ Stop_review:
     - kubectl -n ${NS} delete deploy ensembl-tools-api-deployment
 
 Production:
-  extends: .deploy
-  <<: *deploy-rules
+  extends: 
+    - .deploy
+    - .deploy-rules
   environment:
     name: production
   variables: 
@@ -115,8 +117,9 @@ Production:
 
 
 Fallback:
-  extends: .deploy
-  <<: *deploy-rules
+  extends: 
+    - .deploy
+    - .deploy-branch-rules
   environment:
     name: fallback
   variables: 
@@ -125,7 +128,9 @@ Fallback:
 
 
 Staging:
-  extends: .deploy
+  extends: 
+    - .deploy
+    - .deploy-branch-rules
   environment:
     name: staging
   rules:
@@ -136,8 +141,9 @@ Staging:
 
 
 Internal:
-  extends: .deploy
-  <<: *deploy-rules
+  extends: 
+    - .deploy
+    - .deploy-branch-rules
   environment:
     name: internal
   variables: 
@@ -146,8 +152,9 @@ Internal:
 
 
 Dev:
-  extends: .deploy
-  <<: *deploy-rules
+  extends: 
+    - .deploy
+    - .deploy-branch-rules
   environment:
     name: development
   variables: 

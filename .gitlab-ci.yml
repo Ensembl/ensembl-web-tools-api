@@ -23,6 +23,17 @@ stages:
   - build
   - deploy
 
+.deploy-rules:
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"'
+      when: always
+
+.deploy-branch-rules:
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "master" || $CI_COMMIT_BRANCH != "dev")'
+      when: always
+
+
 .deploy:
   stage: deploy
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
@@ -67,66 +78,85 @@ Docker:
     - docker logout $CI_REGISTRY
 
 # Deploy feature branch (for specific review apps)
-Review:HX:
-  extends: .deploy
+Review:
+  extends: 
+    - .deploy
+    - .deploy-branch-rules
   environment:
-    name: wp51-hl-development
-    kubernetes:
-      namespace: ${CI_COMMIT_REF_SLUG}
-    on_stop: Stop_review
-  before_script:
-    - cd k8s/overlays/review
-    - kustomize edit set label environment:${CI_COMMIT_REF_SLUG}
-    - kustomize edit set namesuffix -- -${CI_COMMIT_REF_SLUG}
+    name: development
+  variables: 
+    AGENT: ${DEV_AGENT}
+    NS: ${CI_COMMIT_REF_SLUG}
   after_script:
-    - kubectl set env deployment/ensembl-tools-api-deployment-${CI_COMMIT_REF_SLUG}  
-      --from configmap/ensembl-tools-api-review-configmap
-  rules:
-    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "main"'
+    - kubectl -n ${NS}  set env deployment/ensembl-tools-api-deployment --from configmap/ensembl-tools-api-configmap
 
 # Stop feature branch review app (cleanup resources) 
 Stop_review:
+  extends: .deploy-branch-rules
   stage: deploy
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   environment:
-    name: wp51-hl-development
-    action: stop
-    kubernetes:
-      namespace: ${CI_COMMIT_REF_SLUG}
+    name: development
   variables:
     GIT_STRATEGY: none
-  
-  rules:
-    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "main"'
-      when: manual
-
+    AGENT: ${DEV_AGENT}
+    NS: ${CI_COMMIT_REF_SLUG}
   script:
-    - kubectl delete service ensembl-tools-api-svc
-    - kubectl delete deploy ensembl-tools-api-deployment
+    - kubectl -n ${NS} delete service ensembl-tools-api-svc
+    - kubectl -n ${NS} delete deploy ensembl-tools-api-deployment
 
-Prod:wp40:HL:
-  extends: .deploy
+Production:
+  extends: 
+    - .deploy
+    - .deploy-rules
   environment:
-    name: wp40-hl-prod
+    name: production
+  variables: 
+    AGENT: ${PROD_AGENT}
+    NS: ${PROD_NS}
 
-Prod:WP41:HX:
-  extends: .deploy
-  environment:
-    name: wp41-hx-prod
 
-Staging:WP40:HL:
-  extends: .deploy
+Fallback:
+  extends: 
+    - .deploy
+    - .deploy-branch-rules
   environment:
-    name: wp40-hl-staging
+    name: fallback
+  variables: 
+    AGENT: ${FALLBACK_AGENT}
+    NS: ${FALLBACK_NS}
+
+
+Staging:
+  extends: 
+    - .deploy
+    - .deploy-branch-rules
+  environment:
+    name: staging
   rules:
     - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"'
+  variables: 
+    AGENT: ${STAGING_AGENT}
+    NS: ${STAGING_NS}
 
-Internal:WP40:HL:
-  extends: .deploy
-  environment:
-    name: wp40-hl-internal
 
-Dev:WP51:HL:
-  extends: .deploy
+Internal:
+  extends: 
+    - .deploy
+    - .deploy-branch-rules
   environment:
-    name: wp51-hl-development
+    name: internal
+  variables: 
+    AGENT: ${INTERNAL_AGENT}
+    NS: ${INTERNAL_NS}
+
+
+Dev:
+  extends: 
+    - .deploy
+    - .deploy-branch-rules
+  environment:
+    name: development
+  variables: 
+    AGENT: ${DEV_AGENT}
+    NS: ${DEV_NS}

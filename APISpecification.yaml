@@ -1,0 +1,157 @@
+openapi: 3.0.0
+info:
+  title: Tools api
+  version: 0.0.1
+paths:
+  /api/tools/vep/submissions/{id}:
+    get:
+      description: Returns results of VEP analysis
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 1
+        - name: per_page
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 100
+      responses:
+        '200':
+          description: Successful operaiton.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VepResultsResponse'
+components:
+  schemas:
+    PaginationMetadata:
+      type: object
+      required:
+        - page
+        - per_page
+        - total
+      properties:
+        page:
+          type: number
+        per_page:
+          type: number
+        total:
+          type: number
+    PredictedTranscriptConsequence:
+      type: object
+      required:
+        - feature_type
+        - stable_id
+        - gene_stable_id
+        - biotype
+        - consequences
+        - strand
+      properties:
+        feature_type:
+          type: string
+          enum:
+            - transcript
+        stable_id:
+          type: string
+          description: transcript stable id, versioned
+        gene_stable_id:
+          type: string
+          description: gene stable id, versioned
+        biotype:
+          type: string
+        consequences:
+          type: array
+          items:
+            type: string
+        strand:
+          type: string
+          enum:
+            - forward
+            - reverse
+    Variant:
+      type: object
+      required:
+        - name
+        - allele_type
+        - slice
+        - reference_allele
+        - alternative_alleles
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: User's name for the variant; optional
+        slice:
+          type: object
+          properties:
+            region:
+              type: object
+              properties:
+                name:
+                  type: string
+              required:
+                - name
+            location:
+              type: object
+              properties:
+                start:
+                  type: number
+                end:
+                  type: number
+              required:
+                - start
+                - end
+          required:
+            - region
+            - location
+        reference_allele:
+          $ref: '#/components/schemas/VariantAllele'
+        alternative_alleles:
+          type: array
+          items:
+            $ref: '#/components/schemas/VariantAllele'
+    VariantAllele:
+      type: object
+      required:
+        - allele_sequence
+        - allele_type
+        - predicted_molecular_consequences
+      properties:
+        allele_sequence:
+          type: string
+        allele_type:
+          type: string
+          description: For reference allele, the value of allele_type is 'biological_region'
+        representative_population_allele_frequency:
+          type: number
+          nullable: true
+        predicted_molecular_consequences:
+          type: array
+          items:
+            $ref: '#/components/schemas/PredictedTranscriptConsequence'
+    VepResultsResponse:
+      type: object
+      required:
+        - metadata
+        - variants
+      properties:
+        metadata:
+          type: object
+          properties:
+            pagination:
+              $ref: '#/components/schemas/PaginationMetadata'
+          required:
+            - pagination
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Variant'

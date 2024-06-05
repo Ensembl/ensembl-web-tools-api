@@ -33,6 +33,24 @@ paths:
                 $ref: '#/components/schemas/VepResultsResponse'
 components:
   schemas:
+    AlternativeVariantAllele:
+      type: object
+      required:
+        - allele_sequence
+        - allele_type
+        - predicted_molecular_consequences
+      properties:
+        allele_sequence:
+          type: string
+        allele_type:
+          type: string
+        representative_population_allele_frequency:
+          type: number
+          nullable: true
+        predicted_molecular_consequences:
+          type: array
+          items:
+            $ref: '#/components/schemas/PredictedTranscriptConsequence'
     PaginationMetadata:
       type: object
       required:
@@ -77,6 +95,13 @@ components:
           enum:
             - forward
             - reverse
+    ReferenceVariantAllele:
+      type: object
+      required:
+        - allele_sequence
+      properties:
+        allele_sequence:
+          type: string
     Variant:
       type: object
       required:
@@ -90,54 +115,26 @@ components:
           type: string
           nullable: true
           description: User's name for the variant; optional
-        slice:
+        location:
           type: object
           properties:
-            region:
-              type: object
-              properties:
-                name:
-                  type: string
-              required:
-                - name
-            location:
-              type: object
-              properties:
-                start:
-                  type: number
-                end:
-                  type: number
-              required:
-                - start
-                - end
+            region_name:
+              type: string
+            start:
+              type: number
+            end:
+              type: number
           required:
-            - region
-            - location
+            - region_name
+            - start
+            - end
+
         reference_allele:
-          $ref: '#/components/schemas/VariantAllele'
+          $ref: '#/components/schemas/ReferenceVariantAllele'
         alternative_alleles:
           type: array
           items:
-            $ref: '#/components/schemas/VariantAllele'
-    VariantAllele:
-      type: object
-      required:
-        - allele_sequence
-        - allele_type
-        - predicted_molecular_consequences
-      properties:
-        allele_sequence:
-          type: string
-        allele_type:
-          type: string
-          description: For reference allele, the value of allele_type is 'biological_region'
-        representative_population_allele_frequency:
-          type: number
-          nullable: true
-        predicted_molecular_consequences:
-          type: array
-          items:
-            $ref: '#/components/schemas/PredictedTranscriptConsequence'
+            $ref: '#/components/schemas/AlternativeVariantAllele'
     VepResultsResponse:
       type: object
       required:

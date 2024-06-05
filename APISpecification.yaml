@@ -128,7 +128,6 @@ components:
             - region_name
             - start
             - end
-
         reference_allele:
           $ref: '#/components/schemas/ReferenceVariantAllele'
         alternative_alleles:

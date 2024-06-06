@@ -3,7 +3,7 @@ info:
   title: Tools api
   version: 0.0.1
 paths:
-  /api/tools/vep/submissions/{id}:
+  /api/tools/vep/submissions/{id}/results:
     get:
       description: Returns results of VEP analysis
       parameters:
@@ -71,6 +71,7 @@ components:
         - stable_id
         - gene_stable_id
         - biotype
+        - is_canonical
         - consequences
         - strand
       properties:
@@ -86,6 +87,8 @@ components:
           description: gene stable id, versioned
         biotype:
           type: string
+        is_canonical:
+          type: boolean
         consequences:
           type: array
           items:

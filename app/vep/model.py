@@ -11,9 +11,9 @@ from pydantic import BaseModel, Field
 
 
 class PaginationMetadata(BaseModel):
-    page: float
-    per_page: float
-    total: float
+    page: int
+    per_page: int
+    total: int
 
 
 class FeatureType(Enum):
@@ -41,8 +41,8 @@ class ReferenceVariantAllele(BaseModel):
 
 class Location(BaseModel):
     region_name: str
-    start: float
-    end: float
+    start: int
+    end: int
 
 
 class Metadata(BaseModel):

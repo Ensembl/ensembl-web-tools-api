@@ -20,7 +20,7 @@ def test_load_csq_description_happy():
 def test_get_results_with_file(): 
 
     vcf_path = "/Users/jon/Programming/vep-vcf-results/vep-output-phase1-options-plus-con.vcf"
-    results = get_results(100,0,vcf_path)
+    results = get_results(100,2,vcf_path)
     
     expected_index = {TARGET_COLUMNS[x]:x for x in range(0,len(TARGET_COLUMNS))}
     

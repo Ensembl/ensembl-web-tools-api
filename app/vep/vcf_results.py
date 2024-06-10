@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 
 import vcfpy
 
@@ -10,7 +10,7 @@ TARGET_COLUMNS = [
                     "IMPACT"
                 ]
 
-def get_prediction_index_map(csq_header:str, target_columns=TARGET_COLUMNS) -> dict: 
+def _get_prediction_index_map(csq_header:str, target_columns=TARGET_COLUMNS) -> dict: 
     
     csq_header = csq_header.split(":")[-1].strip()
     csq_headers = csq_header.split("|")
@@ -23,7 +23,13 @@ def get_prediction_index_map(csq_header:str, target_columns=TARGET_COLUMNS) -> d
     
     return map
 
-def get_alt_allele_details(alt:vcfpy.AltRecord,rec:vcfpy.Record,index_map:Dict) -> AlternativeVariantAllele:
+def _get_csq_value(csq_values:List, csq_key:str, default_value:Any, index_map:Dict) -> Any:
+    if csq_key in index_map and csq_values[index_map[csq_key]]: 
+        return csq_values[index_map[csq_key]]
+    return default_value
+    
+
+def _get_alt_allele_details(alt:vcfpy.AltRecord,rec:vcfpy.Record,index_map:Dict) -> AlternativeVariantAllele:
     
     frequency = None
     consequences = []
@@ -34,28 +40,22 @@ def get_alt_allele_details(alt:vcfpy.AltRecord,rec:vcfpy.Record,index_map:Dict) 
             if csq_values[index_map["Allele"]] != alt.value: 
                 continue
                 
-            if "AF" in index_map and csq_values[index_map["AF"]]:
-                frequency = csq_values[index_map["AF"]]
+            frequency = _get_csq_value(csq_values, "AF", None, index_map)
                 
             if csq_values[index_map["Feature_type"]] == "Transcript": 
                 
-                is_cononical = True if "CANONICAL" in index_map and csq_values[index_map["CANONICAL"]] == "YES" else False
-                
-                cons = []
-                if "Consequence" in index_map and csq_values[index_map["Consequence"]]: 
-                    cons = csq_values[index_map["Consequence"]].split("&")
+                is_cononical = _get_csq_value(csq_values, "CANONICAL", "NO", index_map) == "YES" 
+                cons = _get_csq_value(csq_values, "Consequence", "", index_map).split("&")
                  
-                #Do we all ways have a strand? check!   
-                strand = Strand.reverse if "STRAND" in index_map and csq_values[index_map["STRAND"]] == "-1" else Strand.forward
-                
-                biotype = csq_values[index_map["BIOTYPE"]] if "BIOTYPE" in index_map and csq_values[index_map["BIOTYPE"]] else ""
-                
+                #It looks like for Feature_type = Transcript that we always have a STRAND value  
+                strand = Strand.reverse if _get_csq_value(csq_values, "STRAND", "1", index_map) == "-1" else Strand.forward
+
                 consequences.append(
                     PredictedTranscriptConsequence(
                     feature_type= FeatureType.transcript,
-                    stable_id = "",
-                    gene_stable_id = "",
-                    biotype = biotype,
+                    stable_id = _get_csq_value(csq_values, "Feature", "", index_map),
+                    gene_stable_id = _get_csq_value(csq_values, "Gene", "", index_map),
+                    biotype = _get_csq_value(csq_values, "BIOTYPE", "", index_map),
                     is_canonical = is_cononical,
                     consequences= cons,
                     strand= strand,
@@ -78,7 +78,7 @@ def get_results(page_size:int,page:int,vcf_path:str) -> VepResultsResponse:
     
     # Parse csq header 
     csq_details = vcf_records.header.get_info_field_info("CSQ").description
-    prediction_index_map = get_prediction_index_map(csq_details)
+    prediction_index_map = _get_prediction_index_map(csq_details)
     
     # handle offset 
     offset = page_size * page
@@ -105,7 +105,7 @@ def get_results(page_size:int,page:int,vcf_path:str) -> VepResultsResponse:
         )
         
         alt_alleles = [
-            get_alt_allele_details(alt,record, prediction_index_map) for alt in record.ALT
+            _get_alt_allele_details(alt,record, prediction_index_map) for alt in record.ALT
         ]
             
         v = Variant(
@@ -130,8 +130,8 @@ def get_results(page_size:int,page:int,vcf_path:str) -> VepResultsResponse:
        
          
     return VepResultsResponse(
-    metadata= meta,
-    variants= variants
+        metadata= meta,
+        variants= variants
     )
     
     

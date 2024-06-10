@@ -130,7 +130,7 @@ components:
       required:
         - name
         - allele_type
-        - slice
+        - location
         - reference_allele
         - alternative_alleles
       properties:
@@ -138,6 +138,8 @@ components:
           type: string
           nullable: true
           description: User's name for the variant; optional
+        allele_type:
+          type: string
         location:
           type: object
           properties:

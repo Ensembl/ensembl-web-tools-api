@@ -1,8 +1,11 @@
+""" Module for loading a VCF and parsing it into a VepResultsResponse 
+object as defined in APISpecification"""
+
 from typing import Dict, Any, IO, List
 
 import vcfpy
 
-from ..vep.model import *
+from ..vep import model
 
 TARGET_COLUMNS = [
     "Allele",
@@ -19,39 +22,42 @@ TARGET_COLUMNS = [
 ]
 
 
-# Taken from https://github.com/Ensembl/ensembl-hypsipyle/blob/main/common/file_model/variant.py#L142
+# Taken from https://github.com/Ensembl/ensembl-hypsipyle
+# main/common/file_model/variant.py#L142
 # Needs to be moved into a shared module
 def _set_allele_type(alt_one_bp: bool, ref_one_bp: bool, ref_alt_equal_bp: bool):
-    """Create a allele type for a variant based on Variation teams logic using ref and largest alt allele sizes"""
+    """Create a allele type for a variant based on Variation 
+    teams logic using ref and largest alt allele sizes"""
     match [alt_one_bp, ref_one_bp, ref_alt_equal_bp]:
         case [True, True, True]:
             allele_type = "SNV"
-            SO_term = "SO:0001483"
+            so_term = "SO:0001483"
 
         case [True, False, False]:
             allele_type = "deletion"
-            SO_term = "SO:0000159"
+            so_term = "SO:0000159"
 
         case [False, True, False]:
             allele_type = "insertion"
-            SO_term = "SO:0000667"
+            so_term = "SO:0000667"
 
         case [False, False, False]:
             allele_type = "indel"
-            SO_term = "SO:1000032"
+            so_term = "SO:1000032"
 
         case [False, False, True]:
             allele_type = "substitution"
-            SO_term = "SO:1000002"
-    return allele_type, SO_term
+            so_term = "SO:1000002"
+    return allele_type, so_term
 
 
 def _get_prediction_index_map(csq_header: str, target_columns=TARGET_COLUMNS) -> dict:
-    """Creates a dictionary of column indexes based on the CSQ info description"""
+    """Creates a dictionary of column indexes based 
+    on the CSQ info description"""
     csq_header = csq_header.split(":")[-1].strip()
     csq_headers = csq_header.split("|")
 
-    map = {
+    map_index = {
         csq_headers[index]: index
         for index in range(len(csq_headers))
         if csq_headers[index] in target_columns
@@ -59,13 +65,14 @@ def _get_prediction_index_map(csq_header: str, target_columns=TARGET_COLUMNS) ->
 
     # TODO add exception if len(map) != len(TARGET_COLUMNS)
 
-    return map
+    return map_index
 
 
 def _get_csq_value(
     csq_values: List, csq_key: str, default_value: Any, index_map: Dict
 ) -> Any:
-    """Helper method to return CSQ values or a default value if either the key or the value is missing"""
+    """Helper method to return CSQ values or a default value 
+    if either the key or the value is missing"""
     if csq_key in index_map and csq_values[index_map[csq_key]]:
         return csq_values[index_map[csq_key]]
     return default_value
@@ -73,7 +80,7 @@ def _get_csq_value(
 
 def _get_alt_allele_details(
     alt: vcfpy.AltRecord, rec: vcfpy.Record, index_map: Dict
-) -> AlternativeVariantAllele:
+) -> model.AlternativeVariantAllele:
     """Creates  AlternativeVariantAllele based on target alt allele and CSQ entires"""
     frequency = None
     consequences = []
@@ -94,14 +101,14 @@ def _get_alt_allele_details(
 
             # It looks like for Feature_type = Transcript that we always have a STRAND value
             strand = (
-                Strand.reverse
+                model.Strand.reverse
                 if _get_csq_value(csq_values, "STRAND", "1", index_map) == "-1"
-                else Strand.forward
+                else model.Strand.forward
             )
 
             consequences.append(
-                PredictedTranscriptConsequence(
-                    feature_type=FeatureType.transcript,
+                model.PredictedTranscriptConsequence(
+                    feature_type=model.FeatureType.transcript,
                     stable_id=_get_csq_value(csq_values, "Feature", "", index_map),
                     gene_stable_id=_get_csq_value(csq_values, "Gene", "", index_map),
                     biotype=_get_csq_value(csq_values, "BIOTYPE", "", index_map),
@@ -113,13 +120,13 @@ def _get_alt_allele_details(
             )
         elif "intergenic_variant" in cons:
             consequences.append(
-                PredictedIntergenicConsequence(
-                    feature_type="",
+                model.PredictedIntergenicConsequence(
+                    feature_type=None,
                     consequences=["intergenic_variant"],
                 )
             )
 
-    return AlternativeVariantAllele(
+    return model.AlternativeVariantAllele(
         allele_sequence=alt.value,
         allele_type=alt.type,
         representative_population_allele_frequency=frequency,
@@ -129,8 +136,9 @@ def _get_alt_allele_details(
 
 def get_results_from_path(
     page_size: int, page: int, vcf_path: str
-) -> VepResultsResponse:
-    """Helper method that converts a file path to a stream for use with get_results_from_stream"""
+) -> model.VepResultsResponse:
+    """Helper method that converts a file path to a stream
+    for use with get_results_from_stream"""
     # Check file file exists
     with open(vcf_path) as vcf_stream:
         return get_results_from_stream(page_size, page, vcf_stream)
@@ -138,8 +146,9 @@ def get_results_from_path(
 
 def get_results_from_stream(
     page_size: int, page: int, vcf_stream: IO
-) -> VepResultsResponse:
-    """Generates a page of VCF data in the format described in APISpecification.yaml for a given VCF stream"""
+) -> model.VepResultsResponse:
+    """Generates a page of VCF data in the format described in
+    APISpecification.yaml for a given VCF stream"""
 
     # Load vcf
     vcf_records = vcfpy.Reader.from_stream(vcf_stream)
@@ -152,9 +161,10 @@ def get_results_from_stream(
     count = 0
     offset = page_size * page
 
-    # This is very slow. We need to find a better way of handling this. vcfpy __next__ might be the key as it reads lines
+    # This is very slow. We need to find a better way of handling this.
+    # vcfpy __next__ might be the key as it reads lines
     if offset > 0:
-        for r in vcf_records:
+        for _r in vcf_records:
             count += 1
             if count >= offset:
                 break
@@ -173,14 +183,15 @@ def get_results_from_stream(
 
         # https://github.com/bihealth/vcfpy/blob/697768d032b6b476766fb4c524c91c8d24559330/vcfpy/record.py#L63
         # end does not look like it is implemented.
-        # Using https://github.com/Penghui-Wang/PyVCF/blob/master/vcf/model.py#L190 from competting vcf module
-        l = Location(
+        # https://github.com/Penghui-Wang/PyVCF/blob/master/vcf/model.py#L190
+        # from competting vcf module
+        location = model.Location(
             region_name=chrom,
             start=record.begin,
             end=record.end if record.end else record.begin + ref_len,
         )
 
-        rva = ReferenceVariantAllele(allele_sequence=record.REF)
+        rva = model.ReferenceVariantAllele(allele_sequence=record.REF)
 
         longest_alt = len(max([a.value for a in record.ALT], key=len))
 
@@ -189,9 +200,9 @@ def get_results_from_stream(
             for alt in record.ALT
         ]
 
-        v = Variant(
+        v = model.Variant(
             name=";".join(record.ID) if len(record.ID) > 0 else ".",
-            location=l,
+            location=location,
             reference_allele=rva,
             alternative_alleles=alt_alleles,
             allele_type=_set_allele_type(
@@ -206,11 +217,11 @@ def get_results_from_stream(
 
     # Also very slow. We could compute this and add it to the VCF header
     total = offset + count
-    for r in vcf_records:
+    for _r in vcf_records:
         total += 1
 
-    meta = Metadata(
-        pagination=PaginationMetadata(page=page, per_page=page_size, total=total)
+    meta = model.Metadata(
+        pagination=model.PaginationMetadata(page=page, per_page=page_size, total=total)
     )
 
-    return VepResultsResponse(metadata=meta, variants=variants)
+    return model.VepResultsResponse(metadata=meta, variants=variants)

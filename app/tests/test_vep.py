@@ -36,6 +36,10 @@ def test_get_results_from_stream():
     
     assert len(results.variants) == 2
     
+    assert results.metadata.pagination.page == 0
+    assert results.metadata.pagination.per_page == 100
+    assert results.metadata.pagination.total == 2
+    
     assert results.variants[0].name == "."
     assert results.variants[1].name == "my_var"
     

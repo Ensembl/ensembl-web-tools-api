@@ -1,4 +1,4 @@
-""" Module for loading a VCF and parsing it into a VepResultsResponse 
+""" Module for loading a VCF and parsing it into a VepResultsResponse
 object as defined in APISpecification"""
 
 from typing import Dict, Any, IO, List
@@ -26,7 +26,7 @@ TARGET_COLUMNS = [
 # main/common/file_model/variant.py#L142
 # Needs to be moved into a shared module
 def _set_allele_type(alt_one_bp: bool, ref_one_bp: bool, ref_alt_equal_bp: bool):
-    """Create a allele type for a variant based on Variation 
+    """Create a allele type for a variant based on Variation
     teams logic using ref and largest alt allele sizes"""
     match [alt_one_bp, ref_one_bp, ref_alt_equal_bp]:
         case [True, True, True]:
@@ -51,9 +51,14 @@ def _set_allele_type(alt_one_bp: bool, ref_one_bp: bool, ref_alt_equal_bp: bool)
     return allele_type, so_term
 
 
-def _get_prediction_index_map(csq_header: str, target_columns=TARGET_COLUMNS) -> dict:
-    """Creates a dictionary of column indexes based 
+def _get_prediction_index_map(
+                        csq_header: str,
+                        target_columns: List[str] = None
+                    ) -> Dict:
+    """Creates a dictionary of column indexes based
     on the CSQ info description"""
+    if not target_columns:
+        target_columns = TARGET_COLUMNS
     csq_header = csq_header.split(":")[-1].strip()
     csq_headers = csq_header.split("|")
 
@@ -64,14 +69,13 @@ def _get_prediction_index_map(csq_header: str, target_columns=TARGET_COLUMNS) ->
     }
 
     # TODO add exception if len(map) != len(TARGET_COLUMNS)
-
     return map_index
 
 
 def _get_csq_value(
     csq_values: List, csq_key: str, default_value: Any, index_map: Dict
 ) -> Any:
-    """Helper method to return CSQ values or a default value 
+    """Helper method to return CSQ values or a default value
     if either the key or the value is missing"""
     if csq_key in index_map and csq_values[index_map[csq_key]]:
         return csq_values[index_map[csq_key]]
@@ -79,13 +83,14 @@ def _get_csq_value(
 
 
 def _get_alt_allele_details(
-    alt: vcfpy.AltRecord, rec: vcfpy.Record, index_map: Dict
+    alt: vcfpy.AltRecord, csqs: List[str], index_map: Dict
 ) -> model.AlternativeVariantAllele:
-    """Creates  AlternativeVariantAllele based on target alt allele and CSQ entires"""
+    """Creates  AlternativeVariantAllele based on
+    target alt allele and CSQ entires"""
     frequency = None
     consequences = []
 
-    for str_csq in rec.INFO["CSQ"]:
+    for str_csq in csqs:
         csq_values = str_csq.split("|")
 
         if csq_values[index_map["Allele"]] != alt.value:
@@ -140,7 +145,7 @@ def get_results_from_path(
     """Helper method that converts a file path to a stream
     for use with get_results_from_stream"""
     # Check file file exists
-    with open(vcf_path) as vcf_stream:
+    with open(vcf_path, encoding="utf-8") as vcf_stream:
         return get_results_from_stream(page_size, page, vcf_stream)
 
 
@@ -154,8 +159,9 @@ def get_results_from_stream(
     vcf_records = vcfpy.Reader.from_stream(vcf_stream)
 
     # Parse csq header
-    csq_details = vcf_records.header.get_info_field_info("CSQ").description
-    prediction_index_map = _get_prediction_index_map(csq_details)
+    prediction_index_map = _get_prediction_index_map(
+        vcf_records.header.get_info_field_info("CSQ").description
+    )
 
     # handle offset
     count = 0
@@ -175,9 +181,8 @@ def get_results_from_stream(
 
     # populate page
     for record in vcf_records:
-        chrom = record.CHROM
-        if chrom.startswith("chr"):
-            chrom = chrom[3:]
+        if record.CHROM.startswith("chr"):
+            record.CHROM = record.CHROM[3:]
 
         ref_len = len(record.REF)
 
@@ -186,30 +191,28 @@ def get_results_from_stream(
         # https://github.com/Penghui-Wang/PyVCF/blob/master/vcf/model.py#L190
         # from competting vcf module
         location = model.Location(
-            region_name=chrom,
+            region_name=record.CHROM,
             start=record.begin,
             end=record.end if record.end else record.begin + ref_len,
         )
-
-        rva = model.ReferenceVariantAllele(allele_sequence=record.REF)
-
-        longest_alt = len(max([a.value for a in record.ALT], key=len))
+        longest_alt = len(max((a.value for a in record.ALT), key=len))
 
         alt_alleles = [
-            _get_alt_allele_details(alt, record, prediction_index_map)
+            _get_alt_allele_details(alt, record.INFO["CSQ"], prediction_index_map)
             for alt in record.ALT
         ]
 
-        v = model.Variant(
-            name=";".join(record.ID) if len(record.ID) > 0 else ".",
-            location=location,
-            reference_allele=rva,
-            alternative_alleles=alt_alleles,
-            allele_type=_set_allele_type(
-                longest_alt < 2, ref_len < 2, longest_alt == ref_len
-            )[0],
+        variants.append(
+            model.Variant(
+                name=";".join(record.ID) if len(record.ID) > 0 else ".",
+                location=location,
+                reference_allele=model.ReferenceVariantAllele(allele_sequence=record.REF),
+                alternative_alleles=alt_alleles,
+                allele_type=_set_allele_type(
+                    longest_alt < 2, ref_len < 2, longest_alt == ref_len
+                )[0],
+            )
         )
-        variants.append(v)
 
         count += 1
         if count >= page_size:
@@ -220,8 +223,13 @@ def get_results_from_stream(
     for _r in vcf_records:
         total += 1
 
-    meta = model.Metadata(
-        pagination=model.PaginationMetadata(page=page, per_page=page_size, total=total)
+    return model.VepResultsResponse(
+        metadata=model.Metadata(
+            pagination=model.PaginationMetadata(
+                page=page,
+                per_page=page_size,
+                total=total
+            )
+        ),
+        variants=variants
     )
-
-    return model.VepResultsResponse(metadata=meta, variants=variants)

@@ -1,4 +1,5 @@
-import json
+# pylint: skip-file
+# flake8: noqa
 from io import StringIO
 
 import pytest
@@ -6,6 +7,7 @@ import pytest
 from ..main import app, get_db_path
 
 from ..vep.vcf_results import get_results_from_path, get_results_from_stream, _get_prediction_index_map, TARGET_COLUMNS
+from ..vep.vcf_results import _set_allele_type, _get_alt_allele_details
 
 CSQ_DESCRIPTION = "Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|REF_ALLELE|UPLOADED_ALLELE|DISTANCE|STRAND|FLAGS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|SIFT|PolyPhen|AF|CLIN_SIG|SOMATIC|PHENO|MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS"
 
@@ -27,10 +29,32 @@ def test_load_csq_description_happy():
     
     prediction_index_map = _get_prediction_index_map(csq_header)
     assert  prediction_index_map == expected_index
+ 
+def test_set_allele_type(): 
+   
+    outcomes = {
+        "SNV":(True,True,True),
+        "deletion":(True,False,False),
+        "insertion":(False,True,False),
+        "indel":(False,False,False),
+        "substitution":(False,False,True),
+    }
+   
+    for expected, args in outcomes.items():
+        assert _set_allele_type(*args)[0] == expected
+   
+def test_get_csq_value(): 
+    #csq_values: List, csq_key: str, default_value: Any, index_map: Dict
+    assert True 
+    
+    
+def test_get_alt_allele_details():
+    #alt: vcfpy.AltRecord, csqs: List[str], index_map: Dict
+    assert True 
+    
     
 def test_get_results_from_stream(): 
-    
-    results = get_results_from_stream(100,0,StringIO(TEST_VCF))
+    results = get_results_from_stream(100, 0, StringIO(TEST_VCF))
     
     expected_index = {TARGET_COLUMNS[x]:x for x in range(0,len(TARGET_COLUMNS))}
     
@@ -54,7 +78,6 @@ def test_get_results_from_stream():
     assert results.variants[1].alternative_alleles[0].representative_population_allele_frequency == None
     
 
-
 @pytest.mark.skip(reason="Used to test against a real VCF file")
 def test_get_results_with_file_and_dump(): 
 
@@ -63,7 +86,8 @@ def test_get_results_with_file_and_dump():
     
     expected_index = {TARGET_COLUMNS[x]:x for x in range(0,len(TARGET_COLUMNS))}
     
-    with open("dump.json","w") as test_dump:
+    with open("dump.json", "w") as test_dump:
         test_dump.write(results.json())
 
     assert len(results.variants) == 100
+

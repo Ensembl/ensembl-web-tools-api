@@ -50,7 +50,9 @@ components:
         predicted_molecular_consequences:
           type: array
           items:
-            $ref: '#/components/schemas/PredictedTranscriptConsequence'
+            anyOf:
+              - $ref: '#/components/schemas/PredictedTranscriptConsequence'
+              - $ref: '#/components/schemas/PredictedIntergenicConsequence'
     PaginationMetadata:
       type: object
       required:
@@ -64,12 +66,27 @@ components:
           type: number
         total:
           type: number
+    PredictedIntergenicConsequence:
+      type: object
+      required:
+        - feature_type
+        - consequences
+      properties:
+        feature_type:
+          nullable: true
+          description: The value of this field is always null. The presence of null in this field will serve as a marker that this is a consequence of an intergenic variant.
+        consequences:
+          type: array
+          items:
+            type: string
+          description: The only expected member of this array will be the string 'intergenic_variant'
     PredictedTranscriptConsequence:
       type: object
       required:
         - feature_type
         - stable_id
         - gene_stable_id
+        - gene_symbol
         - biotype
         - is_canonical
         - consequences
@@ -85,6 +102,9 @@ components:
         gene_stable_id:
           type: string
           description: gene stable id, versioned
+        gene_symbol:
+          type: string
+          nullable: true
         biotype:
           type: string
         is_canonical:
@@ -110,7 +130,7 @@ components:
       required:
         - name
         - allele_type
-        - slice
+        - location
         - reference_allele
         - alternative_alleles
       properties:
@@ -118,6 +138,8 @@ components:
           type: string
           nullable: true
           description: User's name for the variant; optional
+        allele_type:
+          type: string
         location:
           type: object
           properties:

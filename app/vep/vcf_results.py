@@ -66,12 +66,12 @@ def _get_alt_allele_details(alt:vcfpy.AltRecord,rec:vcfpy.Record,index_map:Dict)
                 continue
                 
             frequency = _get_csq_value(csq_values, "AF", None, index_map)
-                
+            
+            cons = _get_csq_value(csq_values, "Consequence", "", index_map).split("&") 
             if csq_values[index_map["Feature_type"]] == "Transcript": 
                 
                 is_cononical = _get_csq_value(csq_values, "CANONICAL", "NO", index_map) == "YES" 
-                cons = _get_csq_value(csq_values, "Consequence", "", index_map).split("&")
-                 
+
                 #It looks like for Feature_type = Transcript that we always have a STRAND value  
                 strand = Strand.reverse if _get_csq_value(csq_values, "STRAND", "1", index_map) == "-1" else Strand.forward
 
@@ -87,6 +87,13 @@ def _get_alt_allele_details(alt:vcfpy.AltRecord,rec:vcfpy.Record,index_map:Dict)
                     strand= strand,
                     )
                 )
+            elif "intergenic_variant" in cons:
+                consequences.append(
+                    PredictedIntergenicConsequence(
+                        feature_type="",
+                        consequences = ['intergenic_variant'],
+                    )
+                )   
                       
     return AlternativeVariantAllele(
         allele_sequence=alt.value,
@@ -126,11 +133,15 @@ def get_results(page_size:int,page:int,vcf_path:str) -> VepResultsResponse:
         if chrom.startswith("chr"):
             chrom = chrom[3:]
             
-        
+        ref_len = len(record.REF)
+
+        #https://github.com/bihealth/vcfpy/blob/697768d032b6b476766fb4c524c91c8d24559330/vcfpy/record.py#L63
+        #end does not look like it is implemented.
+        #Using https://github.com/Penghui-Wang/PyVCF/blob/master/vcf/model.py#L190 from competting vcf module 
         l = Location(
             region_name = chrom,
             start = record.begin,
-            end = record.end if record.end else record.begin
+            end = record.end if record.end else record.begin + ref_len
         )
             
         rva = ReferenceVariantAllele(
@@ -138,7 +149,7 @@ def get_results(page_size:int,page:int,vcf_path:str) -> VepResultsResponse:
         )
         
         longest_alt = len(max([a.value for a in record.ALT], key=len))
-        ref_len = len(record.REF)
+        
         
         alt_alleles = [
             _get_alt_allele_details(alt,record, prediction_index_map) for alt in record.ALT

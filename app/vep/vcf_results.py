@@ -96,7 +96,7 @@ def _get_alt_allele_details(
         if csq_values[index_map["Allele"]] != alt.value:
             continue
 
-        frequency = _get_csq_value(csq_values, "AF", None, index_map)
+        frequency = _get_csq_value(csq_values, "AF", frequency, index_map)
 
         cons = _get_csq_value(csq_values, "Consequence", "", index_map).split("&")
         if csq_values[index_map["Feature_type"]] == "Transcript":

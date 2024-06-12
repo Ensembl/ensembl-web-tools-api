@@ -11,9 +11,11 @@ CSQ_DESCRIPTION = "Consequence annotations from Ensembl VEP. Format: Allele|Cons
 
 CSQ_1 = "T|upstream_gene_variant|MODIFIER|FAM138F|ENSG00000282591|Transcript|ENST00000631376.1|lncRNA||||||||||rs868831437|C|C/T|4978|-1||HGNC|HGNC:33581|YES|||0.4860||||||||"
 
+CSQ_2 = "A|intergenic_variant|MODIFIER|||||||||||||||rs1555675005|T|T/A|||||||||||||||||"
+
 CSQ_NO_FREQ = "T|upstream_gene_variant|MODIFIER|FAM138F|ENSG00000282591|Transcript|ENST00000631376.1|lncRNA||||||||||rs868831437|C|C/T|4978|-1||HGNC|HGNC:33581|YES|||||||||||"
 
-CSQ_2 = "A|intergenic_variant|MODIFIER|||||||||||||||rs1555675005|T|T/A|||||||||||||||||"
+CSQ_NO_CON = "T||MODIFIER|FAM138F|ENSG00000282591|Transcript|ENST00000631376.1|lncRNA||||||||||rs868831437|C|C/T|4978|-1||HGNC|HGNC:33581|YES|||||||||||"
 
 TEST_VCF = f"""##fileformat=VCFv4.2
 ##fileDate=20160824
@@ -83,15 +85,30 @@ def test_get_alt_allele_details():
     assert results.predicted_molecular_consequences[0].biotype == "lncRNA"
     assert results.predicted_molecular_consequences[0].gene_symbol == "FAM138F"
     
-  
-      
+def test_get_alt_allele_no_consequence():
+    #alt: vcfpy.AltRecord, csqs: List[str], index_map: Dict
+    altRec = vcfpy.Substitution("SNV",value="T")
+    
+    index_map = _get_prediction_index_map(CSQ_DESCRIPTION)
+    
+    csq_list = [CSQ_NO_CON]
+    
+    # model.AlternativeVariantAllele
+    results = _get_alt_allele_details(altRec, csq_list, index_map)
+    
+    assert type(results) == model.AlternativeVariantAllele 
+    assert results.allele_sequence == "T"
+    assert len(results.predicted_molecular_consequences) == 1 
+    assert results.predicted_molecular_consequences[0].consequences == []
+ 
+           
 def test_get_alt_allele_details_intergenic():
     #alt: vcfpy.AltRecord, csqs: List[str], index_map: Dict
     altRec = vcfpy.Substitution("SNV",value="A")
     
     index_map = _get_prediction_index_map(CSQ_DESCRIPTION)
     
-    csq_list = [CSQ_1,CSQ_2,CSQ_NO_FREQ]
+    csq_list = [CSQ_2]
     
     # model.AlternativeVariantAllele
     results = _get_alt_allele_details(altRec, csq_list, index_map)
@@ -103,6 +120,7 @@ def test_get_alt_allele_details_intergenic():
     assert results.predicted_molecular_consequences[0].feature_type == None
     assert len(results.predicted_molecular_consequences[0].consequences) == 1 
     assert results.predicted_molecular_consequences[0].consequences[0] == "intergenic_variant"
+
   
     
 def test_get_results_from_stream(): 

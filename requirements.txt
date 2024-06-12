@@ -2,3 +2,4 @@ fastapi>=0.104,<0.200
 pydantic>=2.4,<2.5
 uvicorn>=0.24,<0.25
 aiohttp>=3.8,<3.9
+vcfpy>=0.13.8

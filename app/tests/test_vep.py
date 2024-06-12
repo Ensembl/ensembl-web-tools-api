@@ -52,13 +52,15 @@ def test_get_csq_value():
         "TEST_STR":0,
         "TEST_NUM":1,
         "TEST_BOOL":2,
+        "TEST_EMPTY":3,
     }
-    csq_values = ["foo",2,True]
+    csq_values = ["foo",2,True,""]
     
     assert _get_csq_value(csq_values,"TEST_STR","ERROR",index_map) == "foo"
     assert _get_csq_value(csq_values,"TEST_NUM",-1,index_map) == 2
     assert _get_csq_value(csq_values,"TEST_BOOL",False,index_map)
     assert _get_csq_value(csq_values,"TEST_MISSING","ERROR",index_map) == "ERROR"
+    assert _get_csq_value(csq_values,"TEST_EMPTY",None,index_map) == None
  
        
 def test_get_alt_allele_details():

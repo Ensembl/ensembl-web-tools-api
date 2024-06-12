@@ -98,7 +98,11 @@ def _get_alt_allele_details(
 
         frequency = _get_csq_value(csq_values, "AF", frequency, index_map)
 
-        cons = _get_csq_value(csq_values, "Consequence", "", index_map).split("&")
+        cons = _get_csq_value(csq_values, "Consequence", "", index_map)
+        if len(cons) == 0:
+            cons = []
+        else:
+            cons = cons.split('&')
         if csq_values[index_map["Feature_type"]] == "Transcript":
             is_cononical = (
                 _get_csq_value(csq_values, "CANONICAL", "NO", index_map) == "YES"
@@ -114,11 +118,11 @@ def _get_alt_allele_details(
             consequences.append(
                 model.PredictedTranscriptConsequence(
                     feature_type=model.FeatureType.transcript,
-                    stable_id=_get_csq_value(csq_values, "Feature", "", index_map),
-                    gene_stable_id=_get_csq_value(csq_values, "Gene", "", index_map),
-                    biotype=_get_csq_value(csq_values, "BIOTYPE", "", index_map),
+                    stable_id=_get_csq_value(csq_values, "Feature", None, index_map),
+                    gene_stable_id=_get_csq_value(csq_values, "Gene", None, index_map),
+                    biotype=_get_csq_value(csq_values, "BIOTYPE", None, index_map),
                     is_canonical=is_cononical,
-                    gene_symbol=_get_csq_value(csq_values, "SYMBOL", "", index_map),
+                    gene_symbol=_get_csq_value(csq_values, "SYMBOL", None, index_map),
                     consequences=cons,
                     strand=strand,
                 )

@@ -30,7 +30,6 @@ paths:
                   type: string
                 input_text:
                   type: string
-                  nullable: true
                 input_file:
                   type: string
                   format: binary
@@ -44,7 +43,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VepResultsResponse'
+                $ref: '#/components/schemas/VepFormSubmissionCreatedResponse'
   /api/tools/vep/submissions/{id}/results:
     get:
       description: Returns results of VEP analysis

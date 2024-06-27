@@ -3,6 +3,45 @@ info:
   title: Tools api
   version: 0.0.1
 paths:
+  /vep/config:
+    get:
+      parameters:
+        - name: genome_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VepConfigResponse'
+  /vep/submission:
+    post:
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                genome_id:
+                  type: string
+                input_file:
+                  type: string
+                  format: binary
+                parameters:
+                  type: string
+                  description: |
+                    Stringified JSON of parameters, such as '{"transcript_set":"blah","symbol":true,"biotype":true}'
+      responses:
+        '200':
+          description: Successful operaiton.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VepFormSubmissionCreatedResponse'
   /api/tools/vep/submissions/{id}/results:
     get:
       description: Returns results of VEP analysis
@@ -53,6 +92,25 @@ components:
             anyOf:
               - $ref: '#/components/schemas/PredictedTranscriptConsequence'
               - $ref: '#/components/schemas/PredictedIntergenicConsequence'
+    BooleanConfigOption:
+      type: object
+      required:
+        - label
+        - description
+        - type
+        - default_value
+      properties:
+        label:
+          type: string
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum:
+            - boolean
+        default_value:
+          type: boolean
     PaginationMetadata:
       type: object
       required:
@@ -86,7 +144,7 @@ components:
         - feature_type
         - stable_id
         - gene_stable_id
-        - gene_symbol
+        - symbol
         - biotype
         - is_canonical
         - consequences
@@ -102,7 +160,7 @@ components:
         gene_stable_id:
           type: string
           description: gene stable id, versioned
-        gene_symbol:
+        symbol:
           type: string
           nullable: true
         biotype:
@@ -124,6 +182,38 @@ components:
         - allele_sequence
       properties:
         allele_sequence:
+          type: string
+    SelectConfigOption:
+      type: object
+      required:
+        - label
+        - description
+        - type
+        - options
+        - default_value
+      properties:
+        label:
+          type: string
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum:
+            - select
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              value:
+                type: string
+            required:
+              - label
+              - value
+        default_value:
           type: string
     Variant:
       type: object
@@ -159,6 +249,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AlternativeVariantAllele'
+    VepConfigResponse:
+      type: object
+      required:
+        - parameters
+      properties:
+        parameters:
+          type: array
+          items:
+            anyOf:
+              - $ref: '#/components/schemas/BooleanConfigOption'
+              - $ref: '#/components/schemas/SelectConfigOption'
     VepResultsResponse:
       type: object
       required:
@@ -176,3 +277,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Variant'
+    VepFormSubmissionCreatedResponse:
+      type: object
+      required:
+        - submission_id
+      properties:
+        submission_id:
+          type: string

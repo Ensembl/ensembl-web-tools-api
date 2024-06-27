@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 import json
 import pytest
-from ..main import app, get_db_path
+from app.blast.blast import app, get_db_path
 
 # Test config endpoint
 def test_read_config():
@@ -15,7 +15,7 @@ def test_read_config():
 # Load example BLAST job payload
 @pytest.fixture
 def blast_payload():
-	with open('app/tests/blast_payload.json') as f:
+	with open('app/blast/tests/blast_payload.json') as f:
 		return json.load(f)
 
 # Test BLAST database path inference

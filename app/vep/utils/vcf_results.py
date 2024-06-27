@@ -1,11 +1,9 @@
 """ Module for loading a VCF and parsing it into a VepResultsResponse
 object as defined in APISpecification"""
 
-from typing import Dict, Any, IO, List
-
 import vcfpy
 
-from ..vep import model
+from vep.models import vcf_results_model as model
 
 TARGET_COLUMNS = [
     "Allele",

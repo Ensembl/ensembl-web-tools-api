@@ -28,15 +28,13 @@ paths:
               properties:
                 genome_id:
                   type: string
-                input_text:
-                  type: string
                 input_file:
                   type: string
                   format: binary
                 parameters:
                   type: string
                   description: |
-                    Stringified JSON of parameters, such as { "transcript_set": string, "gene_symbol": true, "biotype": true }
+                    Stringified JSON of parameters, such as '{"transcript_set":"blah","symbol":true,"biotype":true}'
       responses:
         '200':
           description: Successful operaiton.
@@ -146,7 +144,7 @@ components:
         - feature_type
         - stable_id
         - gene_stable_id
-        - gene_symbol
+        - symbol
         - biotype
         - is_canonical
         - consequences
@@ -162,7 +160,7 @@ components:
         gene_stable_id:
           type: string
           description: gene stable id, versioned
-        gene_symbol:
+        symbol:
           type: string
           nullable: true
         biotype:

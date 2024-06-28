@@ -17,18 +17,18 @@ import os
 from core.config import BLAST_CONFIG
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: setup data cache and requests session
-    app.client_session = ClientSession()
-    with open("/data/blast_config.json") as f:
-        app.blast_config = json.load(f)
-    yield
-    # Shutdown: close requests session
-    await app.client_session.close()
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     # Startup: setup data cache and requests session
+#     app.client_session = ClientSession()
+#     with open("/data/blast_config.json") as f:
+#         app.blast_config = json.load(f)
+#     yield
+#     # Shutdown: close requests session
+#     await app.client_session.close()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 
 # Override response for input payload validation error

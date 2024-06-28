@@ -30,7 +30,7 @@ API_PREFIX = "/api/tools"
 
 config = Config(".env")
 DEBUG: bool = config("DEBUG", cast=bool, default=False)
-PROJECT_NAME: str = config("PROJECT_NAME", default="Ensembl Web Metadata API")
+PROJECT_NAME: str = config("PROJECT_NAME", default="Ensembl Web Tools API")
 ALLOWED_HOSTS: list[str] = config(
     "ALLOWED_HOSTS",
     cast=CommaSeparatedStrings,

@@ -27,7 +27,7 @@ router = APIRouter()
 
 
 
-@router.post("/submit", name="submit_vep")
+@router.post("/submissions", name="submit_vep")
 def submit_vep(genome_id:Annotated[str, Form()], input_file: UploadFile):
     try:
         return {"genome_id":genome_id,"filename": input_file.filename}

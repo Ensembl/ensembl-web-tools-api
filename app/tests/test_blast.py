@@ -15,7 +15,7 @@ def test_read_config():
 # Load example BLAST job payload
 @pytest.fixture
 def blast_payload():
-	with open('app/blast/tests/blast_payload.json') as f:
+	with open('app/tests/blast_payload.json') as f:
 		return json.load(f)
 
 # Test BLAST database path inference

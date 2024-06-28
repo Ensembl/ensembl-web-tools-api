@@ -26,7 +26,7 @@ from .logging import InterceptHandler
 import json
 
 VERSION = "0.0.0"
-API_PREFIX = "/api"
+API_PREFIX = "/api/tools"
 
 config = Config(".env")
 DEBUG: bool = config("DEBUG", cast=bool, default=False)

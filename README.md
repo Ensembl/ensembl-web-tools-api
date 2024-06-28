@@ -10,10 +10,9 @@ A FastAPI app providing the tools backend microservice for Ensembl 2020 client.
 
 ### Setup
 
-With Docker:
+With docker-compose:
 ```
-docker build -t tools-api .
-docker run --name tools-api -p 8013:8013 tools-api
+docker-compose up 
 ```
 Directly:
 ```

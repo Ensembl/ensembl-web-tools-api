@@ -53,8 +53,6 @@ Test:
   image: python:3.10
   before_script:
     - pip install -r app/tests/requirements.txt
-    - cp -R ./app/ /app/
-    - cd /app
     - ls -al
   script:
     - pytest --cov --junitxml=report.xml

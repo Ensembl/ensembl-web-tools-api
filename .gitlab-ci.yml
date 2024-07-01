@@ -55,6 +55,7 @@ Test:
     - pip install -r app/tests/requirements.txt
     - cp -R ./app/ /app/
     - cd /app
+    - ls -al
   script:
     - pytest --cov --junitxml=report.xml
   coverage: '/^TOTAL.+?(\d+\%)$/'

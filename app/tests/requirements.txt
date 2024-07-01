@@ -1,7 +1,7 @@
 fastapi>=0.104,<0.200
-pydantic>=2.4,<2.5
-uvicorn>=0.24,<0.25
+httpx>=0.25,<0.26
 aiohttp>=3.8,<3.9
+pytest-cov>=3.0,<3.1
 vcfpy @ git+https://github.com/likhitha-surapaneni/vcfpy@header-fix
 loguru==0.7.2
 python-multipart==0.0.9

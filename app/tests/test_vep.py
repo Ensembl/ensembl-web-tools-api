@@ -3,9 +3,9 @@ from io import StringIO
 import pytest
 import vcfpy
 
-from app.vep.models import vcf_results_model as model
-from app.vep.utils.vcf_results import get_results_from_path, get_results_from_stream, _get_prediction_index_map, TARGET_COLUMNS
-from app.vep.utils.vcf_results import _set_allele_type, _get_alt_allele_details, _get_csq_value
+from vep.models import vcf_results_model as model
+from vep.utils.vcf_results import get_results_from_path, get_results_from_stream, _get_prediction_index_map, TARGET_COLUMNS
+from vep.utils.vcf_results import _set_allele_type, _get_alt_allele_details, _get_csq_value
 
 CSQ_DESCRIPTION = "Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|REF_ALLELE|UPLOADED_ALLELE|DISTANCE|STRAND|FLAGS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|SIFT|PolyPhen|AF|CLIN_SIG|SOMATIC|PHENO|MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS"
 

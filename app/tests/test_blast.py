@@ -7,7 +7,7 @@ from app.main import app
 # Test config endpoint
 def test_read_config():
 	with TestClient(app) as client: #include @startup hook
-		with open('./data/blast_config.json') as f:
+		with open('data/blast_config.json') as f:
 			config = json.load(f)
 		response = client.get('/blast/config')
 		assert response.status_code == 200

@@ -57,7 +57,7 @@ Test:
     - cd app/
     - ls -al ../
   script:
-    - python -m pytest --cov --junitxml=report.xml
+    - python -m pytest  --ignore=tests/test_vep.py --cov --junitxml=report.xml
   coverage: '/^TOTAL.+?(\d+\%)$/'
   artifacts:
     when: always

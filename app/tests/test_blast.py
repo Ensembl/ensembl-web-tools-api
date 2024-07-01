@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 import json
 import pytest
-from app.blast.blast import app, get_db_path
+from blast.blast import app, get_db_path
 
 # Test config endpoint
 def test_read_config():

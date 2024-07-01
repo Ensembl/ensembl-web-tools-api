@@ -53,7 +53,7 @@ Test:
   image: python:3.10
   before_script:
     - pip install -r app/tests/requirements.txt
-    - cp ./data /data
+    - cp -r ./data /data
     - cd app/
     - ls -al ../
   script:

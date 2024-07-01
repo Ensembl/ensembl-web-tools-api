@@ -56,7 +56,7 @@ Test:
     - cd app/
     - ls -al
   script:
-    - pytest --cov --junitxml=report.xml
+    - python -m pytest --cov --junitxml=report.xml
   coverage: '/^TOTAL.+?(\d+\%)$/'
   artifacts:
     when: always

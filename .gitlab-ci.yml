@@ -54,7 +54,7 @@ Test:
   before_script:
     - pip install -r app/tests/requirements.txt
     - cd app/
-    - ls -al
+    - ls -al ../
   script:
     - python -m pytest --cov --junitxml=report.xml
   coverage: '/^TOTAL.+?(\d+\%)$/'

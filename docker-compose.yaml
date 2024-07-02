@@ -1,7 +1,6 @@
 version: '2'
 services:
   tools_api:
-
     build:
       context: .
       dockerfile: Dockerfile

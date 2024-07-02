@@ -17,6 +17,7 @@ import os
 from core.config import BLAST_CONFIG
 
 
+<<<<<<< HEAD
 # @asynccontextmanager
 # async def lifespan(app: FastAPI):
 #     # Startup: setup data cache and requests session
@@ -29,6 +30,20 @@ from core.config import BLAST_CONFIG
 
 
 app = FastAPI()
+=======
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: setup data cache and requests session
+    app.client_session = ClientSession()
+    with open("/data/blast_config.json") as f:
+        app.blast_config = json.load(f)
+    yield
+    # Shutdown: close requests session
+    await app.client_session.close()
+
+
+app = FastAPI(lifespan=lifespan)
+>>>>>>> 197a795 (Refactor project to add VEP app with a single file upload endpoint for test.)
 
 
 # Override response for input payload validation error

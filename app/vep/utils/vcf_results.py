@@ -2,6 +2,7 @@
 object as defined in APISpecification"""
 
 import vcfpy
+from typing import List, Dict, Any
 
 from vep.models import vcf_results_model as model
 

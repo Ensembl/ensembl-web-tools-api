@@ -30,7 +30,7 @@ stages:
 
 .deploy-branch-rules:
   rules:
-    - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "master" || $CI_COMMIT_BRANCH != "dev")'
+    - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev")'
       when: always
 
 

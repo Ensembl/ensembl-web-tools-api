@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from blast.blast import app as blast_app
-from vep.routes import router
+from vep.routes import router as vep_router
 from core.config import API_PREFIX, ALLOWED_HOSTS, VERSION, PROJECT_NAME, DEBUG
 
 def get_application() -> FastAPI:
@@ -33,10 +33,10 @@ def get_application() -> FastAPI:
         allow_headers=["*"],
     )
 
-    application.include_router(router, prefix=API_PREFIX)
+    application.include_router(vep_router, prefix=API_PREFIX)
 
     return application
 
 
 app = get_application()
-app.mount("/blast", blast_app)
+app.mount("/api/tools/blast", blast_app)

@@ -29,7 +29,7 @@ def get_application() -> FastAPI:
         CORSMiddleware,
         allow_origins=ALLOWED_HOSTS or ["*"],
         allow_credentials=True,
-        allow_methods=["GET"],
+        allow_methods=["POST", "GET"],
         allow_headers=["*"],
     )
 

@@ -3,13 +3,14 @@ import json
 import pytest
 from app.blast.blast import get_db_path
 from app.main import app
+from core.config import API_PREFIX
 
 # Test config endpoint
 def test_read_config():
 	with TestClient(app) as client: #include @startup hook
 		with open('/data/blast_config.json') as f:
 			config = json.load(f)
-		response = client.get('/api/tools/blast/config')
+		response = client.get(API_PREFIX + '/blast/config')
 		assert response.status_code == 200
 		assert response.json() == config
 
@@ -30,7 +31,7 @@ def test_get_db_path(blast_payload):
 # Test single BLAST job submission with a valid payload
 def test_blast_job(blast_payload):
 	with TestClient(app) as client:
-		response = client.post('/api/tools/blast/job', json=blast_payload)
+		response = client.post(API_PREFIX + '/blast/job', json=blast_payload)
 		assert response.status_code == 200
 		resp = response.json()
 		assert 'submission_id' in resp
@@ -48,7 +49,7 @@ def test_blast_jobs(blast_payload):
 	with TestClient(app) as client:
 		blast_payload['genome_ids'].append(blast_payload['genome_ids'][0])
 		blast_payload['query_sequences'].append({'id': 2, 'value': 'MPIGSKERPTFKTRCNKADLGPI'})
-		response = client.post('/api/tools/blast/job', json=blast_payload)
+		response = client.post(API_PREFIX + '/blast/job', json=blast_payload)
 		assert response.status_code == 200
 		resp = response.json()
 		assert 'submission_id' in resp
@@ -63,7 +64,7 @@ def test_blast_jobs(blast_payload):
 def test_blast_job_data_error(blast_payload):
 	with TestClient(app) as client:
 		del blast_payload['query_sequences']
-		response = client.post('/api/tools/blast/job', json=blast_payload)
+		response = client.post(API_PREFIX + '/blast/job', json=blast_payload)
 		assert response.status_code == 422
 		resp = response.json()
 		assert 'error' in resp
@@ -74,7 +75,7 @@ def test_blast_job_jd_error(blast_payload):
 	with TestClient(app) as client:
 		# 'stype'='dna' is incompatible with 'program'='blastp'
 		blast_payload['parameters']['stype'] = 'dna'
-		response = client.post('/api/tools/blast/job', json=blast_payload)
+		response = client.post(API_PREFIX + '/blast/job', json=blast_payload)
 		assert response.status_code == 200
 		resp = response.json()
 		assert 'jobs' in resp
@@ -87,7 +88,7 @@ def test_blast_job_jd_error(blast_payload):
 # Test BLAST job status endpoint
 def test_blast_job_status():
 	with TestClient(app) as client:
-		response = client.get('/api/tools/blast/jobs/status/ncbiblast_ensembl-12345')
+		response = client.get(API_PREFIX + '/blast/jobs/status/ncbiblast_ensembl-12345')
 		assert response.status_code == 200
 		assert 'status' in response.json()
 
@@ -96,7 +97,7 @@ def test_blast_job_status():
 def test_blast_job_statuses():
 	with TestClient(app) as client:
 		job_ids = {'job_ids': ['ncbiblast-1234', 'ncbiblast-5678']}
-		response = client.post('/api/tools/blast/jobs/status', json=job_ids)
+		response = client.post(API_PREFIX + '/blast/jobs/status', json=job_ids)
 		assert response.status_code == 200
 		resp = response.json()
 		assert 'statuses' in resp
@@ -107,13 +108,13 @@ def test_blast_job_statuses():
 # Test JD proxy error response
 def test_blast_proxy_error():
 	with TestClient(app) as client:
-		response = client.get('/api/tools/blast/jobs/na/na')
+		response = client.get(API_PREFIX + '/blast/jobs/na/na')
 		assert response.status_code == 404
 		assert 'error' in response.json()
 
 # Test invalid endpoint error response
 def test_404_error():
 	with TestClient(app) as client:
-		response = client.get('/api/tools/blast/invalid_path')
+		response = client.get(API_PREFIX + '/blast/invalid_path')
 		assert response.status_code == 404
 		assert response.json() == {'error': 'Invalid endpoint'}

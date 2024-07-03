@@ -96,7 +96,7 @@ def test_blast_job_status():
 # Example job id: ncbiblast_ensembl-R20220907-111749-0693-28451168-np2
 def test_blast_job_statuses():
 	with TestClient(app) as client:
-		job_ids = {'job_ids': ['ncbiblast-1234', 'ncbiblast-5678']}
+		job_ids = {'job_ids': ['ncbiblast_ensembl-12345', 'ncbiblast_ensembl-5678']}
 		response = client.post(API_PREFIX + '/blast/jobs/status', json=job_ids)
 		assert response.status_code == 200
 		resp = response.json()

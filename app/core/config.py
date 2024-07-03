@@ -56,7 +56,7 @@ logger.configure(handlers=[{"sink": sys.stderr, "level": LOGGING_LEVEL}])
 logging.info(BLAST_CONFIG)
 
 # Nextflow Configurations
-NF_TOKEN = config("TOKEN")
+NF_TOKEN = config("NF_TOKEN")
 NF_COMPUTE_ENV_ID = config("NF_COMPUTE_ENV_ID")
 NF_PIPELINE_URL = config("NF_PIPELINE_URL")
 NF_WORK_DIR = config("NF_WORK_DIR")

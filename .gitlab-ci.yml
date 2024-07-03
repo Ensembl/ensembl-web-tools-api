@@ -58,6 +58,7 @@ Test:
     - pip install -r app/tests/requirements.txt
     - cp -r ./data /data
     - cd app/
+    - cp .env.sample .env
     - ls -al ../
   script:
     - python -m pytest  --ignore=tests/test_vep.py --cov --junitxml=report.xml

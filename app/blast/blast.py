@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from urllib import response
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, APIRouter
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -29,7 +29,6 @@ from core.config import BLAST_CONFIG
 
 
 app = FastAPI()
-
 
 # Override response for input payload validation error
 @app.exception_handler(RequestValidationError)
@@ -74,8 +73,8 @@ class DbType(str, Enum):
 
 
 class BlastParams(BaseModel, extra='allow'):
-    email: str | None = "blast2020@ebi.ac.uk"
-    title: str | None = ""
+    email: str = "blast2020@ebi.ac.uk"
+    title: str = ""
     program: Program
     database: DbType
 

@@ -3,7 +3,7 @@ info:
   title: Tools api
   version: 0.0.1
 paths:
-  /vep/config:
+  /api/tools/vep/config:
     get:
       parameters:
         - name: genome_id
@@ -18,7 +18,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VepConfigResponse'
-  /vep/submission:
+  /api/tools/vep/submissions:
     post:
       requestBody:
         content:

@@ -57,6 +57,7 @@ Test:
   before_script:
     - pip install -r app/tests/requirements.txt
     - cp -r ./data /data
+    - cp .env.sample .env
     - cd app/
     - ls -al ../
   script:

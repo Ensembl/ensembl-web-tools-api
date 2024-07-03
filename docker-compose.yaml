@@ -11,5 +11,6 @@ services:
       - DEBUG=True
     volumes:
       - ./app/:/app/
+      - ./tmpdir:/tmpdir/
     ports:
       - 8013:8013

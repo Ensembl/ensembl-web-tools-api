@@ -3,7 +3,7 @@ import json
 from loguru import logger
 from core.logging import InterceptHandler
 from models.pipeline_model import PipelineParams
-from core.config import NF_TOKEN, NF_PIPELINE_URL, NF_COMPUTE_ENV_ID, NF_WORK_DIR, SEQERA_WORKFLOW_LAUNCH_URL
+from core.config import NF_TOKEN, NF_PIPELINE_URL, NF_WORK_DIR, SEQERA_WORKFLOW_LAUNCH_URL
 
 logging.getLogger().handlers = [InterceptHandler()]
 

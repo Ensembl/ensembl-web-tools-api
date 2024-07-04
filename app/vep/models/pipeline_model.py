@@ -1,12 +1,13 @@
 from typing import Optional, List, Literal
 from pydantic import BaseModel, validator
+from core.config import NF_COMPUTE_ENV_ID
 
 class VEPConfigParams(BaseModel):
     vcf: str
     vep_config: str
 
 class LaunchParams(BaseModel):
-    computeEnvId: str = "17wuWKrWOZW5JrLoGGwPdD"
+    computeEnvId: str = NF_COMPUTE_ENV_ID
     pipeline: str
     workDir: str
     revision: str = "main"

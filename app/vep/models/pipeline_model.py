@@ -11,12 +11,12 @@ class LaunchParams(BaseModel):
     pipeline: str
     workDir: str
     revision: str = "main"
-    pullLatest: bool = "true"
+    pullLatest: bool = True
     configProfiles: List[str] = ["slurmnew"]
     paramsText: VEPConfigParams
     preRunScript: str = "module load nextflow"
     postRunScript: str = ""
-    stubRun: bool = "false"
+    stubRun: bool = False
     labelIds: List[str]
     headJobCpus: int = 1
     headJobMemoryMb: int = 4

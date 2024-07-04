@@ -36,7 +36,7 @@ def submit_vep(genome_id:Annotated[str, Form()], input_file: UploadFile):
         logging.info(e)
 
 # Creates config ini file
-def create_config_ini_file(symbol: bool = "true", biotype: bool = "true"):
+def create_config_ini_file(symbol: bool = False, biotype: bool = False):
     symbol = 1 if (symbol) else 0
     biotype = 1 if (biotype) else 0
 

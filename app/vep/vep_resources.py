@@ -45,20 +45,24 @@ def create_config_ini_file(symbol: bool = "true", biotype: bool = "true"):
         biotype = biotype
     )
     config_dump = config_ini_params.model_dump()
-    config_yaml = f'''cache 1
+
+    print (config_dump['cache_version'])
+    config_yaml = f'''cache {config_dump["cache"]}
 dir_cache {config_dump["dir_cache"]}
-species homo_sapiens
-assembly 'GRCh38'
-cache_version 110
-offline 1
-force_overwrite 1
+species {config_dump["species"]}
+assembly {config_dump["assembly"]}
+cache_version {config_dump["cache_version"]}
+offline {config_dump["offline"]}
+force_overwrite {config_dump["force_overwrite"]}
 symbol {symbol}
 biotype {biotype}
-transcript_version 1
-canonical 1
+transcript_version {config_dump["transcript_version"]}
+canonical {config_dump["canonical"]}
 '''
     ini_file = tempfile.NamedTemporaryFile(prefix="vep_", dir=VEP_CONFIG_INI_PATH, delete=False)
     try: 
         ini_file.write(config_yaml.encode())
     finally:
         ini_file.close()
+
+create_config_ini_file()

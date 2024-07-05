@@ -39,7 +39,6 @@ ALLOWED_HOSTS: list[str] = config(
 with open("/data/blast_config.json") as f:
     BLAST_CONFIG = json.load(f)
 
-
 # logging configuration
 LOGGING_LEVEL = logging.DEBUG if DEBUG else logging.INFO
 LOGGERS = ("uvicorn.asgi", "uvicorn.access")
@@ -61,3 +60,5 @@ NF_COMPUTE_ENV_ID = config("NF_COMPUTE_ENV_ID")
 NF_PIPELINE_URL = config("NF_PIPELINE_URL")
 NF_WORK_DIR = config("NF_WORK_DIR")
 SEQERA_WORKFLOW_LAUNCH_URL = config("SEQERA_WORKFLOW_LAUNCH_URL")
+
+VCF_UPLOAD_DIRECTORY = config("VCF_UPLOAD_DIRECTORY", default="/tmpdir")

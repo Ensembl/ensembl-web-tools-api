@@ -31,3 +31,4 @@ def submit_vep(genome_id:Annotated[str, Form()], input_file: UploadFile):
         return {"genome_id":genome_id,"filename": input_file.filename}
     except Exception as e:
         logging.info(e)
+

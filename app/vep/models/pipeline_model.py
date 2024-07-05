@@ -1,6 +1,7 @@
 from typing import Optional, List, Literal
 from pydantic import BaseModel, validator
-from core.config import NF_COMPUTE_ENV_ID
+from core.config import NF_COMPUTE_ENV_ID, VEP_CONFIG_INI_PATH
+
 import tempfile 
 
 class VEPConfigParams(BaseModel):

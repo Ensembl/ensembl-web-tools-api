@@ -17,7 +17,6 @@ limitations under the License.
 import logging
   
 from typing import Annotated
-from core.config import VEP_CONFIG_INI_PATH
 from fastapi import APIRouter, responses, UploadFile, Form
 
 # from core.logging import InterceptHandler

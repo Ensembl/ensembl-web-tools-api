@@ -46,7 +46,6 @@ def create_config_ini_file(symbol: bool = False, biotype: bool = False):
     )
     config_dump = config_ini_params.model_dump()
 
-    print (config_dump['cache_version'])
     config_yaml = f'''cache {config_dump["cache"]}
 dir_cache {config_dump["dir_cache"]}
 species {config_dump["species"]}
@@ -64,5 +63,3 @@ canonical {config_dump["canonical"]}
         ini_file.write(config_yaml.encode())
     finally:
         ini_file.close()
-
-create_config_ini_file()

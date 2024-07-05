@@ -15,8 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import logging
-import tempfile 
-import os, json
   
 from typing import Annotated
 from core.config import VEP_CONFIG_INI_PATH
@@ -34,32 +32,3 @@ def submit_vep(genome_id:Annotated[str, Form()], input_file: UploadFile):
         return {"genome_id":genome_id,"filename": input_file.filename}
     except Exception as e:
         logging.info(e)
-
-# Creates config ini file
-def create_config_ini_file(symbol: bool = False, biotype: bool = False):
-    symbol = 1 if (symbol) else 0
-    biotype = 1 if (biotype) else 0
-
-    config_ini_params = ConfigIniParams(
-        symbol = symbol,
-        biotype = biotype
-    )
-    config_dump = config_ini_params.model_dump()
-
-    config_yaml = f'''cache {config_dump["cache"]}
-dir_cache {config_dump["dir_cache"]}
-species {config_dump["species"]}
-assembly {config_dump["assembly"]}
-cache_version {config_dump["cache_version"]}
-offline {config_dump["offline"]}
-force_overwrite {config_dump["force_overwrite"]}
-symbol {symbol}
-biotype {biotype}
-transcript_version {config_dump["transcript_version"]}
-canonical {config_dump["canonical"]}
-'''
-    ini_file = tempfile.NamedTemporaryFile(prefix="vep_", dir=VEP_CONFIG_INI_PATH, delete=False)
-    try: 
-        ini_file.write(config_yaml.encode())
-    finally:
-        ini_file.close()

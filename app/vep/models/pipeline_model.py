@@ -1,6 +1,7 @@
 from typing import Optional, List, Literal
 from pydantic import BaseModel, validator
 from core.config import NF_COMPUTE_ENV_ID
+import tempfile 
 
 class VEPConfigParams(BaseModel):
     vcf: str
@@ -36,3 +37,33 @@ class ConfigIniParams(BaseModel):
   biotype: int = 1
   transcript_version: int = 1
   canonical: int = 1
+
+# Creates config ini file
+def create_config_ini_file(symbol: bool = False, biotype: bool = False):
+    symbol = 1 if (symbol) else 0
+    biotype = 1 if (biotype) else 0
+
+    config_ini_params = ConfigIniParams(
+        symbol = symbol,
+        biotype = biotype
+    )
+    config_dump = config_ini_params.model_dump()
+
+    config_yaml = f'''cache {config_dump["cache"]}
+dir_cache {config_dump["dir_cache"]}
+species {config_dump["species"]}
+assembly {config_dump["assembly"]}
+cache_version {config_dump["cache_version"]}
+offline {config_dump["offline"]}
+force_overwrite {config_dump["force_overwrite"]}
+symbol {symbol}
+biotype {biotype}
+transcript_version {config_dump["transcript_version"]}
+canonical {config_dump["canonical"]}
+'''
+    ini_file = tempfile.NamedTemporaryFile(prefix="vep_", dir=VEP_CONFIG_INI_PATH, delete=False)
+    try: 
+        ini_file.write(config_yaml.encode())
+    finally:
+        ini_file.close()
+    return ini_file

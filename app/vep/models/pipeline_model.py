@@ -40,10 +40,6 @@ class ConfigIniParams(BaseModel):
   canonical: int = 1
   ini_file: str = None
 
-  @validator('symbol','biotype', pre = True, always = True)
-  def convert_to_int(cls, value: bool) -> int:
-    return 1 if (value) else 0
-  
   # Creates config ini file
   def create_config_ini_file(self):
 

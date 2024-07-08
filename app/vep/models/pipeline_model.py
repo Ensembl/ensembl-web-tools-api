@@ -57,7 +57,7 @@ biotype {biotype}
 transcript_version {self.transcript_version}
 canonical {self.canonical}
 '''
-      ini_file = tempfile.NamedTemporaryFile(prefix="vep_", dir=VEP_CONFIG_INI_PATH, delete=False)
+      ini_file = tempfile.NamedTemporaryFile(prefix="vep_", suffix=".ini", dir=VEP_CONFIG_INI_PATH, delete=False)
       try:
           ini_file.write(config_yaml.encode())
       finally:

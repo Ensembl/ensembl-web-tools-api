@@ -18,7 +18,7 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   DOCKER_IMAGE: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}
   NFS_SERVER: ${HL_NFS_SERVER_CODON}
-  NFS_PATH: ${HL_NFS_PATH_CODON}
+  NFS_PATH: ${HL_NFS_OPPATH_CODON}
 
 stages:
   - test
@@ -44,7 +44,7 @@ stages:
     - kubectl config set-context --current --namespace=${NS}
   script:
     - git clone https://gitlab.ebi.ac.uk/ensembl-web/ensembl-k8s-manifests.git
-    - git -C ensembl-k8s-manifests/ checkout tools-api-mount
+    - git -C ensembl-k8s-manifests/ checkout k8s123-migration
     - cd ensembl-k8s-manifests/ensembl-web-tools-api
     - sed -i "s#<NFS_SERVER>#${NFS_SERVER}#g" deployment.yaml
     - sed -i "s#<NFS_PATH>#${NFS_PATH}#g" deployment.yaml

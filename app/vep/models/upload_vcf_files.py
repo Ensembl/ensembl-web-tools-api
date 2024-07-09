@@ -1,49 +1,65 @@
+import os
 import logging
 import tempfile
-import aiofiles
+import shutil
 
-import typing
-from starlette import status
+from starlette.requests import ClientDisconnect
 
-from fastapi import UploadFile, File, HTTPException
+from streaming_form_data import StreamingFormDataParser
+from streaming_form_data.targets import FileTarget, ValueTarget
 
 from core.config import VCF_UPLOAD_DIRECTORY
 
-ALLOWED_FILE_TYPES = ("vcf", "vcf.gz", ".txt")  # Allowed file types
-MAX_FILE_SIZE = 240 * 1024 * 1024  # 250 MB
+MAX_FILE_SIZE = 260 * 1024 * 1024  # 250 MB
+MAX_REQUEST_BODY_SIZE = MAX_FILE_SIZE + 1024
+
+class MaxBodySizeException(Exception):
+    def __init__(self, body_len: str):
+        self.body_len = body_len
 
 
-async def validate_file(input_file: UploadFile = File(...), allowed_types: typing.Tuple[str] = ALLOWED_FILE_TYPES,
-                        max_size: int = MAX_FILE_SIZE) -> bool:
-    # Check file type
-    if not input_file.filename.endswith(ALLOWED_FILE_TYPES):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file type: {input_file.content_type}. Allowed types are: {', '.join(allowed_types)}."
-        )
+class MaxBodySizeValidator:
+    def __init__(self, max_size: int):
+        self.body_len = 0
+        self.max_size = max_size
 
-    # Check file size
-    input_file.file.seek(0, 2)
-    file_size = input_file.file.tell()
-    input_file.file.seek(0)
-
-    if file_size > max_size:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File size exceeds the maximum limit of {(max_size / (1024 * 1024)) + 10} MB."
-        )
+    def __call__(self, chunk: bytes):
+        self.body_len += len(chunk)
+        if self.body_len > self.max_size:
+            raise MaxBodySizeException(body_len=self.body_len)
 
 
-async def custom_file_upload(input_file: UploadFile = File(...)) -> UploadFile:
-    await validate_file(input_file=input_file)
-    temp_file = tempfile.NamedTemporaryFile(delete=False, dir=VCF_UPLOAD_DIRECTORY, suffix=input_file.filename)
-    try:
-        CHUNK_SIZE = 1024 * 1024  # 1MB
-        async with aiofiles.open(temp_file.name, 'wb') as f:
-            while chunk := await input_file.read(CHUNK_SIZE):
-                await f.write(chunk)
+class Streamer:
+    def __init__(self, request):
+        self.request = request
+        self.filename = self.request.headers.get('Filename', None)
+        self.file_name_validator(self.filename)
+        self.temp_dir = tempfile.mkdtemp(dir=VCF_UPLOAD_DIRECTORY)
+        self.filepath = os.path.join(str(self.temp_dir), os.path.basename(self.filename))
+        self._input_file = FileTarget(self.filepath)
 
-    except Exception as e:
-        logging.info(e)
+        self.parser = StreamingFormDataParser(headers=self.request.headers)
+        self.parameters = ValueTarget()
+        self.genome_id = ValueTarget()
 
-    return input_file
+    @staticmethod
+    def file_name_validator(file_name: str = None):
+        if not file_name:
+            raise Exception
+
+    async def stream(self):
+        body_validator =MaxBodySizeValidator(MAX_REQUEST_BODY_SIZE)
+        try:
+            self.parser.register('input_file', self._input_file)
+            self.parser.register('parameters', self.parameters)
+            self.parser.register('genome_id', self.genome_id)
+
+            async for chunk in self.request.stream():
+                body_validator(chunk)
+                self.parser.data_received(chunk)
+            return True
+        except (Exception, ClientDisconnect) as e:
+            print(e)
+            logging.info(e)
+            shutil.rmtree(self.temp_dir)
+            raise Exception

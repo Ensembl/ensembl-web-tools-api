@@ -18,12 +18,11 @@ limitations under the License.
 """
 
 import logging
-from typing import Annotated
-
-from fastapi import APIRouter, UploadFile, Form, Depends
 
 from core.logging import InterceptHandler
-from vep.models.upload_vcf_files import custom_file_upload
+from vep.models.upload_vcf_files import Streamer
+
+from fastapi import Request, HTTPException, status, APIRouter
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -31,9 +30,19 @@ router = APIRouter()
 
 
 @router.post("/submissions", name="submit_vep")
-async def submit_vep(genome_id: Annotated[str, Form()], input_file: UploadFile = Depends(custom_file_upload)):
+async def submit_vep(request : Request):
     try:
-        return {"genome_id": genome_id, "filename": input_file.filename}
+        test_obj = Streamer(request=request)
+        stream_result = await test_obj.stream()
+        print(test_obj.parameters.value.decode())
+        print(test_obj.genome_id.value.decode())
+        if stream_result:
+            return {"message": f"Successfully uploaded{test_obj.filepath}"}
+        else:
+            raise Exception
 
     except Exception as e:
-        logging.info(e)
+        print(e)
+        return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail='There was an error uploading the file')
+

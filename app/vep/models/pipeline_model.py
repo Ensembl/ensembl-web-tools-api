@@ -3,6 +3,7 @@ from pydantic import BaseModel, validator
 from core.config import NF_COMPUTE_ENV_ID, VEP_CONFIG_INI_PATH
 from core.logging import InterceptHandler
 from models.pipeline_model import ConfigIniParams
+import logging
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -42,7 +43,6 @@ class ConfigIniParams(BaseModel):
   biotype: bool = False
   transcript_version: int = 1
   canonical: int = 1
-  ini_file: str = None
 
   # Creates config ini file
   def create_config_ini_file(self):
@@ -62,6 +62,7 @@ biotype {biotype}
 transcript_version {self.transcript_version}
 canonical {self.canonical}
 '''
+
     try:
       with tempfile.NamedTemporaryFile(prefix="vep_", suffix=".ini", dir=VEP_CONFIG_INI_PATH, delete=False) as ini_file:
         ini_file.write(config_yaml.encode())

@@ -69,4 +69,4 @@ canonical {self.canonical}
       return ini_file
     except Exception as e:
       logging.info(e)
-      raise RuntimeError("Could not create vep config ini file") from e
+      raise RuntimeError("Could not create vep config ini file")

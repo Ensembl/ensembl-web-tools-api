@@ -1,6 +1,10 @@
 from typing import Optional, List, Literal
 from pydantic import BaseModel, validator
 from core.config import NF_COMPUTE_ENV_ID, VEP_CONFIG_INI_PATH
+from core.logging import InterceptHandler
+from models.pipeline_model import ConfigIniParams
+
+logging.getLogger().handlers = [InterceptHandler()]
 
 import tempfile 
 
@@ -58,9 +62,10 @@ biotype {biotype}
 transcript_version {self.transcript_version}
 canonical {self.canonical}
 '''
-    ini_file = tempfile.NamedTemporaryFile(prefix="vep_", suffix=".ini", dir=VEP_CONFIG_INI_PATH, delete=False)
     try:
-      ini_file.write(config_yaml.encode())
-    finally:
-      ini_file.close()
-    self.ini_file = ini_file
+      with tempfile.NamedTemporaryFile(prefix="vep_", suffix=".ini", dir=VEP_CONFIG_INI_PATH, delete=False) as ini_file:
+        ini_file.write(config_yaml.encode())
+      return ini_file
+    except Exception as e:
+      logging.info(e)
+      raise RuntimeError("Could not create vep config ini file") from e

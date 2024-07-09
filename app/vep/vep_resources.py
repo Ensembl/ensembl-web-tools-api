@@ -14,22 +14,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+
 import logging
 from typing import Annotated
-
 from fastapi import APIRouter, responses, UploadFile, Form
 
 from core.logging import InterceptHandler
-
+from models.pipeline_model import ConfigIniParams
 logging.getLogger().handlers = [InterceptHandler()]
 
 router = APIRouter()
 
-
-
 @router.post("/submissions", name="submit_vep")
 def submit_vep(genome_id:Annotated[str, Form()], input_file: UploadFile):
-    try:
-        return {"genome_id":genome_id,"filename": input_file.filename}
-    except Exception as e:
-        logging.info(e)
+  try:
+    return {"genome_id":genome_id,"filename": input_file.filename}
+  except Exception as e:
+    logging.info(e)

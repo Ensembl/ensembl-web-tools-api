@@ -24,10 +24,11 @@ from starlette.requests import ClientDisconnect
 
 from streaming_form_data import StreamingFormDataParser
 from streaming_form_data.targets import FileTarget, ValueTarget
+import streaming_form_data
 
 from core.config import VCF_UPLOAD_DIRECTORY
 
-MAX_FILE_SIZE = 260 * 1024 * 1024  # 250 MB
+MAX_FILE_SIZE = 1024 * 1024 * 1024 * 2 # 2GB
 MAX_REQUEST_BODY_SIZE = MAX_FILE_SIZE + 1024
 
 class MaxBodySizeException(Exception):
@@ -75,6 +76,10 @@ class Streamer:
                 body_validator(chunk)
                 self.parser.data_received(chunk)
             return True
+
+        except (MaxBodySizeException, streaming_form_data.validators.ValidationError):
+            shutil.rmtree(self.temp_dir)
+            raise MaxBodySizeException(MAX_FILE_SIZE)
         except (Exception, ClientDisconnect) as e:
             print(e)
             logging.info(e)

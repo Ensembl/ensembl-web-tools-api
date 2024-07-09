@@ -19,7 +19,7 @@ limitations under the License.
 import logging
 
 from core.logging import InterceptHandler
-from vep.models.upload_vcf_files import Streamer
+from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 
 from fastapi import Request, HTTPException, status, APIRouter
 
@@ -36,12 +36,14 @@ async def submit_vep(request : Request):
         print(test_obj.parameters.value.decode())
         print(test_obj.genome_id.value.decode())
         if stream_result:
-            return {"message": f"Successfully uploaded{test_obj.filepath}"}
+            return {"message": f"Successfully uploaded{test_obj.filepath}."}
         else:
             raise Exception
-
+    except MaxBodySizeException:
+        return HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                             detail='Maximum file size limit exceeded')
     except Exception as e:
         print(e)
         return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail='There was an error uploading the file')
+                            detail='There was an error uploading the file.')
 

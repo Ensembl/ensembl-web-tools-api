@@ -32,17 +32,17 @@ router = APIRouter()
 @router.post("/submissions", name="submit_vep")
 async def submit_vep(request : Request):
     try:
-        test_obj = Streamer(request=request)
-        stream_result = await test_obj.stream()
-        print(test_obj.parameters.value.decode())
-        print(test_obj.genome_id.value.decode())
+        stream_obj = Streamer(request=request)
+        stream_result = await stream_obj.stream()
+        print(stream_obj.parameters.value.decode())
+        print(stream_obj.genome_id.value.decode())
         if stream_result:
-            return {"message": f"Successfully uploaded{test_obj.filepath}."}
+            return {"message": f"Successfully uploaded{stream_obj.filepath}"}
         else:
             raise Exception
     except MaxBodySizeException:
         return HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                             detail='Maximum file size limit exceeded')
+                             detail='Maximum file size limit exceeded.')
     except Exception as e:
         print(e)
         return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

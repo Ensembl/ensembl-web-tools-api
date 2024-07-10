@@ -80,7 +80,7 @@ class Streamer:
             if self.filename == 'temp_name':
                 os.rename(self.filepath, os.path.join(self.temp_dir, self._input_file.multipart_filename))
                 self.filename = self._input_file.multipart_filename
-                self.filepath = os.path.join(self.temp_dir, self._input_file.multipart_filename)
+                self.filepath = os.path.join(self.temp_dir, self.filename)
             return True
 
         except (MaxBodySizeException, streaming_form_data.validators.ValidationError):

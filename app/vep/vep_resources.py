@@ -22,7 +22,6 @@ from typing import Annotated
 from fastapi import Request, HTTPException, status, APIRouter
 
 from core.logging import InterceptHandler
-from models.pipeline_model import ConfigIniParams
 from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 
 logging.getLogger().handlers = [InterceptHandler()]

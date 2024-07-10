@@ -26,10 +26,11 @@ from streaming_form_data import StreamingFormDataParser
 from streaming_form_data.targets import FileTarget, ValueTarget
 import streaming_form_data
 
-from core.config import VCF_UPLOAD_DIRECTORY
+from core.config import UPLOAD_DIRECTORY
 
-MAX_FILE_SIZE = 1024 * 1024 * 1024 * 2 # 2GB
+MAX_FILE_SIZE = 1024 * 1024 * 1024 * 2  # 2GB
 MAX_REQUEST_BODY_SIZE = MAX_FILE_SIZE + 1024
+
 
 class MaxBodySizeException(Exception):
     def __init__(self, body_len: str):
@@ -50,9 +51,9 @@ class MaxBodySizeValidator:
 class Streamer:
     def __init__(self, request):
         self.request = request
-        self.filename = self.request.headers.get('Filename', None)
+        self.filename = self.request.headers.get('Filename', 'temp_name')
         self.file_name_validator(self.filename)
-        self.temp_dir = tempfile.mkdtemp(dir=VCF_UPLOAD_DIRECTORY)
+        self.temp_dir = tempfile.mkdtemp(dir=UPLOAD_DIRECTORY)
         self.filepath = os.path.join(str(self.temp_dir), os.path.basename(self.filename))
         self._input_file = FileTarget(self.filepath)
 
@@ -66,7 +67,7 @@ class Streamer:
             raise Exception
 
     async def stream(self):
-        body_validator =MaxBodySizeValidator(MAX_REQUEST_BODY_SIZE)
+        body_validator = MaxBodySizeValidator(MAX_REQUEST_BODY_SIZE)
         try:
             self.parser.register('input_file', self._input_file)
             self.parser.register('parameters', self.parameters)
@@ -75,6 +76,11 @@ class Streamer:
             async for chunk in self.request.stream():
                 body_validator(chunk)
                 self.parser.data_received(chunk)
+
+            if self.filename == 'temp_name':
+                os.rename(self.filepath, os.path.join(self.temp_dir, self._input_file.multipart_filename))
+                self.filename = self._input_file.multipart_filename
+                self.filepath = os.path.join(self.temp_dir, self._input_file.multipart_filename)
             return True
 
         except (MaxBodySizeException, streaming_form_data.validators.ValidationError):

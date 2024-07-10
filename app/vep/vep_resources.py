@@ -18,10 +18,12 @@ limitations under the License.
 
 import logging
 
-from core.logging import InterceptHandler
-from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
-
+from typing import Annotated
 from fastapi import Request, HTTPException, status, APIRouter
+
+from core.logging import InterceptHandler
+from models.pipeline_model import ConfigIniParams
+from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -46,4 +48,5 @@ async def submit_vep(request : Request):
         print(e)
         return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail='There was an error uploading the file.')
+
 

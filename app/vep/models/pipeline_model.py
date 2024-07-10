@@ -1,8 +1,7 @@
-from typing import Optional, List, Literal
-from pydantic import BaseModel, validator
-from core.config import NF_COMPUTE_ENV_ID, VEP_CONFIG_INI_PATH
+from typing import List
+from pydantic import BaseModel
+from core.config import NF_COMPUTE_ENV_ID, UPLOAD_DIRECTORY
 from core.logging import InterceptHandler
-from models.pipeline_model import ConfigIniParams
 import logging
 
 logging.getLogger().handlers = [InterceptHandler()]
@@ -64,7 +63,7 @@ canonical {self.canonical}
 '''
 
     try:
-      with tempfile.NamedTemporaryFile(prefix="vep_", suffix=".ini", dir=VEP_CONFIG_INI_PATH, delete=False) as ini_file:
+      with tempfile.NamedTemporaryFile(prefix="vep_", suffix=".ini", dir=UPLOAD_DIRECTORY, delete=False) as ini_file:
         ini_file.write(config_yaml.encode())
       return ini_file
     except Exception as e:

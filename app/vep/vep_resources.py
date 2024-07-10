@@ -13,21 +13,39 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
 """
 
 import logging
+
 from typing import Annotated
-from fastapi import APIRouter, responses, UploadFile, Form
+from fastapi import Request, HTTPException, status, APIRouter
 
 from core.logging import InterceptHandler
-from models.pipeline_model import ConfigIniParams
+from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
+
 logging.getLogger().handlers = [InterceptHandler()]
 
 router = APIRouter()
 
+
 @router.post("/submissions", name="submit_vep")
-def submit_vep(genome_id:Annotated[str, Form()], input_file: UploadFile):
-  try:
-    return {"genome_id":genome_id,"filename": input_file.filename}
-  except Exception as e:
-    logging.info(e)
+async def submit_vep(request : Request):
+    try:
+        stream_obj = Streamer(request=request)
+        stream_result = await stream_obj.stream()
+        print(stream_obj.parameters.value.decode())
+        print(stream_obj.genome_id.value.decode())
+        if stream_result:
+            return {"message": f"Successfully uploaded{stream_obj.filepath}"}
+        else:
+            raise Exception
+    except MaxBodySizeException:
+        return HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                             detail='Maximum file size limit exceeded.')
+    except Exception as e:
+        print(e)
+        return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail='There was an error uploading the file.')
+
+

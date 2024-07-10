@@ -5,3 +5,5 @@ aiohttp>=3.8,<3.9
 vcfpy @ git+https://github.com/likhitha-surapaneni/vcfpy@header-fix
 loguru==0.7.2
 python-multipart==0.0.9
+aiofiles==24.1.0
+streaming-form-data==1.15.0

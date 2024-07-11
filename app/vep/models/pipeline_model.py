@@ -1,6 +1,6 @@
 from typing import List
 from pydantic import BaseModel
-from core.config import NF_COMPUTE_ENV_ID, UPLOAD_DIRECTORY
+from core.config import NF_COMPUTE_ENV_ID, UPLOAD_DIRECTORY, NF_PIPELINE_URL, NF_WORK_DIR
 from core.logging import InterceptHandler
 import logging
 
@@ -14,8 +14,8 @@ class VEPConfigParams(BaseModel):
 
 class LaunchParams(BaseModel):
   computeEnvId: str = NF_COMPUTE_ENV_ID
-  pipeline: str
-  workDir: str
+  pipeline: str = NF_PIPELINE_URL
+  workDir: str = NF_WORK_DIR
   revision: str = "main"
   pullLatest: bool = True
   configProfiles: List[str] = ["slurmnew"]

@@ -39,8 +39,8 @@ async def submit_vep(request : Request):
         genome_id = stream_obj.genome_id.value.decode()
 
         parameters_dict = json.loads(parameters)
-        ini_parameters = ConfigIniParams(**parameters_json)
-        inifile = ini_parameters.create_config_ini_file()
+        ini_parameters = ConfigIniParams(**parameters_dict)
+        inifile = ini_parameters.create_config_ini_file(stream_obj.temp_dir)
 
         if stream_result:
             return {"message": f"Successfully uploaded{stream_obj.filepath}"}

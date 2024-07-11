@@ -44,7 +44,7 @@ class ConfigIniParams(BaseModel):
   canonical: int = 1
 
   # Creates config ini file
-  def create_config_ini_file(self):
+  def create_config_ini_file(self,dir):
 
     symbol = 1 if self.symbol else 0
     biotype = 1 if self.biotype else 0
@@ -63,7 +63,7 @@ canonical {self.canonical}
 '''
 
     try:
-      with tempfile.NamedTemporaryFile(prefix="vep_", suffix=".ini", dir=UPLOAD_DIRECTORY, delete=False) as ini_file:
+      with tempfile.NamedTemporaryFile(prefix="vep_", suffix=".ini", dir=dir, delete=False) as ini_file:
         ini_file.write(config_yaml.encode())
       return ini_file
     except Exception as e:

@@ -23,7 +23,7 @@ from fastapi import Request, HTTPException, status, APIRouter
 
 from core.logging import InterceptHandler
 from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
-from vep.models.pipeline_model import ConfigIniParams
+from vep.models.pipeline_model import ConfigIniParams, VEPConfigParams
 import json
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -41,7 +41,7 @@ async def submit_vep(request : Request):
         parameters_dict = json.loads(parameters)
         ini_parameters = ConfigIniParams(**parameters_dict)
         inifile = ini_parameters.create_config_ini_file(stream_obj.temp_dir)
-
+        vep_config_parameters = VEPConfigParams(vcf=stream_obj.filepath,vep_config=inifile.name)
         if stream_result:
             return {"message": f"Successfully uploaded{stream_obj.filepath}"}
         else:

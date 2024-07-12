@@ -46,7 +46,8 @@ async def submit_vep(request : Request):
         launch_params = LaunchParams(paramsText=vep_config_parameters, labelIds=[])
         pipeline_params = PipelineParams(launch=launch_params)
         if stream_result:
-            return {"message": f"Successfully uploaded{stream_obj.filepath}"}
+            workflow_id = launch_workflow(pipeline_params)
+            return {"submission_id":  workflow_id }
         else:
             raise Exception
     except MaxBodySizeException:

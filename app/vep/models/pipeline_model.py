@@ -1,8 +1,8 @@
 from typing import List
-from pydantic import BaseModel
+from pydantic import BaseModel, model_serializer
 from core.config import NF_COMPUTE_ENV_ID, UPLOAD_DIRECTORY, NF_PIPELINE_URL, NF_WORK_DIR
 from core.logging import InterceptHandler
-import logging
+import logging, json
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -11,6 +11,13 @@ import tempfile
 class VEPConfigParams(BaseModel):
   vcf: str
   vep_config: str
+
+  @model_serializer
+  def vep_config_serialiser(self):
+    vcf_str = '\"vcf\":\"' + self.vcf + '\"'
+    config_str = '\"vep_config\":\"' + self.vep_config + '\"'
+    stringified_encoded_json = '{' + vcf_str + ',' + config_str +'}'
+    return stringified_encoded_json
 
 class LaunchParams(BaseModel):
   computeEnvId: str = NF_COMPUTE_ENV_ID

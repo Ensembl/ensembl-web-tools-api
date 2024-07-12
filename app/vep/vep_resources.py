@@ -59,7 +59,6 @@ async def submit_vep(request: Request):
             detail="Maximum file size limit exceeded.",
         )
     except Exception as e:
-        print(e)
         return HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not submit VEP job/workflow.",

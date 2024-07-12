@@ -29,14 +29,14 @@ VERSION = "0.0.0"
 API_PREFIX = "/api/tools"
 
 config = Config(".env")
-DEBUG: bool = config("DEBUG", cast=bool, default=False)
+DEBUG: bool = config("DEBUG", cast=bool, default=True)
 PROJECT_NAME: str = config("PROJECT_NAME", default="Ensembl Web Tools API")
 ALLOWED_HOSTS: list[str] = config(
     "ALLOWED_HOSTS",
     cast=CommaSeparatedStrings,
     default="*",
 )
-with open("/data/blast_config.json") as f:
+with open("../data/blast_config.json") as f:
     BLAST_CONFIG = json.load(f)
 
 # logging configuration

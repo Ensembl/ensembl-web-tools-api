@@ -26,13 +26,14 @@ from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 from vep.models.pipeline_model import *
 from vep.utils.nextflow import launch_workflow
 import json
+
 logging.getLogger().handlers = [InterceptHandler()]
 
 router = APIRouter()
 
 
 @router.post("/submissions", name="submit_vep")
-async def submit_vep(request : Request):
+async def submit_vep(request: Request):
     try:
         stream_obj = Streamer(request=request)
         stream_result = await stream_obj.stream()
@@ -42,20 +43,24 @@ async def submit_vep(request : Request):
         parameters_dict = json.loads(parameters)
         ini_parameters = ConfigIniParams(**parameters_dict)
         inifile = ini_parameters.create_config_ini_file(stream_obj.temp_dir)
-        vep_config_parameters = VEPConfigParams(vcf=stream_obj.filepath,vep_config=inifile.name)
+        vep_config_parameters = VEPConfigParams(
+            vcf=stream_obj.filepath, vep_config=inifile.name
+        )
         launch_params = LaunchParams(paramsText=vep_config_parameters, labelIds=[])
         pipeline_params = PipelineParams(launch=launch_params)
         if stream_result:
             workflow_id = launch_workflow(pipeline_params)
-            return {"submission_id":  workflow_id }
+            return {"submission_id": workflow_id}
         else:
             raise Exception
     except MaxBodySizeException:
-        return HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                             detail='Maximum file size limit exceeded.')
+        return HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Maximum file size limit exceeded.",
+        )
     except Exception as e:
         print(e)
-        return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail='There was an error uploading the file.')
-
-
+        return HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="There was an error uploading the file.",
+        )

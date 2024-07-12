@@ -36,7 +36,7 @@ ALLOWED_HOSTS: list[str] = config(
     cast=CommaSeparatedStrings,
     default="*",
 )
-with open("../data/blast_config.json") as f:
+with open("/data/blast_config.json") as f:
     BLAST_CONFIG = json.load(f)
 
 # logging configuration

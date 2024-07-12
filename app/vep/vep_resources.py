@@ -62,5 +62,5 @@ async def submit_vep(request: Request):
         print(e)
         return HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="There was an error uploading the file.",
+            detail="Could not submit VEP job/workflow.",
         )

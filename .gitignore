@@ -4,5 +4,6 @@ __pycache__
 .coverage
 .idea*
 .env
+report.xml
 tmpdir/
 venv*

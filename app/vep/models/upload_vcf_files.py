@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 """
+
 import os
 import logging
 import tempfile
@@ -51,10 +52,12 @@ class MaxBodySizeValidator:
 class Streamer:
     def __init__(self, request):
         self.request = request
-        self.filename = self.request.headers.get('Filename', 'temp_name')
+        self.filename = self.request.headers.get("Filename", "temp_name")
         self.file_name_validator(self.filename)
         self.temp_dir = tempfile.mkdtemp(dir=UPLOAD_DIRECTORY)
-        self.filepath = os.path.join(str(self.temp_dir), os.path.basename(self.filename))
+        self.filepath = os.path.join(
+            str(self.temp_dir), os.path.basename(self.filename)
+        )
         self._input_file = FileTarget(self.filepath)
 
         self.parser = StreamingFormDataParser(headers=self.request.headers)
@@ -69,16 +72,19 @@ class Streamer:
     async def stream(self):
         body_validator = MaxBodySizeValidator(MAX_REQUEST_BODY_SIZE)
         try:
-            self.parser.register('input_file', self._input_file)
-            self.parser.register('parameters', self.parameters)
-            self.parser.register('genome_id', self.genome_id)
+            self.parser.register("input_file", self._input_file)
+            self.parser.register("parameters", self.parameters)
+            self.parser.register("genome_id", self.genome_id)
 
             async for chunk in self.request.stream():
                 body_validator(chunk)
                 self.parser.data_received(chunk)
 
-            if self.filename == 'temp_name':
-                os.rename(self.filepath, os.path.join(self.temp_dir, self._input_file.multipart_filename))
+            if self.filename == "temp_name":
+                os.rename(
+                    self.filepath,
+                    os.path.join(self.temp_dir, self._input_file.multipart_filename),
+                )
                 self.filename = self._input_file.multipart_filename
                 self.filepath = os.path.join(self.temp_dir, self.filename)
             return True

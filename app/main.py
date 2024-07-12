@@ -22,6 +22,7 @@ from blast.blast import app as blast_app
 from vep.routes import router as vep_router
 from core.config import API_PREFIX, ALLOWED_HOSTS, VERSION, PROJECT_NAME, DEBUG
 
+
 def get_application() -> FastAPI:
     application = FastAPI(title=PROJECT_NAME, debug=DEBUG, version=VERSION)
 

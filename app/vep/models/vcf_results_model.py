@@ -9,15 +9,17 @@ from typing import Any, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
+
 class PaginationMetadata(BaseModel):
     page: int
     per_page: int
     total: int
 
+
 class PredictedIntergenicConsequence(BaseModel):
     feature_type: Any = Field(
         ...,
-        description='The value of this field is always null. The presence of null in this field will serve as a marker that this is a consequence of an intergenic variant.',
+        description="The value of this field is always null. The presence of null in this field will serve as a marker that this is a consequence of an intergenic variant.",
     )
     consequences: List[str] = Field(
         ...,
@@ -26,18 +28,18 @@ class PredictedIntergenicConsequence(BaseModel):
 
 
 class FeatureType(Enum):
-    transcript = 'transcript'
+    transcript = "transcript"
 
 
 class Strand(Enum):
-    forward = 'forward'
-    reverse = 'reverse'
+    forward = "forward"
+    reverse = "reverse"
 
 
 class PredictedTranscriptConsequence(BaseModel):
     feature_type: FeatureType
-    stable_id: str = Field(..., description='transcript stable id, versioned')
-    gene_stable_id: str = Field(..., description='gene stable id, versioned')
+    stable_id: str = Field(..., description="transcript stable id, versioned")
+    gene_stable_id: str = Field(..., description="gene stable id, versioned")
     gene_symbol: str
     biotype: str
     is_canonical: bool

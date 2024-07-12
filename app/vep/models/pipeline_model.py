@@ -2,11 +2,9 @@ from typing import List
 from pydantic import BaseModel, model_serializer
 from core.config import NF_COMPUTE_ENV_ID, UPLOAD_DIRECTORY, NF_PIPELINE_URL, NF_WORK_DIR
 from core.logging import InterceptHandler
-import logging, json
+import logging, json, os
 
 logging.getLogger().handlers = [InterceptHandler()]
-
-import tempfile 
 
 class VEPConfigParams(BaseModel):
   vcf: str
@@ -70,8 +68,8 @@ canonical {self.canonical}
 '''
 
     try:
-      with tempfile.NamedTemporaryFile(prefix="vep_", suffix=".ini", dir=dir, delete=False) as ini_file:
-        ini_file.write(config_yaml.encode())
+      with open(os.path.join(dir, "config.ini"), "w") as ini_file:
+        ini_file.write(config_yaml)
       return ini_file
     except Exception as e:
       logging.info(e)

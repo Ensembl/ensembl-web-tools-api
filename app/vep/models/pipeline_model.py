@@ -57,7 +57,6 @@ class ConfigIniParams(BaseModel):
     transcript_version: int = 1
     canonical: int = 1
 
-    # Creates config ini file
     def create_config_ini_file(self, dir):
 
         symbol = 1 if self.symbol else 0

@@ -35,18 +35,18 @@ router = APIRouter()
 @router.post("/submissions", name="submit_vep")
 async def submit_vep(request: Request):
     try:
-        stream_obj = Streamer(request=request)
-        stream_result = await stream_obj.stream()
-        parameters = stream_obj.parameters.value.decode()
-        genome_id = stream_obj.genome_id.value.decode()
+        request_streamer = Streamer(request=request)
+        stream_result = await request_streamer.stream()
+        vep_job_parameters = request_streamer.parameters.value.decode()
+        genome_id = request_streamer.genome_id.value.decode()
 
-        parameters_dict = json.loads(parameters)
-        ini_parameters = ConfigIniParams(**parameters_dict)
-        inifile = ini_parameters.create_config_ini_file(stream_obj.temp_dir)
-        vep_config_parameters = VEPConfigParams(
-            vcf=stream_obj.filepath, vep_config=inifile.name
+        vep_job_parameters_dict = json.loads(vep_job_parameters)
+        ini_parameters = ConfigIniParams(**vep_job_parameters_dict)
+        inifile = ini_parameters.create_config_ini_file(request_streamer.temp_dir)
+        vep_job_config_parameters = VEPConfigParams(
+            vcf=request_streamer.filepath, vep_config=inifile.name
         )
-        launch_params = LaunchParams(paramsText=vep_config_parameters, labelIds=[])
+        launch_params = LaunchParams(paramsText=vep_job_config_parameters, labelIds=[])
         pipeline_params = PipelineParams(launch=launch_params)
         if stream_result:
             workflow_id = launch_workflow(pipeline_params)

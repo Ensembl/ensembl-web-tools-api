@@ -30,16 +30,10 @@ from core.config import BLAST_CONFIG
 
 app = FastAPI()
 
-
 # Override response for input payload validation error
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    return JSONResponse(
-        content={
-            "error": ";".join(f"{err['loc']}:{err['msg']}" for err in exc.errors())
-        },
-        status_code=422,
-    )
+    return JSONResponse(content={"error": ";".join(f"{err['loc']}:{err['msg']}" for err in exc.errors())}, status_code=422)
 
 
 # Override 404 response
@@ -78,7 +72,7 @@ class DbType(str, Enum):
     protein = "pep"
 
 
-class BlastParams(BaseModel, extra="allow"):
+class BlastParams(BaseModel, extra='allow'):
     email: str = "blast2020@ebi.ac.uk"
     title: str = ""
     program: Program
@@ -101,19 +95,13 @@ class JobIDs(BaseModel):
 
 
 # Infer the target db path for BLAST job
-suffix_map = {"dna": "unmasked", "dna_sm": "softmasked"}  # dna/dna_sm/cdna/pep
-
-
+suffix_map = {"dna": "unmasked", "dna_sm": "softmasked"} #dna/dna_sm/cdna/pep
 def get_db_path(genome_id: str, db_type: str) -> str:
     return f"ensembl/{genome_id}/{suffix_map.get(db_type, db_type)}"
 
 
 # Submit a BLAST job to JD. Returns a resolvable for fetching the response.
-blast_url = os.environ.get(
-    "BLAST_URL", "http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl"
-)
-
-
+blast_url = os.environ.get("BLAST_URL", "http://wwwdev.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl")
 async def run_blast(
     query: dict, blast_payload: dict, genome_id: str, db_type: str
 ) -> dict:
@@ -160,8 +148,7 @@ async def submit_blast(payload: BlastJob) -> dict:
 @app.get("/jobs/status/{job_id}")
 async def blast_job_status(job_id: str) -> dict:
     resp = await blast_proxy("status", job_id)
-    if resp["status"] == "NOT_FOUND":
-        response.status_code = 404
+    if resp['status'] == 'NOT_FOUND': response.status_code = 404
     resp["job_id"] = job_id
     return resp
 
@@ -203,3 +190,4 @@ async def blast_proxy(action: str, params: str, response: Response = None) -> di
             else:
                 content = f"Invalid JD endpoint: /{action}/{params}"
             return {"error": content}
+

@@ -42,6 +42,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VepFormSubmissionCreatedResponse'
+  /api/tools/vep/submissions/{id}/status:
+    get:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VepSubmissionStatusResponse'
   /api/tools/vep/submissions/{id}/results:
     get:
       description: Returns results of VEP analysis
@@ -277,6 +292,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Variant'
+    VepSubmissionStatusResponse:
+      type: object
+      required:
+        - submission_id
+        - status
+      properties:
+        submission_id:
+          type: string
+        status:
+          type: string
+          description: >
+            The possible statuses for a VEP submission are based on the list of documented statuses of Seqera workflows
+            (see https://github.com/seqeralabs/tower-cli/blob/50dd04dd806acf8461dfc9b286faec7e874aec15/USAGE.md?plain=1#L254-L259),
+            except for the 'UNKNOWN' status, which is listed in Seqera docs without explanation how a workflow can get into that status.
+            If the tools api receives 'UNKNOWN' status from the Seqera platform, interpret it the same as FAILED.
+          enum:
+            - SUBMITTED
+            - RUNNING
+            - SUCCEEDED
+            - FAILED
+            - CANCELLED
     VepFormSubmissionCreatedResponse:
       type: object
       required:

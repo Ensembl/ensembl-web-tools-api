@@ -305,7 +305,7 @@ components:
       properties:
         message:
           type: string
-          description: A message that says, "A submission with id <id> was not found"
+          example: A submission with id 1234567 was not found
     VepSubmissionStatusResponse:
       type: object
       required:

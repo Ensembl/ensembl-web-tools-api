@@ -1,13 +1,18 @@
 from typing import List
-from pydantic import BaseModel, model_serializer
+from pydantic import (
+    BaseModel,
+    model_serializer,
+    Field,
+    AliasPath,
+    field_serializer,
+)
 from core.config import (
     NF_COMPUTE_ENV_ID,
-    UPLOAD_DIRECTORY,
     NF_PIPELINE_URL,
     NF_WORK_DIR,
 )
 from core.logging import InterceptHandler
-import logging, json, os
+import logging, os
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -82,3 +87,15 @@ canonical {self.canonical}
         except Exception as e:
             logging.info(e)
             raise RuntimeError("Could not create vep config ini file")
+
+
+class PipelineStatus(BaseModel):
+    job_id: str
+    status: str = Field(alias=AliasPath("workflow", "status"), default="FAILED")
+
+    @field_serializer("status")
+    def serialize_status(self, status: str):
+        if status == "UNKNOWN":
+            status = "FAILED"
+            logging.info("UNKNOWN STATUS WAS RETURNED HERE")
+        return status

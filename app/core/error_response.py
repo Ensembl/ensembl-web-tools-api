@@ -7,6 +7,7 @@ from starlette.status import (
     HTTP_400_BAD_REQUEST,
     HTTP_501_NOT_IMPLEMENTED,
     HTTP_500_INTERNAL_SERVER_ERROR,
+    HTTP_413_REQUEST_ENTITY_TOO_LARGE,
 )
 
 
@@ -51,6 +52,18 @@ def http_406_not_acceptable():
         {"status_code": HTTP_406_NOT_ACCEPTABLE, "details": "Not Acceptable"}
     )
     return PlainTextResponse(response_msg, status_code=HTTP_406_NOT_ACCEPTABLE)
+
+
+def http_413_not_acceptable():
+    response_msg = json.dumps(
+        {
+            "status_code": HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            "details": "Maximum file size limit exceeded.",
+        }
+    )
+    return PlainTextResponse(
+        response_msg, status_code=HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    )
 
 
 def http_501_not_implemented():

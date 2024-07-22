@@ -18,13 +18,20 @@ limitations under the License.
 
 import logging
 
-from typing import Annotated
-from fastapi import Request, HTTPException, status, APIRouter
+from requests import HTTPError
+from starlette.responses import JSONResponse, PlainTextResponse
+from fastapi import Request, status, APIRouter
 
+from core.error_response import response_error_handler
 from core.logging import InterceptHandler
+from vep.models.pipeline_model import (
+    ConfigIniParams,
+    VEPConfigParams,
+    LaunchParams,
+    PipelineParams,
+)
 from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
-from vep.models.pipeline_model import *
-from vep.utils.nextflow import launch_workflow
+from vep.utils.nextflow import launch_workflow, get_workflow_status
 import json
 
 logging.getLogger().handlers = [InterceptHandler()]
@@ -42,9 +49,9 @@ async def submit_vep(request: Request):
 
         vep_job_parameters_dict = json.loads(vep_job_parameters)
         ini_parameters = ConfigIniParams(**vep_job_parameters_dict)
-        inifile = ini_parameters.create_config_ini_file(request_streamer.temp_dir)
+        ini_file = ini_parameters.create_config_ini_file(request_streamer.temp_dir)
         vep_job_config_parameters = VEPConfigParams(
-            vcf=request_streamer.filepath, vep_config=inifile.name
+            vcf=request_streamer.filepath, vep_config=ini_file.name
         )
         launch_params = LaunchParams(paramsText=vep_job_config_parameters, labelIds=[])
         pipeline_params = PipelineParams(launch=launch_params)
@@ -54,12 +61,30 @@ async def submit_vep(request: Request):
         else:
             raise Exception
     except MaxBodySizeException:
-        return HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Maximum file size limit exceeded.",
-        )
+        return response_error_handler(result={"status": 413})
     except Exception as e:
-        return HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not submit VEP job/workflow.",
-        )
+        return response_error_handler(result={"status": 500})
+
+
+@router.get("/submissions/{submission_id}/status", name="submission_status")
+async def vep_status(request: Request, submission_id: str):
+    try:
+        workflow_status = await get_workflow_status(submission_id)
+        return JSONResponse(content=workflow_status.dict())
+
+    except HTTPError as http_error:
+        if http_error.response.status_code in [403,400]:
+            response_msg = json.dumps(
+                {
+                    "status_code": status.HTTP_404_NOT_FOUND,
+                    "details": f"A submission with id {submission_id} was not found",
+                }
+            )
+            return PlainTextResponse(
+                response_msg, status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        return response_error_handler(result={"status": http_error.response.status_code})
+    except Exception as e:
+        logging.debug(e)
+        return response_error_handler(result={"status": 500})

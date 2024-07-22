@@ -66,18 +66,18 @@ async def submit_vep(request: Request):
         return response_error_handler(result={"status": 500})
 
 
-@router.get("/submissions/{job_id}/status", name="submission_status")
-async def submit_vep(request: Request, job_id: str):
+@router.get("/submissions/{submission_id}/status", name="submission_status")
+async def vep_status(request: Request, submission_id: str):
     try:
-        workflow_status = await get_workflow_status(job_id)
+        workflow_status = await get_workflow_status(submission_id)
         return JSONResponse(content=workflow_status.dict())
 
     except HTTPError as http_error:
-        if http_error.response.status_code == 403:
+        if http_error.response.status_code in [403,400]:
             response_msg = json.dumps(
                 {
                     "status_code": status.HTTP_404_NOT_FOUND,
-                    "details": f"A submission with id {job_id} was not found",
+                    "details": f"A submission with id {submission_id} was not found",
                 }
             )
             return PlainTextResponse(

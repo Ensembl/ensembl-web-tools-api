@@ -90,7 +90,7 @@ canonical {self.canonical}
 
 
 class PipelineStatus(BaseModel):
-    job_id: str
+    submission_id: str
     status: str = Field(alias=AliasPath("workflow", "status"), default="FAILED")
 
     @field_serializer("status")

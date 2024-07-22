@@ -301,9 +301,13 @@ components:
     VepSubmissionNotFoundResponse:
       type: object
       required:
-        - message
+        - details
+        - status_code
       properties:
-        message:
+        status_code:
+          type: number
+          default: 404
+        details:
           type: string
           example: A submission with id 1234567 was not found
     VepSubmissionStatusResponse:

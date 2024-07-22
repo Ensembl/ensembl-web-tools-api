@@ -6,7 +6,6 @@ from core.logging import InterceptHandler
 from vep.models.pipeline_model import PipelineParams, PipelineStatus
 from core.config import (
     NF_TOKEN,
-    SEQERA_WORKFLOW_LAUNCH_URL,
     SEQERA_API,
 )
 
@@ -18,6 +17,7 @@ def launch_workflow(pipeline_params: PipelineParams):
         "Content-Type": "application/json",
         "Authorization": f"Bearer {NF_TOKEN}",
     }
+    SEQERA_WORKFLOW_LAUNCH_URL = SEQERA_API + "/workflow/launch"
     payload = pipeline_params.model_dump()
     try:
         response = requests.post(
@@ -32,17 +32,17 @@ def launch_workflow(pipeline_params: PipelineParams):
         raise Exception
 
 
-async def get_workflow_status(job_id):
+async def get_workflow_status(submission_id):
     try:
         _headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {NF_TOKEN}",
         }
-        _seqera_workflow_status_url = f"{SEQERA_API}/workflow/{job_id}"
+        _seqera_workflow_status_url = f"{SEQERA_API}/workflow/{submission_id}"
         response = requests.get(_seqera_workflow_status_url, headers=_headers)
 
         response.raise_for_status()
-        pipeline_status = PipelineStatus(job_id=job_id, status=response.json())
+        pipeline_status = PipelineStatus(submission_id=submission_id, status=response.json())
         return pipeline_status
     except HTTPError as e:
         raise e

@@ -96,8 +96,10 @@ async def download_results(request: Request, submission_id: str):
         workflow_status_response = await get_workflow_status(submission_id)
         workflow_status = workflow_status_response.dict()
         # To use out file it will require changes in nextflow and get_workflow_status endpoint
-        results_file = workflow_status['outfile']
-        return FileResponse(os.path.join(UPLOAD_DIRECTORY, results_file))
+        results_file = os.path.join(UPLOAD_DIRECTORY, 'vep_output_file') #workflow_status['outfile']
+        print (results_file)
+        return FileResponse(results_file)
+
         # if workflow_status['status'] == "SUCCEDED":
         #     return await FileResponse(results_file)
         # else:

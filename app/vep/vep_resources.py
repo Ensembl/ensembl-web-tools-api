@@ -89,7 +89,7 @@ async def vep_status(request: Request, submission_id: str):
         logging.debug(e)
         return response_error_handler(result={"status": 500})
 
-@router.get("/download/{submission_id}", name="download_results")
+@router.get("/submissions/{submission_id}/download", name="download_results")
 async def download_results(request: Request, submission_id: str):
     try:
         workflow_status_response = await get_workflow_status(submission_id)
@@ -106,7 +106,7 @@ async def download_results(request: Request, submission_id: str):
                 }
             )
             return PlainTextResponse(
-                response_msg, status_code=status.HTTP_404_NOT_FOUND
+                response_msg, status_code=status.HTTP_200_OK
             )
 
     except HTTPError as http_error:

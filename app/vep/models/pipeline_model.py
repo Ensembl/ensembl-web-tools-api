@@ -92,6 +92,11 @@ canonical {self.canonical}
 class PipelineStatus(BaseModel):
     submission_id: str
     status: str = Field(alias=AliasPath("workflow", "status"), default="FAILED")
+    # The alias path should be changed to outFile
+    # Nextflow Pipeline/Seqera has to provide the outFile to read
+    # This is just for testing and will download whatever file which was uploaded
+    # default vchr1.tar.gz is for local testing while developing
+    outfile : str = Field(alias=AliasPath("workflow", "params", "vcf"), default='vchr1.tar.gz')
 
     @field_serializer("status")
     def serialize_status(self, status: str):

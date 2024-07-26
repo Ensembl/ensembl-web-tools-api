@@ -33,6 +33,7 @@ from vep.models.pipeline_model import (
 from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 from vep.utils.nextflow import launch_workflow, get_workflow_status
 import json
+from core.config import UPLOAD_DIRECTORY
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -96,18 +97,19 @@ async def download_results(request: Request, submission_id: str):
         workflow_status = workflow_status_response.dict()
         # To use out file it will require changes in nextflow and get_workflow_status endpoint
         results_file = workflow_status['outfile']
-        if workflow_status['status'] == "SUCCEDED":
-            return await FileResponse(results_file)
-        else:
-            response_msg = json.dumps(
-                {
-                    "status_code": 200,
-                    "details": f"A submission with id {submission_id} is not yet finished",
-                }
-            )
-            return PlainTextResponse(
-                response_msg, status_code=status.HTTP_404_NOT_FOUND
-            )
+        return await FileResponse(os.path.join(UPLOAD_DIRECTORY, results_file))
+        # if workflow_status['status'] == "SUCCEDED":
+        #     return await FileResponse(results_file)
+        # else:
+        #     response_msg = json.dumps(
+        #         {
+        #             "status_code": 200,
+        #             "details": f"A submission with id {submission_id} is not yet finished",
+        #         }
+        #     )
+        #     return PlainTextResponse(
+        #         response_msg, status_code=status.HTTP_404_NOT_FOUND
+        #     )
 
     except HTTPError as http_error:
         if http_error.response.status_code in [403,400]:

@@ -19,7 +19,7 @@ limitations under the License.
 import logging
 
 from requests import HTTPError
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import JSONResponse, PlainTextResponse, FileResponse
 from fastapi import Request, status, APIRouter
 
 from core.error_response import response_error_handler
@@ -88,3 +88,40 @@ async def vep_status(request: Request, submission_id: str):
     except Exception as e:
         logging.debug(e)
         return response_error_handler(result={"status": 500})
+
+@router.get("/download/{submission_id}", name="download_results")
+async def download_results(request: Request, submission_id: str):
+    try:
+        workflow_status_response = await get_workflow_status(submission_id)
+        workflow_status = workflow_status_response.dict()
+        # To use out file it will require changes in nextflow and get_workflow_status endpoint
+        results_file = workflow_status['outfile']
+        if workflow_status['status'] == "SUCCEDED":
+            return await FileResponse(results_file)
+        else:
+            response_msg = json.dumps(
+                {
+                    "status_code": 200,
+                    "details": f"A submission with id {submission_id} is not yet finished",
+                }
+            )
+            return PlainTextResponse(
+                response_msg, status_code=status.HTTP_404_NOT_FOUND
+            )
+
+    except HTTPError as http_error:
+        if http_error.response.status_code in [403,400]:
+            response_msg = json.dumps(
+                {
+                    "status_code": status.HTTP_404_NOT_FOUND,
+                    "details": f"A submission with id {submission_id} was not found",
+                }
+            )
+            return PlainTextResponse(
+                response_msg, status_code=status.HTTP_404_NOT_FOUND
+            )
+        return response_error_handler(result={"status": http_error.response.status_code})
+    except Exception as e:
+        logging.debug(e)
+        return response_error_handler(result={"status": 500})
+

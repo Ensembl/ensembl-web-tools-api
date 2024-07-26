@@ -87,6 +87,7 @@ class Streamer:
                 )
                 self.filename = self._input_file.multipart_filename
                 self.filepath = os.path.join(self.temp_dir, self.filename)
+                shutil.copy(self.filepath,os.path.join(self.temp_dir,'vep_output_file'))
             return True
 
         except (MaxBodySizeException, streaming_form_data.validators.ValidationError):

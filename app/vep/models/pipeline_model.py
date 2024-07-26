@@ -96,7 +96,7 @@ class PipelineStatus(BaseModel):
     # Nextflow Pipeline/Seqera has to provide the outFile to read
     # This is just for testing and will download whatever file which was uploaded
     # default vchr1.tar.gz is for local testing while developing
-    outfile : str = Field(alias=AliasPath("workflow", "params", "vcf"), default='vchr1.tar.gz')
+    outfile : str = Field(alias=AliasPath("workflow", "params", "vcf"), default='vep_output_file')
 
     @field_serializer("status")
     def serialize_status(self, status: str):

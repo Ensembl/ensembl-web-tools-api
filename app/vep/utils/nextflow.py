@@ -7,6 +7,7 @@ from vep.models.pipeline_model import PipelineParams, PipelineStatus
 from core.config import (
     NF_TOKEN,
     SEQERA_API,
+    NF_WORKSPACE_ID
 )
 
 logging.getLogger().handlers = [InterceptHandler()]
@@ -17,11 +18,14 @@ def launch_workflow(pipeline_params: PipelineParams):
         "Content-Type": "application/json",
         "Authorization": f"Bearer {NF_TOKEN}",
     }
+    params= {
+        "workspaceId": NF_WORKSPACE_ID
+    }
     SEQERA_WORKFLOW_LAUNCH_URL = SEQERA_API + "/workflow/launch"
     payload = pipeline_params.model_dump()
     try:
         response = requests.post(
-            SEQERA_WORKFLOW_LAUNCH_URL, headers=headers, json=payload
+            SEQERA_WORKFLOW_LAUNCH_URL, params=params, headers=headers, json=payload
         )
         response.raise_for_status()
         response_json = response.json()

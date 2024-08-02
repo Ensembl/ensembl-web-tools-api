@@ -1,6 +1,8 @@
 from typing import List
 from pydantic import (
     BaseModel,
+    DirectoryPath,
+    FilePath,
     model_serializer,
     Field,
     AliasPath,
@@ -18,14 +20,16 @@ logging.getLogger().handlers = [InterceptHandler()]
 
 
 class VEPConfigParams(BaseModel):
-    vcf: str
-    vep_config: str
+    vcf: FilePath
+    vep_config: FilePath
+    outdir: DirectoryPath
 
     @model_serializer
     def vep_config_serialiser(self):
-        vcf_str = '"vcf":"' + self.vcf + '"'
-        config_str = '"vep_config":"' + self.vep_config + '"'
-        stringified_encoded_json = "{" + vcf_str + "," + config_str + "}"
+        vcf_str = '"vcf":"' + self.vcf.as_posix() + '"'
+        config_str = '"vep_config":"' + self.vep_config.as_posix() + '"'
+        outdir_str = '"outdir":"' + self.outdir.as_posix() + '"'
+        stringified_encoded_json = "{" + vcf_str + "," + config_str + "," + outdir_str + "}"
         return stringified_encoded_json
 
 
@@ -96,7 +100,7 @@ class PipelineStatus(BaseModel):
     # Nextflow Pipeline/Seqera has to provide the outFile to read
     # This is just for testing and will download whatever file which was uploaded
     # default vchr1.tar.gz is for local testing while developing
-    outfile : str = Field(alias=AliasPath("workflow", "params", "vcf"), default='vchr1.tar.gz')
+    outfile : FilePath = Field(alias=AliasPath("workflow", "params", "outdir"), default='vchr1.tar.gz')
 
     @field_serializer("status")
     def serialize_status(self, status: str):

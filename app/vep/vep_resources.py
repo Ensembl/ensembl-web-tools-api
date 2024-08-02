@@ -51,7 +51,7 @@ async def submit_vep(request: Request):
         ini_parameters = ConfigIniParams(**vep_job_parameters_dict)
         ini_file = ini_parameters.create_config_ini_file(request_streamer.temp_dir)
         vep_job_config_parameters = VEPConfigParams(
-            vcf=request_streamer.filepath, vep_config=ini_file.name
+            vcf=request_streamer.filepath, vep_config=ini_file.name, outdir=request_streamer.temp_dir
         )
         launch_params = LaunchParams(paramsText=vep_job_config_parameters, labelIds=[])
         pipeline_params = PipelineParams(launch=launch_params)

@@ -37,7 +37,7 @@ class LaunchParams(BaseModel):
     pullLatest: bool = True
     configProfiles: List[str] = ["slurmnew"]
     paramsText: VEPConfigParams
-    preRunScript: str = "module load nextflow"
+    preRunScript: str = ""
     postRunScript: str = ""
     stubRun: bool = False
     labelIds: List[str]
@@ -50,39 +50,32 @@ class PipelineParams(BaseModel):
 
 
 class ConfigIniParams(BaseModel):
-    cache: int = 1
-    dir_cache: str = "/nfs/production/flicek/ensembl/variation/data/VEP/tabixconverted/"
-    species: str = "homo_sapiens"
-    assembly: str = "GRCh38"
-    cache_version: int = 110
-    offline: int = 1
     force_overwrite: int = 1
     symbol: bool = False
     biotype: bool = False
     transcript_version: int = 1
     canonical: int = 1
+    gff: str = "/nfs/public/rw/enswbsites/dev/vep/test/genes.gff3.bgz"
+    fasta: str = "/nfs/public/rw/enswbsites/dev/vep/test/unmasked.fa.bgz"
 
     def create_config_ini_file(self, dir):
 
         symbol = 1 if self.symbol else 0
         biotype = 1 if self.biotype else 0
 
-        config_yaml = f"""cache {self.cache}
-dir_cache {self.dir_cache}
-species {self.species}
-assembly {self.assembly}
-cache_version {self.cache_version}
-offline {self.offline}
+        config_ini = f"""\
 force_overwrite {self.force_overwrite}
 symbol {symbol}
 biotype {biotype}
 transcript_version {self.transcript_version}
 canonical {self.canonical}
+gff {self.gff}
+fasta {self.fasta}
 """
 
         try:
             with open(os.path.join(dir, "config.ini"), "w") as ini_file:
-                ini_file.write(config_yaml)
+                ini_file.write(config_ini)
             return ini_file
         except Exception as e:
             logging.info(e)

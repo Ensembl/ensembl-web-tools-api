@@ -69,6 +69,8 @@ symbol {symbol}
 biotype {biotype}
 transcript_version {self.transcript_version}
 canonical {self.canonical}
+gff {self.gff}
+fasta {self.fasta}
 """
 
         try:

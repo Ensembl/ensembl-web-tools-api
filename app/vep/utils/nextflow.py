@@ -9,7 +9,7 @@ from core.config import (
     SEQERA_API,
     NF_WORKSPACE_ID
 )
-
+import json
 logging.getLogger().handlers = [InterceptHandler()]
 
 
@@ -23,6 +23,7 @@ def launch_workflow(pipeline_params: PipelineParams):
     }
     SEQERA_WORKFLOW_LAUNCH_URL = SEQERA_API + "/workflow/launch"
     payload = pipeline_params.model_dump()
+    print (json.dumps(payload))
     try:
         response = requests.post(
             SEQERA_WORKFLOW_LAUNCH_URL, params=params, headers=headers, json=payload

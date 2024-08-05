@@ -29,7 +29,9 @@ class VEPConfigParams(BaseModel):
         vcf_str = '"vcf":"' + self.vcf.as_posix() + '"'
         config_str = '"vep_config":"' + self.vep_config.as_posix() + '"'
         outdir_str = '"outdir":"' + self.outdir.as_posix() + '"'
-        stringified_encoded_json = "{" + vcf_str + "," + config_str + "," + outdir_str + "}"
+        stringified_encoded_json = (
+            "{" + vcf_str + "," + config_str + "," + outdir_str + "}"
+        )
         return stringified_encoded_json
 
 
@@ -96,4 +98,3 @@ class PipelineStatus(BaseModel):
             status = "FAILED"
             logging.info("UNKNOWN STATUS WAS RETURNED HERE")
         return status
-

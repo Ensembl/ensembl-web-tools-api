@@ -4,11 +4,7 @@ from requests import HTTPError
 
 from core.logging import InterceptHandler
 from vep.models.pipeline_model import PipelineParams, PipelineStatus
-from core.config import (
-    NF_TOKEN,
-    SEQERA_API,
-    NF_WORKSPACE_ID
-)
+from core.config import NF_TOKEN, SEQERA_API, NF_WORKSPACE_ID
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -18,9 +14,7 @@ def launch_workflow(pipeline_params: PipelineParams):
         "Content-Type": "application/json",
         "Authorization": f"Bearer {NF_TOKEN}",
     }
-    params= {
-        "workspaceId": NF_WORKSPACE_ID
-    }
+    params = {"workspaceId": NF_WORKSPACE_ID}
     SEQERA_WORKFLOW_LAUNCH_URL = SEQERA_API + "/workflow/launch"
     payload = pipeline_params.model_dump()
     try:
@@ -43,10 +37,10 @@ async def get_workflow_status(submission_id):
             "Authorization": f"Bearer {NF_TOKEN}",
         }
         _seqera_workflow_status_url = f"{SEQERA_API}/workflow/{submission_id}"
-        params= {
-            "workspaceId": NF_WORKSPACE_ID
-            }
-        response = requests.get(_seqera_workflow_status_url, params=params, headers=_headers)
+        params = {"workspaceId": NF_WORKSPACE_ID}
+        response = requests.get(
+            _seqera_workflow_status_url, params=params, headers=_headers
+        )
 
         response.raise_for_status()
         response_json = response.json()

@@ -53,7 +53,9 @@ async def submit_vep(request: Request):
         ini_parameters = ConfigIniParams(**vep_job_parameters_dict)
         ini_file = ini_parameters.create_config_ini_file(request_streamer.temp_dir)
         vep_job_config_parameters = VEPConfigParams(
-            vcf=request_streamer.filepath, vep_config=ini_file.name, outdir=request_streamer.temp_dir
+            vcf=request_streamer.filepath,
+            vep_config=ini_file.name,
+            outdir=request_streamer.temp_dir,
         )
         launch_params = LaunchParams(paramsText=vep_job_config_parameters, labelIds=[])
         pipeline_params = PipelineParams(launch=launch_params)
@@ -72,11 +74,13 @@ async def submit_vep(request: Request):
 async def vep_status(request: Request, submission_id: str):
     try:
         workflow_status = await get_workflow_status(submission_id)
-        submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status)
+        submission_status = PipelineStatus(
+            submission_id=submission_id, status=workflow_status
+        )
         return JSONResponse(content=submission_status.dict())
 
     except HTTPError as http_error:
-        if http_error.response.status_code in [403,400]:
+        if http_error.response.status_code in [403, 400]:
             response_msg = json.dumps(
                 {
                     "status_code": status.HTTP_404_NOT_FOUND,
@@ -87,21 +91,28 @@ async def vep_status(request: Request, submission_id: str):
                 response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
 
-        return response_error_handler(result={"status": http_error.response.status_code})
+        return response_error_handler(
+            result={"status": http_error.response.status_code}
+        )
     except Exception as e:
         logging.debug(e)
         return response_error_handler(result={"status": 500})
+
 
 @router.get("/submissions/{submission_id}/download", name="download_results")
 async def download_results(request: Request, submission_id: str):
     try:
         workflow_status = await get_workflow_status(submission_id)
-        submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status)
+        submission_status = PipelineStatus(
+            submission_id=submission_id, status=workflow_status
+        )
         # To use out file it will require changes in nextflow and get_workflow_status endpoint
-        if submission_status.dict()['status'] == "SUCCEDED":
-            input_vcf_file = workflow_status['workflow']['params']['vcf']
+        if submission_status.dict()["status"] == "SUCCEDED":
+            input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             input_vcf_path = FilePath(input_vcf_file)
-            results_file = input_vcf_path.joinpath(input_vcf_path.parent, input_vcf_path.stem + "_VEP.vcf")
+            results_file = input_vcf_path.joinpath(
+                input_vcf_path.parent, input_vcf_path.stem + "_VEP.vcf"
+            )
             return await FileResponse(results_file)
         else:
             response_msg = json.dumps(
@@ -110,12 +121,10 @@ async def download_results(request: Request, submission_id: str):
                     "details": f"A submission with id {submission_id} is not yet finished",
                 }
             )
-            return PlainTextResponse(
-                response_msg, status_code=status.HTTP_200_OK
-            )
+            return PlainTextResponse(response_msg, status_code=status.HTTP_200_OK)
 
     except HTTPError as http_error:
-        if http_error.response.status_code in [403,400]:
+        if http_error.response.status_code in [403, 400]:
             response_msg = json.dumps(
                 {
                     "status_code": status.HTTP_404_NOT_FOUND,
@@ -125,8 +134,9 @@ async def download_results(request: Request, submission_id: str):
             return PlainTextResponse(
                 response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
-        return response_error_handler(result={"status": http_error.response.status_code})
+        return response_error_handler(
+            result={"status": http_error.response.status_code}
+        )
     except Exception as e:
         logging.debug(e)
         return response_error_handler(result={"status": 500})
-

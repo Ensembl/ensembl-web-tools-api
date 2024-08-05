@@ -29,10 +29,12 @@ from vep.models.pipeline_model import (
     VEPConfigParams,
     LaunchParams,
     PipelineParams,
+    PipelineStatus,
 )
 from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 from vep.utils.nextflow import launch_workflow, get_workflow_status
 import json
+from pydantic import FilePath
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -70,7 +72,8 @@ async def submit_vep(request: Request):
 async def vep_status(request: Request, submission_id: str):
     try:
         workflow_status = await get_workflow_status(submission_id)
-        return JSONResponse(content=workflow_status.dict())
+        submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status)
+        return JSONResponse(content=submission_status.dict())
 
     except HTTPError as http_error:
         if http_error.response.status_code in [403,400]:
@@ -92,11 +95,13 @@ async def vep_status(request: Request, submission_id: str):
 @router.get("/submissions/{submission_id}/download", name="download_results")
 async def download_results(request: Request, submission_id: str):
     try:
-        workflow_status_response = await get_workflow_status(submission_id)
-        workflow_status = workflow_status_response.dict()
+        workflow_status = await get_workflow_status(submission_id)
+        submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status)
         # To use out file it will require changes in nextflow and get_workflow_status endpoint
-        results_file = workflow_status['outfile']
-        if workflow_status['status'] == "SUCCEDED":
+        if submission_status.dict()['status'] == "SUCCEDED":
+            input_vcf_file = workflow_status['workflow']['params']['vcf']
+            input_vcf_path = FilePath(input_vcf_file)
+            results_file = input_vcf_path.joinpath(input_vcf_path.parent, input_vcf_path.stem + "_VEP.vcf")
             return await FileResponse(results_file)
         else:
             response_msg = json.dumps(

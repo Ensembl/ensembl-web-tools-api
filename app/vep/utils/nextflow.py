@@ -43,10 +43,13 @@ async def get_workflow_status(submission_id):
             "Authorization": f"Bearer {NF_TOKEN}",
         }
         _seqera_workflow_status_url = f"{SEQERA_API}/workflow/{submission_id}"
-        response = requests.get(_seqera_workflow_status_url, headers=_headers)
+        params= {
+            "workspaceId": NF_WORKSPACE_ID
+            }
+        response = requests.get(_seqera_workflow_status_url, params=params, headers=_headers)
 
         response.raise_for_status()
-        pipeline_status = PipelineStatus(submission_id=submission_id, status=response.json())
+        pipeline_status = PipelineStatus(submission_id=submission_id, status=response_json())
         return pipeline_status
     except HTTPError as e:
         raise e

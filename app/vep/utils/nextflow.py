@@ -50,7 +50,7 @@ async def get_workflow_status(submission_id):
 
         response.raise_for_status()
         response_json = resonse.json()
-        pipeline_status = PipelineStatus(submission_id=submission_id, status=response_json)
+        pipeline_status = PipelineStatus(submission_id=submission_id, status=response_json, outfile=response_json)
         return pipeline_status
     except HTTPError as e:
         raise e

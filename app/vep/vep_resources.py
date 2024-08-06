@@ -110,10 +110,11 @@ async def download_results(request: Request, submission_id: str):
         if submission_status.dict()["status"] == "SUCCEDED":
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             input_vcf_path = FilePath(input_vcf_file)
-            results_file = input_vcf_path.joinpath(
-                input_vcf_path.parent, input_vcf_path.stem + "_VEP.vcf"
+            results_file_path = input_vcf_path.joinpath(
+                input_vcf_path.parent, input_vcf_path.stem + "_VEP.vcf.gz"
             )
-            return await FileResponse(results_file)
+            logging.debug(f"This is file path, {results_file_path}")
+            return await FileResponse(results_file_path)
         else:
             response_msg = json.dumps(
                 {

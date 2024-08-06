@@ -115,7 +115,7 @@ async def download_results(request: Request, submission_id: str):
         )
         print(f"This is file path, {results_file_path}")
         logging.info(f"This is file path, {results_file_path}")
-        return await FileResponse(results_file_path)
+        return FileResponse(results_file_path)
     else:
         response_msg = json.dumps(
             {

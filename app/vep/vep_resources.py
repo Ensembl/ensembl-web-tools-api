@@ -103,7 +103,8 @@ async def vep_status(request: Request, submission_id: str):
 async def download_results(request: Request, submission_id: str):
     logging.info('entered route handler')
     workflow_status = await get_workflow_status(submission_id)
-    submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status)
+    submission_status = PipelineStatus(
+        submission_id=submission_id, status=workflow_status['workflow']['status'])
         # To use out file it will require changes in nextflow and get_workflow_status endpoint
     if submission_status.dict()["status"] == "SUCCEDED":
         print('submission status succeeded')

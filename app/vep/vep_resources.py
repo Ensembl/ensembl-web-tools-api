@@ -101,6 +101,7 @@ async def vep_status(request: Request, submission_id: str):
 
 @router.get("/submissions/{submission_id}/download", name="download_results")
 async def download_results(request: Request, submission_id: str):
+    print('entered route handler')
     try:
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
@@ -108,11 +109,13 @@ async def download_results(request: Request, submission_id: str):
         )
         # To use out file it will require changes in nextflow and get_workflow_status endpoint
         if submission_status.dict()["status"] == "SUCCEDED":
+            print('submission status succeeded')
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             input_vcf_path = FilePath(input_vcf_file)
             results_file_path = input_vcf_path.joinpath(
                 input_vcf_path.parent, input_vcf_path.stem + "_VEP.vcf.gz"
             )
+            print(f"This is file path, {results_file_path}")
             logging.debug(f"This is file path, {results_file_path}")
             return await FileResponse(results_file_path)
         else:
@@ -139,5 +142,6 @@ async def download_results(request: Request, submission_id: str):
             result={"status": http_error.response.status_code}
         )
     except Exception as e:
+        print(e)
         logging.debug(e)
         return response_error_handler(result={"status": 500})

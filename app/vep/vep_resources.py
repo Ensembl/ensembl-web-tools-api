@@ -75,7 +75,7 @@ async def vep_status(request: Request, submission_id: str):
     try:
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
-            submission_id=submission_id, status=workflow_status
+            submission_id=submission_id, status=workflow_status['workflow']['status']
         )
         return JSONResponse(content=submission_status.dict())
 

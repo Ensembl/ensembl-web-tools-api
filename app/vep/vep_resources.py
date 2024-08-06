@@ -36,7 +36,7 @@ from vep.utils.nextflow import launch_workflow, get_workflow_status
 import json
 from pydantic import FilePath
 
-logging.getLogger().handlers = [InterceptHandler()]
+# logging.getLogger().handlers = [InterceptHandler()]
 
 router = APIRouter()
 
@@ -101,47 +101,70 @@ async def vep_status(request: Request, submission_id: str):
 
 @router.get("/submissions/{submission_id}/download", name="download_results")
 async def download_results(request: Request, submission_id: str):
-    print('entered route handler')
-    try:
-        workflow_status = await get_workflow_status(submission_id)
-        submission_status = PipelineStatus(
-            submission_id=submission_id, status=workflow_status
-        )
+    logging.info('entered route handler')
+    workflow_status = await get_workflow_status(submission_id)
+        submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status)
         # To use out file it will require changes in nextflow and get_workflow_status endpoint
-        if submission_status.dict()["status"] == "SUCCEDED":
-            print('submission status succeeded')
-            input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
-            input_vcf_path = FilePath(input_vcf_file)
-            results_file_path = input_vcf_path.joinpath(
-                input_vcf_path.parent, input_vcf_path.stem + "_VEP.vcf.gz"
-            )
-            print(f"This is file path, {results_file_path}")
-            logging.debug(f"This is file path, {results_file_path}")
-            return await FileResponse(results_file_path)
-        else:
-            response_msg = json.dumps(
-                {
-                    "status_code": 200,
-                    "details": f"A submission with id {submission_id} is not yet finished",
-                }
-            )
-            return PlainTextResponse(response_msg, status_code=status.HTTP_200_OK)
-
-    except HTTPError as http_error:
-        if http_error.response.status_code in [403, 400]:
-            response_msg = json.dumps(
-                {
-                    "status_code": status.HTTP_404_NOT_FOUND,
-                    "details": f"A submission with id {submission_id} was not found",
-                }
-            )
-            return PlainTextResponse(
-                response_msg, status_code=status.HTTP_404_NOT_FOUND
-            )
-        return response_error_handler(
-            result={"status": http_error.response.status_code}
+    if submission_status.dict()["status"] == "SUCCEDED":
+        print('submission status succeeded')
+        input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
+        input_vcf_path = FilePath(input_vcf_file)
+        results_file_path = input_vcf_path.joinpath(
+            input_vcf_path.parent, input_vcf_path.stem + "_VEP.vcf.gz"
         )
-    except Exception as e:
-        print(e)
-        logging.debug(e)
-        return response_error_handler(result={"status": 500})
+        print(f"This is file path, {results_file_path}")
+        logging.info(f"This is file path, {results_file_path}")
+        return await FileResponse(results_file_path)
+    else:
+        response_msg = json.dumps(
+            {
+                "status_code": 200,
+                "details": f"A submission with id {submission_id} is not yet finished",
+            }
+        )
+        return PlainTextResponse(response_msg, status_code=status.HTTP_200_OK)
+
+    
+    # try:
+    #     workflow_status = await get_workflow_status(submission_id)
+    #     submission_status = PipelineStatus(
+    #         submission_id=submission_id, status=workflow_status
+    #     )
+    #     # To use out file it will require changes in nextflow and get_workflow_status endpoint
+    #     if submission_status.dict()["status"] == "SUCCEDED":
+    #         print('submission status succeeded')
+    #         input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
+    #         input_vcf_path = FilePath(input_vcf_file)
+    #         results_file_path = input_vcf_path.joinpath(
+    #             input_vcf_path.parent, input_vcf_path.stem + "_VEP.vcf.gz"
+    #         )
+    #         print(f"This is file path, {results_file_path}")
+    #         logging.debug(f"This is file path, {results_file_path}")
+    #         return await FileResponse(results_file_path)
+    #     else:
+    #         response_msg = json.dumps(
+    #             {
+    #                 "status_code": 200,
+    #                 "details": f"A submission with id {submission_id} is not yet finished",
+    #             }
+    #         )
+    #         return PlainTextResponse(response_msg, status_code=status.HTTP_200_OK)
+
+    # except HTTPError as http_error:
+    #     if http_error.response.status_code in [403, 400]:
+    #         response_msg = json.dumps(
+    #             {
+    #                 "status_code": status.HTTP_404_NOT_FOUND,
+    #                 "details": f"A submission with id {submission_id} was not found",
+    #             }
+    #         )
+    #         return PlainTextResponse(
+    #             response_msg, status_code=status.HTTP_404_NOT_FOUND
+    #         )
+    #     return response_error_handler(
+    #         result={"status": http_error.response.status_code}
+    #     )
+    # except Exception as e:
+    #     print(e)
+    #     logging.debug(e)
+    #     return response_error_handler(result={"status": 500})

@@ -106,8 +106,7 @@ async def download_results(request: Request, submission_id: str):
     submission_status = PipelineStatus(
         submission_id=submission_id, status=workflow_status['workflow']['status'])
         # To use out file it will require changes in nextflow and get_workflow_status endpoint
-    return PlainTextResponse(str(dir(submission_status))+f" {submission_status.status}", status_code=status.HTTP_200_OK)
-    if submission_status.status == "SUCCEDED":
+    if submission_status.status == "SUCCEEDED":
         print('submission status succeeded')
         input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
         input_vcf_path = FilePath(input_vcf_file)

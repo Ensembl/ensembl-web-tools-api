@@ -11,6 +11,6 @@ services:
       - DEBUG=True
     volumes:
       - ./app/:/app/
-      - ./tmpdir:/nfs/public/rw/enswbsites/tmpdir
+      - ./tmpdir:/nfs/public/rw/enswbsites
     ports:
       - 8013:8013

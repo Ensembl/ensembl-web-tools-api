@@ -19,13 +19,19 @@ logging.getLogger().handlers = [InterceptHandler()]
 class VEPConfigParams(BaseModel):
     vcf: str
     vep_config: str
+    bin_size: int = 3000
+    sort: bool = True
+    output_prefix: str = ""  # optional prefix for output files
 
     @model_serializer
     def vep_config_serialiser(self):
-        vcf_str = '"input":"' + self.vcf + '"'
-        config_str = '"vep_config":"' + self.vep_config + '"'
-        stringified_encoded_json = "{" + vcf_str + "," + config_str + "}"
-        return stringified_encoded_json
+        vcf_str = f'"input": "{self.vcf}"'
+        config_str = f'"vep_config":"{self.vep_config}"'
+        bin_str = f'"bin_size": {self.bin_size}'
+        sort_str = f'"sort": {"true" if self.sort else "false"}'
+        prefix_str = f'"output_prefix": "{self.output_prefix}"' if self.output_prefix else ""
+        json_str = "{" + ", ".join([vcf_str, config_str, bin_str, sort_str, prefix_str]) + "}"
+        return json_str
 
 
 class LaunchParams(BaseModel):
@@ -48,10 +54,8 @@ class ConfigIniParams(BaseModel):
     biotype: bool = False
     transcript_version: int = 1
     canonical: int = 1
-    sort: int = 1
-    gff: str = "/nfs/public/rw/enswbsites/dev/vep/test/genes.gff3.bgz" # hardcoded for testing
+    gff: str = "/nfs/public/rw/enswbsites/dev/vep/test/genes.gff3.bgz"
     fasta: str = "/nfs/public/rw/enswbsites/dev/vep/test/unmasked.fa.bgz"
-    output_prefix: str = "" # outfile: <prefix>_VEP.vcf.gz (uses input filename if empty str)
 
     def create_config_ini_file(self, dir):
         symbol = 1 if self.symbol else 0
@@ -63,10 +67,8 @@ symbol {symbol}
 biotype {biotype}
 transcript_version {self.transcript_version}
 canonical {self.canonical}
-sort {self.sort}
 gff {self.gff}
 fasta {self.fasta}
-output_prefix {self.output_prefix}
 """
 
         try:

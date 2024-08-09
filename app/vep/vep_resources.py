@@ -33,6 +33,7 @@ from vep.models.pipeline_model import (
 )
 from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 from vep.utils.nextflow import launch_workflow, get_workflow_status
+from vep.utils.vcf_results import get_results_from_path
 import json
 from pydantic import FilePath
 
@@ -95,6 +96,10 @@ async def vep_status(request: Request, submission_id: str):
         logging.debug(e)
         return response_error_handler(result={"status": 500})
 
+def get_vep_results_file_path(input_vcf_file):
+    input_vcf_path = FilePath(input_vcf_file)
+    return input_vcf_path.with_name("_VEP").with_suffix(".vcf.gz")
+
 
 @router.get("/submissions/{submission_id}/download", name="download_results")
 async def download_results(request: Request, submission_id: str):
@@ -105,13 +110,9 @@ async def download_results(request: Request, submission_id: str):
         )
         if submission_status.status == "SUCCEEDED":
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
-            input_vcf_path = FilePath(input_vcf_file)
-            results_file_path = input_vcf_path.with_name("_VEP").with_suffix(".vcf.gz")
-            return FileResponse(
-                results_file_path,
-                media_type="application/gzip",
-                filename=results_file_path.name,
-            )
+            results_file_path = get_vep_results_file_path(input_vcf_file)
+
+            return FileResponse(results_file_path, media_type="application/gzip", filename=results_file_path.name)
         else:
             response_msg = {
                 "details": f"A submission with id {submission_id} is not yet finished",
@@ -135,3 +136,30 @@ async def download_results(request: Request, submission_id: str):
     except Exception as e:
         logging.debug(e)
         return response_error_handler(result={"status": 500})
+
+@router.get("/submissions/{submission_id}/results", name="view_results")
+async def fetch_results(request: Request, submission_id: str, page: int, page_size: int):
+    try:
+        workflow_status = await get_workflow_status(submission_id)
+        submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status['workflow']['status'])
+        if submission_status.status == "SUCCEEDED":
+            input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
+            results_file_path = get_vep_results_file_path(input_vcf_file)
+            return get_results_from_path(vcf_path = results_file_path, page=page, page_size = page_size)
+
+    except HTTPError as http_error:
+        if http_error.response.status_code in [403,400]:
+            response_msg = json.dumps(
+                {
+                    "status_code": status.HTTP_404_NOT_FOUND,
+                    "details": f"A submission with id {submission_id} was not found",
+                }
+            )
+            return PlainTextResponse(
+                response_msg, status_code=status.HTTP_404_NOT_FOUND
+            )
+        return response_error_handler(result={"status": http_error.response.status_code})
+    except Exception as e:
+        logging.debug(e)
+        # return response_error_handler(result={"status": 500})
+        return PlainTextResponse(e, status_code=500)

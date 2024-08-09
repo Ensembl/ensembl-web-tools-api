@@ -21,7 +21,7 @@ class VEPConfigParams(BaseModel):
     vep_config: str
     bin_size: int = 3000
     sort: bool = True
-    output_prefix: str = ""  # optional prefix for output files
+    output_prefix: str = ""
 
     @model_serializer
     def vep_config_serialiser(self):

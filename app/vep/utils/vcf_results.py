@@ -1,10 +1,11 @@
 """ Module for loading a VCF and parsing it into a VepResultsResponse
 object as defined in APISpecification"""
 
-import vcfpy
-from typing import List, Dict, Any
+from typing import List, Dict, Any, IO
 
-from vep.models import vcf_results_model as model
+import vcfpy
+
+from app.vep.models import vcf_results_model as model
 
 TARGET_COLUMNS = [
     "Allele",
@@ -51,9 +52,8 @@ def _set_allele_type(alt_one_bp: bool, ref_one_bp: bool, ref_alt_equal_bp: bool)
 
 
 def _get_prediction_index_map(
-                        csq_header: str,
-                        target_columns: List[str] = None
-                    ) -> Dict:
+    csq_header: str, target_columns: List[str] = None
+) -> Dict:
     """Creates a dictionary of column indexes based
     on the CSQ info description"""
     if not target_columns:
@@ -101,7 +101,7 @@ def _get_alt_allele_details(
         if len(cons) == 0:
             cons = []
         else:
-            cons = cons.split('&')
+            cons = cons.split("&")
         if csq_values[index_map["Feature_type"]] == "Transcript":
             is_cononical = (
                 _get_csq_value(csq_values, "CANONICAL", "NO", index_map) == "YES"
@@ -145,21 +145,29 @@ def _get_alt_allele_details(
 def get_results_from_path(
     page_size: int, page: int, vcf_path: str
 ) -> model.VepResultsResponse:
-    """Helper method that converts a file path to a stream
-    for use with get_results_from_stream"""
+    """Helper method that converts a file path to a VCFPY reader
+    for use with _get_results_from_vcfpy"""
     # Check file file exists
-    with open(vcf_path, encoding="utf-8") as vcf_stream:
-        return get_results_from_stream(page_size, page, vcf_stream)
+    vcf_records = vcfpy.Reader.from_path(vcf_path)
+    return _get_results_from_vcfpy(page_size, page, vcf_records)
 
 
 def get_results_from_stream(
     page_size: int, page: int, vcf_stream: IO
 ) -> model.VepResultsResponse:
-    """Generates a page of VCF data in the format described in
-    APISpecification.yaml for a given VCF stream"""
+    """Helper method that converts a stream into a VCFPY reader
+    for use with _get_results_from_vcfpy"""
 
     # Load vcf
     vcf_records = vcfpy.Reader.from_stream(vcf_stream)
+    return _get_results_from_vcfpy(page_size, page, vcf_records)
+
+
+def _get_results_from_vcfpy(
+    page_size: int, page: int, vcf_records: vcfpy.Reader
+) -> model.VepResultsResponse:
+    """Generates a page of VCF data in the format described in
+    APISpecification.yaml for a given VCFPY reader"""
 
     # Parse csq header
     prediction_index_map = _get_prediction_index_map(
@@ -209,7 +217,9 @@ def get_results_from_stream(
             model.Variant(
                 name=";".join(record.ID) if len(record.ID) > 0 else ".",
                 location=location,
-                reference_allele=model.ReferenceVariantAllele(allele_sequence=record.REF),
+                reference_allele=model.ReferenceVariantAllele(
+                    allele_sequence=record.REF
+                ),
                 alternative_alleles=alt_alleles,
                 allele_type=_set_allele_type(
                     longest_alt < 2, ref_len < 2, longest_alt == ref_len
@@ -229,10 +239,8 @@ def get_results_from_stream(
     return model.VepResultsResponse(
         metadata=model.Metadata(
             pagination=model.PaginationMetadata(
-                page=page,
-                per_page=page_size,
-                total=total
+                page=page, per_page=page_size, total=total
             )
         ),
-        variants=variants
+        variants=variants,
     )

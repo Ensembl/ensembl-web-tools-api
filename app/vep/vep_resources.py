@@ -53,7 +53,7 @@ async def submit_vep(request: Request):
         vep_job_config_parameters = VEPConfigParams(
             vcf=request_streamer.filepath, vep_config=ini_file.name
         )
-        launch_params = LaunchParams(paramsText=vep_job_config_parameters, labelIds=[])
+        launch_params = LaunchParams(paramsText=vep_job_config_parameters)
         pipeline_params = PipelineParams(launch=launch_params)
         if stream_result:
             workflow_id = launch_workflow(pipeline_params)

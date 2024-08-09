@@ -1,4 +1,3 @@
-from typing import List
 from pydantic import (
     BaseModel,
     model_serializer,
@@ -23,7 +22,7 @@ class VEPConfigParams(BaseModel):
 
     @model_serializer
     def vep_config_serialiser(self):
-        vcf_str = '"vcf":"' + self.vcf + '"'
+        vcf_str = '"input":"' + self.vcf + '"'
         config_str = '"vep_config":"' + self.vep_config + '"'
         stringified_encoded_json = "{" + vcf_str + "," + config_str + "}"
         return stringified_encoded_json
@@ -35,14 +34,8 @@ class LaunchParams(BaseModel):
     workDir: str = NF_WORK_DIR
     revision: str = "main"
     pullLatest: bool = True
-    configProfiles: List[str] = ["slurmnew"]
+    configProfiles: list[str] = ["ensembl"]
     paramsText: VEPConfigParams
-    preRunScript: str = ""
-    postRunScript: str = ""
-    stubRun: bool = False
-    labelIds: List[str]
-    headJobCpus: int = 1
-    headJobMemoryMb: int = 4
 
 
 class PipelineParams(BaseModel):
@@ -55,11 +48,13 @@ class ConfigIniParams(BaseModel):
     biotype: bool = False
     transcript_version: int = 1
     canonical: int = 1
-    gff: str = "/nfs/public/rw/enswbsites/dev/vep/test/genes.gff3.bgz"
+    sort: int = 1
+    # TODO: use genome_id from client payload to set gff+fasta paths
+    gff: str = "/nfs/public/rw/enswbsites/dev/vep/test/genes.gff3.bgz" # hardcoded for testing
     fasta: str = "/nfs/public/rw/enswbsites/dev/vep/test/unmasked.fa.bgz"
+    output_prefix: str = "" # outfile: <prefix>_VEP.vcf.gz (uses input filename if empty str)
 
     def create_config_ini_file(self, dir):
-
         symbol = 1 if self.symbol else 0
         biotype = 1 if self.biotype else 0
 
@@ -69,8 +64,10 @@ symbol {symbol}
 biotype {biotype}
 transcript_version {self.transcript_version}
 canonical {self.canonical}
+sort {self.sort}
 gff {self.gff}
 fasta {self.fasta}
+output_prefix {self.output_prefix}
 """
 
         try:

@@ -75,7 +75,7 @@ async def vep_status(request: Request, submission_id: str):
     try:
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
-            submission_id=submission_id, status=workflow_status['workflow']['status']
+            submission_id=submission_id, status=workflow_status["workflow"]["status"]
         )
         return JSONResponse(content=submission_status.dict())
 
@@ -101,19 +101,20 @@ async def vep_status(request: Request, submission_id: str):
 
 @router.get("/submissions/{submission_id}/download", name="download_results")
 async def download_results(request: Request, submission_id: str):
-    logging.info('entered route handler') 
     try:
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
-        submission_id=submission_id, status=workflow_status['workflow']['status'])
-        # To use out file it will require changes in nextflow and get_workflow_status endpoint
+            submission_id=submission_id, status=workflow_status["workflow"]["status"]
+        )
         if submission_status.status == "SUCCEEDED":
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             input_vcf_path = FilePath(input_vcf_file)
-            results_file_path = input_vcf_path.joinpath(
-                input_vcf_path.parent, input_vcf_path.stem + "_VEP.vcf.gz"
+            results_file_path = input_vcf_path.with_name("_VEP").with_suffix(".vcf.gz")
+            return FileResponse(
+                results_file_path,
+                media_type="application/gzip",
+                filename=results_file_path.name,
             )
-            return FileResponse(results_file_path, media_type="application/gzip", filename=results_file_path.name)
         else:
             response_msg = json.dumps(
                 {

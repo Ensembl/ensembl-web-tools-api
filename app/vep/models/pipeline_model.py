@@ -49,7 +49,6 @@ class ConfigIniParams(BaseModel):
     transcript_version: int = 1
     canonical: int = 1
     sort: int = 1
-    # TODO: use genome_id from client payload to set gff+fasta paths
     gff: str = "/nfs/public/rw/enswbsites/dev/vep/test/genes.gff3.bgz" # hardcoded for testing
     fasta: str = "/nfs/public/rw/enswbsites/dev/vep/test/unmasked.fa.bgz"
     output_prefix: str = "" # outfile: <prefix>_VEP.vcf.gz (uses input filename if empty str)

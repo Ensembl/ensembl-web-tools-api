@@ -45,7 +45,7 @@ async def submit_vep(request: Request):
         request_streamer = Streamer(request=request)
         stream_result = await request_streamer.stream()
         vep_job_parameters = request_streamer.parameters.value.decode()
-        genome_id = request_streamer.genome_id.value.decode() # TODO: use for gff/fasta selection
+        genome_id = request_streamer.genome_id.value.decode()
 
         vep_job_parameters_dict = json.loads(vep_job_parameters)
         ini_parameters = ConfigIniParams(**vep_job_parameters_dict)

@@ -120,7 +120,9 @@ async def download_results(request: Request, submission_id: str):
                     "details": f"A submission with id {submission_id} is not yet finished",
                 }
             )
-            return PlainTextResponse(response_msg, status_code=status.HTTP_404_NOT_FOUND)
+            return PlainTextResponse(
+                response_msg, status_code=status.HTTP_404_NOT_FOUND
+            )
 
     except HTTPError as http_error:
         if http_error.response.status_code in [403, 400]:

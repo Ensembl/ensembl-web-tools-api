@@ -90,7 +90,7 @@ fasta {self.fasta}
 
 class PipelineStatus(BaseModel):
     submission_id: str
-    status: str = "FAILED"
+    status: str = Field(alias=AliasPath("status", "workflow", "status"), default="FAILED")
 
     @field_serializer("status")
     def serialize_status(self, status: str):

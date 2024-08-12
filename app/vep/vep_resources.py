@@ -81,13 +81,11 @@ async def vep_status(request: Request, submission_id: str):
 
     except HTTPError as http_error:
         if http_error.response.status_code in [403, 400]:
-            response_msg = json.dumps(
-                {
-                    "details": f"A submission with id {submission_id} was not found",
-                }
-            )
-            return PlainTextResponse(
-                response_msg, status_code=status.HTTP_404_NOT_FOUND
+            response_msg = {
+                "details": f"A submission with id {submission_id} was not found",
+            }
+            return JSONResponse(
+                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
 
         return response_error_handler(
@@ -115,25 +113,21 @@ async def download_results(request: Request, submission_id: str):
                 filename=results_file_path.name,
             )
         else:
-            response_msg = json.dumps(
-                {
-                    "details": f"A submission with id {submission_id} is not yet finished",
-                }
-            )
-            return PlainTextResponse(
-                response_msg, status_code=status.HTTP_404_NOT_FOUND
+            response_msg = {
+                "details": f"A submission with id {submission_id} is not yet finished",
+            }
+            return JSONResponse(
+                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
 
     except HTTPError as http_error:
         if http_error.response.status_code in [403, 400]:
-            response_msg = json.dumps(
-                {
-                    "status_code": status.HTTP_404_NOT_FOUND,
-                    "details": f"A submission with id {submission_id} was not found",
-                }
-            )
-            return PlainTextResponse(
-                response_msg, status_code=status.HTTP_404_NOT_FOUND
+            response_msg = {
+                "status_code": status.HTTP_404_NOT_FOUND,
+                "details": f"A submission with id {submission_id} was not found",
+            }
+            return JSONResponse(
+                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
         return response_error_handler(
             result={"status": http_error.response.status_code}

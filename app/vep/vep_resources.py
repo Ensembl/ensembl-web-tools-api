@@ -83,7 +83,6 @@ async def vep_status(request: Request, submission_id: str):
         if http_error.response.status_code in [403, 400]:
             response_msg = json.dumps(
                 {
-                    "status_code": status.HTTP_404_NOT_FOUND,
                     "details": f"A submission with id {submission_id} was not found",
                 }
             )

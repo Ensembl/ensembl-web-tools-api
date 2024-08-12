@@ -155,11 +155,12 @@ async def fetch_results(request: Request, submission_id: str, page: int, page_si
                     "details": f"A submission with id {submission_id} was not found",
                 }
             )
-            return PlainTextResponse(
-                response_msg, status_code=status.HTTP_404_NOT_FOUND
+            return JSONResponse(
+                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
-        return response_error_handler(result={"status": http_error.response.status_code})
+        return response_error_handler(
+            result={"status": http_error.response.status_code}
+        )
     except Exception as e:
         logging.debug(e)
-        # return response_error_handler(result={"status": 500})
-        return PlainTextResponse(e, status_code=500)
+        return response_error_handler(result={"status": 500})

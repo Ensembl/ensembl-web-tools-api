@@ -21,6 +21,7 @@ import logging
 from requests import HTTPError
 from starlette.responses import JSONResponse, PlainTextResponse, FileResponse
 from fastapi import Request, status, APIRouter
+from enum import Enum
 
 from core.error_response import response_error_handler
 from core.logging import InterceptHandler
@@ -41,6 +42,12 @@ logging.getLogger().handlers = [InterceptHandler()]
 
 router = APIRouter()
 
+class VepStatus(str, Enum):
+    submitted = "SUBMITTED"
+    running = "RUNNING"
+    succeeded = "SUCCEEDED"
+    failed = "FAILED"
+    cancelled = "CANCELLED"
 
 @router.post("/submissions", name="submit_vep")
 async def submit_vep(request: Request):
@@ -108,7 +115,7 @@ async def download_results(request: Request, submission_id: str):
         submission_status = PipelineStatus(
             submission_id=submission_id, status=workflow_status["workflow"]["status"]
         )
-        if submission_status.status == "SUCCEEDED":
+        if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             results_file_path = get_vep_results_file_path(input_vcf_file)
 
@@ -138,14 +145,14 @@ async def download_results(request: Request, submission_id: str):
         return response_error_handler(result={"status": 500})
 
 @router.get("/submissions/{submission_id}/results", name="view_results")
-async def fetch_results(request: Request, submission_id: str, page: int, page_size: int):
+async def fetch_results(request: Request, submission_id: str, page: int, per_page: int):
     try:
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status['workflow']['status'])
-        if submission_status.status == "SUCCEEDED":
+        if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             results_file_path = get_vep_results_file_path(input_vcf_file)
-            return get_results_from_path(vcf_path = results_file_path, page=page, page_size = page_size)
+            return get_results_from_path(vcf_path = results_file_path, page=page, page_size = per_page)
 
     except HTTPError as http_error:
         if http_error.response.status_code in [403,400]:

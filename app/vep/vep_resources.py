@@ -106,7 +106,7 @@ async def download_results(request: Request, submission_id: str):
         if submission_status.status == "SUCCEEDED":
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             input_vcf_path = FilePath(input_vcf_file)
-            results_file_path = input_vcf_path.with_name("_VEP").with_suffix(".vcf.gz")
+            results_file_path = input_vcf_path.with_name(input_vcf_path.stem + "_VEP").with_suffix(".vcf.gz")
             return FileResponse(
                 results_file_path,
                 media_type="application/gzip",

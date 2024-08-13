@@ -186,6 +186,17 @@ def _get_results_from_vcfpy(
             count += 1
             if count >= offset:
                 break
+                
+    #user asked for a page out of range
+    if offset > count:
+        return model.VepResultsResponse(
+                metadata=model.Metadata(
+                    pagination=model.PaginationMetadata(
+                        page=page, per_page=page_size, total=count
+                    )
+                ),
+                variants=[],
+        )        
 
     # build page
     variants = []

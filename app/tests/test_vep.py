@@ -228,6 +228,11 @@ def test_paging():
     assert(results.variants[0].name == "id_21")
     assert(len(results.variants) == 1)
     
+def test_negative_paging():
+    results = get_results_from_stream(5, 6, StringIO(TEST_PAGING_VCF))
+    assert(len(results.variants) == 0)
+    assert(results.metadata.pagination.total == 21)
+    
 
 @pytest.mark.skip(reason="Used to test against a real VCF file")
 def test_get_results_with_file_and_dump():

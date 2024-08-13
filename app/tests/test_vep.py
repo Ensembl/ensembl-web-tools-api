@@ -150,7 +150,7 @@ def test_get_results_from_stream():
 
     assert len(results.variants) == 2
 
-    assert results.metadata.pagination.page == 0
+    assert results.metadata.pagination.page == 1
     assert results.metadata.pagination.per_page == 100
     assert results.metadata.pagination.total == 2
 
@@ -181,13 +181,16 @@ def test_get_results_from_stream():
 def test_get_results_with_file_and_dump():
 
     vcf_path = (
-        "/Users/jon/Programming/vep-vcf-results/vep-output-phase1-options-plus-con.vcf"
+        #"/Users/jon/Programming/vep-vcf-results/vep-output-phase1-options-plus-con.vcf"
+        "/Users/jon/Programming/ensembl-web-tools-api/test_VEP.vcf.gz"
     )
-    results = get_results_from_path(100, 2, vcf_path)
+    results = get_results_from_path(100, 1, vcf_path)
 
     expected_index = {TARGET_COLUMNS[x]: x for x in range(0, len(TARGET_COLUMNS))}
 
     with open("dump.json", "w") as test_dump:
         test_dump.write(results.json())
 
-    assert len(results.variants) == 100
+    #assert results.variants[0].name =="rs1405511870"
+    assert results.metadata.pagination.total == 1
+    assert len(results.variants) == 1

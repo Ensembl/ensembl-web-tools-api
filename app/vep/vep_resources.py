@@ -101,7 +101,7 @@ async def download_results(request: Request, submission_id: str):
     try:
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
-            submission_id=submission_id, status=workflow_status["workflow"]["status"]
+            submission_id=submission_id, status=workflow_status
         )
         if submission_status.status == "SUCCEEDED":
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]

@@ -1,6 +1,8 @@
 from typing import List
 from pydantic import (
     BaseModel,
+    DirectoryPath,
+    FilePath,
     model_serializer,
     Field,
     AliasPath,
@@ -18,14 +20,18 @@ logging.getLogger().handlers = [InterceptHandler()]
 
 
 class VEPConfigParams(BaseModel):
-    vcf: str
-    vep_config: str
+    vcf: FilePath
+    vep_config: FilePath
+    outdir: DirectoryPath
 
     @model_serializer
     def vep_config_serialiser(self):
-        vcf_str = '"vcf":"' + self.vcf + '"'
-        config_str = '"vep_config":"' + self.vep_config + '"'
-        stringified_encoded_json = "{" + vcf_str + "," + config_str + "}"
+        vcf_str = '"vcf":"' + self.vcf.as_posix() + '"'
+        config_str = '"vep_config":"' + self.vep_config.as_posix() + '"'
+        outdir_str = '"outdir":"' + self.outdir.as_posix() + '"'
+        stringified_encoded_json = (
+            "{" + vcf_str + "," + config_str + "," + outdir_str + "}"
+        )
         return stringified_encoded_json
 
 
@@ -84,7 +90,9 @@ fasta {self.fasta}
 
 class PipelineStatus(BaseModel):
     submission_id: str
-    status: str = Field(alias=AliasPath("workflow", "status"), default="FAILED")
+    status: str = Field(
+        alias=AliasPath("status", "workflow", "status"), default="FAILED"
+    )
 
     @field_serializer("status")
     def serialize_status(self, status: str):

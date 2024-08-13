@@ -19,7 +19,7 @@ limitations under the License.
 import logging
 
 from requests import HTTPError
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import JSONResponse, PlainTextResponse, FileResponse
 from fastapi import Request, status, APIRouter
 
 from core.error_response import response_error_handler
@@ -29,10 +29,12 @@ from vep.models.pipeline_model import (
     VEPConfigParams,
     LaunchParams,
     PipelineParams,
+    PipelineStatus,
 )
 from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 from vep.utils.nextflow import launch_workflow, get_workflow_status
 import json
+from pydantic import FilePath
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -51,7 +53,9 @@ async def submit_vep(request: Request):
         ini_parameters = ConfigIniParams(**vep_job_parameters_dict)
         ini_file = ini_parameters.create_config_ini_file(request_streamer.temp_dir)
         vep_job_config_parameters = VEPConfigParams(
-            vcf=request_streamer.filepath, vep_config=ini_file.name
+            vcf=request_streamer.filepath,
+            vep_config=ini_file.name,
+            outdir=request_streamer.temp_dir,
         )
         launch_params = LaunchParams(paramsText=vep_job_config_parameters, labelIds=[])
         pipeline_params = PipelineParams(launch=launch_params)
@@ -70,21 +74,64 @@ async def submit_vep(request: Request):
 async def vep_status(request: Request, submission_id: str):
     try:
         workflow_status = await get_workflow_status(submission_id)
-        return JSONResponse(content=workflow_status.dict())
+        submission_status = PipelineStatus(
+            submission_id=submission_id, status=workflow_status
+        )
+        return JSONResponse(content=submission_status.dict())
 
     except HTTPError as http_error:
-        if http_error.response.status_code in [403,400]:
-            response_msg = json.dumps(
-                {
-                    "status_code": status.HTTP_404_NOT_FOUND,
-                    "details": f"A submission with id {submission_id} was not found",
-                }
-            )
-            return PlainTextResponse(
-                response_msg, status_code=status.HTTP_404_NOT_FOUND
+        if http_error.response.status_code in [403, 400]:
+            response_msg = {
+                "details": f"A submission with id {submission_id} was not found",
+            }
+            return JSONResponse(
+                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
 
-        return response_error_handler(result={"status": http_error.response.status_code})
+        return response_error_handler(
+            result={"status": http_error.response.status_code}
+        )
+    except Exception as e:
+        logging.debug(e)
+        return response_error_handler(result={"status": 500})
+
+
+@router.get("/submissions/{submission_id}/download", name="download_results")
+async def download_results(request: Request, submission_id: str):
+    try:
+        workflow_status = await get_workflow_status(submission_id)
+        submission_status = PipelineStatus(
+            submission_id=submission_id, status=workflow_status["workflow"]["status"]
+        )
+        if submission_status.status == "SUCCEEDED":
+            input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
+            input_vcf_path = FilePath(input_vcf_file)
+            results_file_path = input_vcf_path.with_name("_VEP").with_suffix(".vcf.gz")
+            return FileResponse(
+                results_file_path,
+                media_type="application/gzip",
+                filename=results_file_path.name,
+            )
+        else:
+            response_msg = {
+                "details": f"A submission with id {submission_id} is not yet finished",
+            }
+            return JSONResponse(
+                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
+            )
+
+    except HTTPError as http_error:
+        if http_error.response.status_code in [403, 400]:
+            response_msg = {
+                "status_code": status.HTTP_404_NOT_FOUND,
+                "details": f"A submission with id {submission_id} was not found",
+            }
+            return JSONResponse(
+                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
+            )
+        return response_error_handler(
+            result={"status": http_error.response.status_code}
+        )
     except Exception as e:
         logging.debug(e)
         return response_error_handler(result={"status": 500})

@@ -105,7 +105,7 @@ async def vep_status(request: Request, submission_id: str):
 
 def get_vep_results_file_path(input_vcf_file):
     input_vcf_path = FilePath(input_vcf_file)
-    return input_vcf_path.with_name("_VEP").with_suffix(".vcf.gz")
+    return input_vcf_path.with_name(input_vcf_path.stem + "_VEP").with_suffix(".vcf.gz")
 
 
 @router.get("/submissions/{submission_id}/download", name="download_results")
@@ -113,7 +113,7 @@ async def download_results(request: Request, submission_id: str):
     try:
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
-            submission_id=submission_id, status=workflow_status["workflow"]["status"]
+            submission_id=submission_id, status=workflow_status
         )
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
@@ -148,7 +148,7 @@ async def download_results(request: Request, submission_id: str):
 async def fetch_results(request: Request, submission_id: str, page: int, per_page: int):
     try:
         workflow_status = await get_workflow_status(submission_id)
-        submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status['workflow']['status'])
+        submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status)
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             results_file_path = get_vep_results_file_path(input_vcf_file)

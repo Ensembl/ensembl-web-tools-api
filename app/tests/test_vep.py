@@ -38,6 +38,33 @@ chr19	82829	my_var	T	A	50	PASS	CSQ={CSQ_2}
 
 """
 
+TEST_PAGING_VCF = f"""##fileformat=VCFv4.2
+##fileDate=20160824
+##INFO=<ID=CSQ,Number=.,Type=String,Description="{CSQ_DESCRIPTION}">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr19	82664	id_01	C	T	50	PASS	CSQ={CSQ_1}
+chr19	82829	id_02	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_03	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_04	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_05	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_06	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_07	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_08	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_09	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_10	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_11	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_12	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_13	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_14	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_15	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_16	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_17	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_18	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_19	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_20	T	A	50	PASS	CSQ={CSQ_2}
+chr19	82829	id_21	T	A	50	PASS	CSQ={CSQ_2}
+"""
+
 
 def test_get_prediction_index_map():
 
@@ -141,8 +168,7 @@ def test_get_alt_allele_details_intergenic():
         results.predicted_molecular_consequences[0].consequences[0]
         == "intergenic_variant"
     )
-
-
+    
 def test_get_results_from_stream():
     results = get_results_from_stream(100, 0, StringIO(TEST_VCF))
 
@@ -150,7 +176,7 @@ def test_get_results_from_stream():
 
     assert len(results.variants) == 2
 
-    assert results.metadata.pagination.page == 0
+    assert results.metadata.pagination.page == 1
     assert results.metadata.pagination.per_page == 100
     assert results.metadata.pagination.total == 2
 
@@ -176,18 +202,52 @@ def test_get_results_from_stream():
         == None
     )
 
+def test_paging():
+    results = get_results_from_stream(5, 1, StringIO(TEST_PAGING_VCF))
+    
+    assert(results.metadata.pagination.page == 1)
+    assert(results.metadata.pagination.per_page == 5)
+    assert(results.metadata.pagination.total == 21)
+    
+    assert(results.variants[0].name == "id_01")
+    assert(results.variants[-1].name == "id_05")
+    
+    results = get_results_from_stream(5, 2, StringIO(TEST_PAGING_VCF))
+    assert(results.variants[0].name == "id_06")
+    assert(results.variants[-1].name == "id_10")
+    
+    results = get_results_from_stream(5, 3, StringIO(TEST_PAGING_VCF))
+    assert(results.variants[0].name == "id_11")
+    assert(results.variants[-1].name == "id_15")
+    
+    results = get_results_from_stream(5, 4, StringIO(TEST_PAGING_VCF))
+    assert(results.variants[0].name == "id_16")
+    assert(results.variants[-1].name == "id_20")
+    
+    results = get_results_from_stream(5, 5, StringIO(TEST_PAGING_VCF))
+    assert(results.variants[0].name == "id_21")
+    assert(len(results.variants) == 1)
+    
+def test_negative_paging():
+    results = get_results_from_stream(5, 6, StringIO(TEST_PAGING_VCF))
+    assert(len(results.variants) == 0)
+    assert(results.metadata.pagination.total == 21)
+    
 
 @pytest.mark.skip(reason="Used to test against a real VCF file")
 def test_get_results_with_file_and_dump():
 
     vcf_path = (
-        "/Users/jon/Programming/vep-vcf-results/vep-output-phase1-options-plus-con.vcf"
+        #"/Users/jon/Programming/vep-vcf-results/vep-output-phase1-options-plus-con.vcf"
+        "/Users/jon/Programming/ensembl-web-tools-api/test_VEP.vcf.gz"
     )
-    results = get_results_from_path(100, 2, vcf_path)
+    results = get_results_from_path(100, 1, vcf_path)
 
     expected_index = {TARGET_COLUMNS[x]: x for x in range(0, len(TARGET_COLUMNS))}
 
     with open("dump.json", "w") as test_dump:
         test_dump.write(results.json())
 
-    assert len(results.variants) == 100
+    #assert results.variants[0].name =="rs1405511870"
+    assert results.metadata.pagination.total == 1
+    assert len(results.variants) == 1

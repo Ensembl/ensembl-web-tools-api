@@ -14,12 +14,15 @@ def serialize_variants(rows):
         results.append(variant)
     return json.dumps(results, indent=2)
 
-# takes about 40ms to run
 def get_first_page_of_variants():
     sql = """
-        SELECT * FROM variants
-        JOIN consequences USING(variant_id)
-        LIMIT 100
+        WITH joint_table AS (
+            SELECT variants.*, consequences.*
+            FROM variants JOIN consequences USING(variant_id)
+        ) SELECT * FROM joint_table WHERE variant_id IN (
+            SELECT DISTINCT variant_id from joint_table
+            LIMIT 100
+        )
     """
     db_connection = sqlite3.connect(DATABASE_NAME)
     db_connection.row_factory = sqlite3.Row
@@ -28,13 +31,16 @@ def get_first_page_of_variants():
     results = serialize_variants(cursor.fetchall())
     print(results)
 
-# takes about 50ms to run
 def get_page_of_variants_with_offset():
     sql = """
-        SELECT * FROM variants
-        JOIN consequences USING(variant_id)
-        LIMIT 100
-        OFFSET 80000
+        WITH joint_table AS (
+            SELECT variants.*, consequences.*
+            FROM variants JOIN consequences USING(variant_id)
+        ) SELECT * FROM joint_table WHERE variant_id IN (
+            SELECT DISTINCT variant_id from joint_table
+            LIMIT 100
+            OFFSET 80000
+        )
     """
     db_connection = sqlite3.connect(DATABASE_NAME)
     db_connection.row_factory = sqlite3.Row
@@ -43,7 +49,6 @@ def get_page_of_variants_with_offset():
     results = serialize_variants(cursor.fetchall())
     print(results)
 
-# takes about 150ms to run
 def get_variants_with_one_filter():
     sql = """
         WITH joint_table AS (

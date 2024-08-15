@@ -51,7 +51,6 @@ def cleanup_variant(variant):
     return variant
 
 
-# takes about 40ms to run denormalized
 def get_first_page_of_variants():
     sql = """
         WITH joint_table AS (
@@ -76,40 +75,6 @@ def get_first_page_of_variants():
     print(results)
 
 
-def try_json_group_object():
-    sql = """
-        WITH joint_table AS (
-            SELECT variants.*, alternative_alleles.*, consequences.*, features.*
-            FROM variants
-            JOIN alternative_alleles USING(variant_id)
-            JOIN alternative_alleles_consequences USING(alternative_allele_id)
-            JOIN consequences USING(consequence_id)
-            JOIN alternative_alleles_features USING(alternative_allele_id)
-            JOIN features ON features.id = alternative_alleles_features.feature_id        
-        )
-        SELECT json_group_object(
-            variant_id,
-            json_object (
-                "name", name,
-                "region_name", region_name,
-                "reference_allele", reference_allele
-            )
-        )  FROM joint_table  WHERE variant_id  IN (
-            SELECT DISTINCT variant_id from joint_table
-            LIMIT 100
-        )
-    """
-
-    db_connection = sqlite3.connect(DATABASE_NAME)
-    db_connection.row_factory = sqlite3.Row
-    cursor = db_connection.cursor()
-    cursor.execute(sql)
-    results = cursor.fetchall()
-    for result in results:
-        print(result.keys())
-
-
-# takes about 50ms to run
 def get_page_of_variants_with_offset():
     sql = """
         WITH joint_table AS (
@@ -186,7 +151,6 @@ def get_variant_at_start():
 
 
 # get_first_page_of_variants()
-# try_json_group_object()
 # get_page_of_variants_with_offset()
 # get_variants_with_one_filter()
 get_variant_at_start()

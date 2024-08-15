@@ -4,8 +4,6 @@ import sqlite3
 from parse_vcf import parse_vcf_data
 from db_details import DATABASE_NAME
 
-# https://dba.stackexchange.com/questions/269453/limit-on-table-with-1-to-many
-
 
 def load_db():
     db_connection = sqlite3.connect(DATABASE_NAME)

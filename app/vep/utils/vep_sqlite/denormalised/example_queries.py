@@ -46,16 +46,15 @@ def get_page_of_variants_with_offset():
 # takes about 150ms to run
 def get_variants_with_one_filter():
     sql = """
-        SELECT * FROM variants
-        JOIN consequences USING(variant_id)
-        WHERE biotype="retained_intron"
-        AND variants.variant_id in (
-            SELECT DISTINCT variants.variant_id
+        WITH joint_table AS (
+            SELECT variants.*, consequences.*
             FROM variants JOIN consequences USING(variant_id)
+        ) SELECT * FROM joint_table WHERE variant_id IN (
+            SELECT DISTINCT variant_id from joint_table
             WHERE biotype="retained_intron"
-            limit 100
-            offset 10000
-        );
+            LIMIT 100
+            OFFSET 20000
+        )
     """
     db_connection = sqlite3.connect(DATABASE_NAME)
     db_connection.row_factory = sqlite3.Row

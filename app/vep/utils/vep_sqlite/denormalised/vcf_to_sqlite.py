@@ -87,7 +87,7 @@ def save_variant_consequences(record: dict, db_connection: sqlite3.Connection):
             variant_id
         ) VALUES (
             :alternative_allele,
-            :consequence,
+            :consequences,
             :feature_type,
             :feature_id,
             :biotype,
@@ -98,6 +98,7 @@ def save_variant_consequences(record: dict, db_connection: sqlite3.Connection):
     """
     for cons in record["consequences"]:
         cons["variant_id"] = record["variant_id"]
+        cons["consequences"] = "&".join(cons["consequences"])
         cursor = db_connection.cursor()
         cursor.execute(sql, cons)
 

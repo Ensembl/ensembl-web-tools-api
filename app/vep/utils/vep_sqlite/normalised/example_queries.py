@@ -28,9 +28,26 @@ def serialize_variants(rows):
             alternative_allele = {
                 "alternative_allele_id": row["alternative_allele_id"],
                 "alternative_allele": row["alternative_allele"],
-                "consequences": []
+                "consequences": [],
+                "features": []
             }
             variant["alternative_alleles"].append(alternative_allele)
+
+        feature_id = row["feature_id"]
+        if feature_id:
+            is_feature_saved = False
+            for feature in alternative_allele["features"]:
+                if feature["feature_id"] == feature_id:
+                    is_feature_saved = True
+            if not is_feature_saved:
+                feature = {
+                    "feature_id": feature_id,
+                    "feature_type": row["feature_type"],
+                    "biotype": row["biotype"],
+                    "gene_id": row["gene_id"],
+                    "gene_symbol": row["gene_symbol"]
+                }
+                alternative_allele["features"].append(feature)
 
         # Add consequence to the list of alternative allele consequences if not already there
         consequence = row["consequence"] 

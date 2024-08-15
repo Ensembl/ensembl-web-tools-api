@@ -153,6 +153,13 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             results_file_path = get_vep_results_file_path(input_vcf_file)
             return get_results_from_path(vcf_path = results_file_path, page=page, page_size = per_page)
+        else:
+            response_msg = {
+                "details": f"A submission with id {submission_id} is not yet finished",
+            }
+            return JSONResponse(
+                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
+            )
 
     except HTTPError as http_error:
         if http_error.response.status_code in [403,400]:

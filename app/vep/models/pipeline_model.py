@@ -1,4 +1,3 @@
-from typing import List
 from pydantic import (
     BaseModel,
     DirectoryPath,
@@ -23,16 +22,23 @@ class VEPConfigParams(BaseModel):
     vcf: FilePath
     vep_config: FilePath
     outdir: DirectoryPath
+    bin_size: int = 3000
+    sort: bool = True
+    output_prefix: str = ""
 
     @model_serializer
     def vep_config_serialiser(self):
-        vcf_str = '"vcf":"' + self.vcf.as_posix() + '"'
-        config_str = '"vep_config":"' + self.vep_config.as_posix() + '"'
-        outdir_str = '"outdir":"' + self.outdir.as_posix() + '"'
-        stringified_encoded_json = (
-            "{" + vcf_str + "," + config_str + "," + outdir_str + "}"
-        )
-        return stringified_encoded_json
+        vcf_str = f'"input": "{self.vcf.as_posix()}"'
+        config_str = f'"vep_config": "{self.vep_config.as_posix()}"'
+        outdir_str = f'"outdir": "{self.outdir.as_posix()}"'
+        bin_str = f'"bin_size": {self.bin_size}'
+        sort_str = f'"sort": {"true" if self.sort else "false"}'
+        prefix_str = f'"output_prefix": "{self.output_prefix}"' if self.output_prefix else ""
+        json_str = "{" + ", ".join(
+            [vcf_str, config_str, outdir_str, bin_str, sort_str, prefix_str]
+        ) + "}"
+
+        return json_str
 
 
 class LaunchParams(BaseModel):
@@ -41,14 +47,8 @@ class LaunchParams(BaseModel):
     workDir: str = NF_WORK_DIR
     revision: str = "main"
     pullLatest: bool = True
-    configProfiles: List[str] = ["slurmnew"]
+    configProfiles: list[str] = ["ensembl"]
     paramsText: VEPConfigParams
-    preRunScript: str = ""
-    postRunScript: str = ""
-    stubRun: bool = False
-    labelIds: List[str]
-    headJobCpus: int = 1
-    headJobMemoryMb: int = 4
 
 
 class PipelineParams(BaseModel):
@@ -65,7 +65,6 @@ class ConfigIniParams(BaseModel):
     fasta: str = "/nfs/public/rw/enswbsites/dev/vep/test/unmasked.fa.bgz"
 
     def create_config_ini_file(self, dir):
-
         symbol = 1 if self.symbol else 0
         biotype = 1 if self.biotype else 0
 
@@ -91,7 +90,7 @@ fasta {self.fasta}
 class PipelineStatus(BaseModel):
     submission_id: str
     status: str = Field(
-        alias=AliasPath("status", "workflow", "status"), default="FAILED"
+        validation_alias=AliasPath("status", "workflow", "status"), default="FAILED"
     )
 
     @field_serializer("status")

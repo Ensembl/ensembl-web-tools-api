@@ -169,6 +169,13 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
                 return JSONResponse(
                     content=response_msg, status_code=status.HTTP_404_NOT_FOUND
                 )
+        else:
+            response_msg = {
+                "details": f"A submission with id {submission_id} is not yet finished",
+            }
+            return JSONResponse(
+                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
+            )
 
     except HTTPError as http_error:
         if http_error.response.status_code in [403,400]:

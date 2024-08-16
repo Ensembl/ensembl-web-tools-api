@@ -14,7 +14,11 @@ def get_consequence_info_index_map(reader: vcfpy.Reader):
     return index_map
 
 def get_variant_name_from_record(record: vcfpy.Record):
-    return record.ID or '.'
+    variant_names = record.ID
+    if isinstance(variant_names, list):
+        return ",".join(variant_names)
+    else:
+        return '.'
 
 def get_region_name_from_record(record: vcfpy.Record):
     region_name = record.CHROM
@@ -37,7 +41,6 @@ def get_consequences_from_record(record: vcfpy.Record):
         record = {
             "alternative_allele": item[consequence_info_index_map['Allele']],
             "consequences": item[consequence_info_index_map['Consequence']].split("&"),
-            "reference_allele": item[consequence_info_index_map['REF_ALLELE']], # Could probably just do record.REF
             "feature_type": item[consequence_info_index_map['Feature_type']] or None,
             "feature_id": item[consequence_info_index_map['Feature']] or None,
             "biotype": item[consequence_info_index_map['BIOTYPE']] or None,
@@ -58,11 +61,13 @@ def parse_vcf_data():
     count = 0
 
     for record in vcf_reader:
+        if not "CSQ" in record.INFO:
+            continue
         parsed_record = {
             "variant_name": get_variant_name_from_record(record),
             "region_name": get_region_name_from_record(record),
             "start": get_start_from_record(record),
-            "reference_allele": get_reference_allele_from_record(record),
+            "reference_allele": record.REF,
             "consequences": get_consequences_from_record(record)
         }
         yield parsed_record

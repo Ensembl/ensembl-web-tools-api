@@ -1,4 +1,5 @@
 import sqlite3
+import json
 
 # FIXME: fix the relative imports!!!
 from parse_vcf import parse_vcf_data
@@ -108,10 +109,14 @@ def save_variant(record: dict, db_connection: sqlite3.Connection):
         ) RETURNING variant_id
     """
     cursor = db_connection.cursor()
-    cursor.execute(sql, record)
-    variant_id = cursor.fetchone()["variant_id"]
-    record['variant_id'] = variant_id
-    save_variant_consequences(record, db_connection)
+    try:
+        cursor.execute(sql, record)
+        variant_id = cursor.fetchone()["variant_id"]
+        record['variant_id'] = variant_id
+        save_variant_consequences(record, db_connection)
+    except:
+        print('ERROR!')
+        print(json.dumps(record))
 
 def save_variant_consequences(record: dict, db_connection: sqlite3.Connection):
     alt_allele_insert_sql = """

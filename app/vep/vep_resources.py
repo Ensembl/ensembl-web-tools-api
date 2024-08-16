@@ -105,7 +105,8 @@ async def vep_status(request: Request, submission_id: str):
 
 def get_vep_results_file_path(input_vcf_file):
     input_vcf_path = FilePath(input_vcf_file)
-    return input_vcf_path.with_name(input_vcf_path.stem + "_VEP").with_suffix(".vcf.gz")
+    vep_results_file = input_vcf_path.with_name(input_vcf_path.stem + "_VEP").with_suffix(".vcf.gz")
+    return vep_results_file
 
 
 @router.get("/submissions/{submission_id}/download", name="download_results")
@@ -118,8 +119,15 @@ async def download_results(request: Request, submission_id: str):
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             results_file_path = get_vep_results_file_path(input_vcf_file)
-
-            return FileResponse(results_file_path, media_type="application/gzip", filename=results_file_path.name)
+            if results_file_path.exists():
+                return FileResponse(results_file_path, media_type="application/gzip", filename=results_file_path.name)
+            else:
+                response_msg = {
+                    "details": f"A submission with id {submission_id} succeeded but could not find output file",
+                }
+                return JSONResponse(
+                    content=response_msg, status_code=status.HTTP_404_NOT_FOUND
+                )
         else:
             response_msg = {
                 "details": f"A submission with id {submission_id} is not yet finished",
@@ -152,7 +160,15 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             results_file_path = get_vep_results_file_path(input_vcf_file)
-            return get_results_from_path(vcf_path = results_file_path, page=page, page_size = per_page)
+            if results_file_path.exists():
+                return get_results_from_path(vcf_path = results_file_path, page=page, page_size = per_page)
+            else:
+                response_msg = {
+                    "details": f"A submission with id {submission_id} succeeded but could not find output file",
+                }
+                return JSONResponse(
+                    content=response_msg, status_code=status.HTTP_404_NOT_FOUND
+                )
         else:
             response_msg = {
                 "details": f"A submission with id {submission_id} is not yet finished",

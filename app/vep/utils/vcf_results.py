@@ -81,17 +81,20 @@ def _get_csq_value(
 
 
 def _get_alt_allele_details(
-    alt: vcfpy.AltRecord, csqs: List[str], index_map: Dict
+    alt: str, ref: str, csqs: List[str], index_map: Dict
 ) -> model.AlternativeVariantAllele:
     """Creates  AlternativeVariantAllele based on
     target alt allele and CSQ entires"""
     frequency = None
     consequences = []
+    allele_type = _set_allele_type(
+        len(alt) < 2, len(ref) < 2, len(alt) == len(ref)
+    )[0]
 
     for str_csq in csqs:
         csq_values = str_csq.split("|")
 
-        if csq_values[index_map["Allele"]] != alt.value:
+        if csq_values[index_map["Allele"]] != alt:
             continue
 
         frequency = _get_csq_value(csq_values, "AF", frequency, index_map)
@@ -134,8 +137,8 @@ def _get_alt_allele_details(
             )
 
     return model.AlternativeVariantAllele(
-        allele_sequence=alt.value,
-        allele_type=alt.type,
+        allele_sequence=alt,
+        allele_type=allele_type,
         representative_population_allele_frequency=frequency,
         predicted_molecular_consequences=consequences,
     )
@@ -152,7 +155,7 @@ def get_results_from_path(
 
 
 def get_results_from_stream(
-    page_size: int, page: int, vcf_stream: IO
+    page_size: int, page: int, vcf_stream: Any
 ) -> model.VepResultsResponse:
     """Generates a page of VCF data in the format described in
     APISpecification.yaml for a given VCF stream"""
@@ -220,9 +223,14 @@ def _get_results_from_vcfpy(
         )
         longest_alt = len(max((a.value for a in record.ALT), key=len))
 
+        alt_allele_strings = list(set([
+            csq_string.split("|")[prediction_index_map["Allele"]]
+            for csq_string in record.INFO["CSQ"]
+        ]))
+
         alt_alleles = [
-            _get_alt_allele_details(alt, record.INFO["CSQ"], prediction_index_map)
-            for alt in record.ALT
+            _get_alt_allele_details(alt, record.REF, record.INFO["CSQ"], prediction_index_map)
+            for alt in alt_allele_strings
         ]
 
         variants.append(

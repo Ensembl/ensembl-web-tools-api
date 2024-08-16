@@ -168,7 +168,11 @@ def save_consequence(consequence: str, db_connection: sqlite3.Connection) -> int
 
 
 def save_feature(record: dict, db_connection: sqlite3.Connection):
-    sql = """
+    feature_query_sql = """
+        SELECT id FROM features
+        WHERE feature_id = ?
+    """
+    feature_insert_sql = """
         INSERT INTO features (
             feature_type,
             feature_id,
@@ -184,8 +188,12 @@ def save_feature(record: dict, db_connection: sqlite3.Connection):
         ) RETURNING id
     """
     cursor = db_connection.cursor()
-    cursor.execute(sql, record)
+    cursor.execute(feature_query_sql, (record['feature_id'],))
     query_result = cursor.fetchone()
+
+    if not query_result:
+        cursor.execute(feature_insert_sql, record)
+        query_result = cursor.fetchone()
     return query_result['id']
 
 def save_alt_allele_feature_association(alt_allele_id: int, feature_id: int, db_connection: sqlite3.Connection):

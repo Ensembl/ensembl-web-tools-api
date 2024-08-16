@@ -33,11 +33,14 @@ class VEPConfigParams(BaseModel):
         outdir_str = f'"outdir": "{self.outdir.as_posix()}"'
         bin_str = f'"bin_size": {self.bin_size}'
         sort_str = f'"sort": {"true" if self.sort else "false"}'
-        prefix_str = f'"output_prefix": "{self.output_prefix}"' if self.output_prefix else ""
-        json_str = "{" + ", ".join(
-            [vcf_str, config_str, outdir_str, bin_str, sort_str, prefix_str]
-        ) + "}"
-
+        prefix_str = (
+            f'"output_prefix": "{self.output_prefix}"' if self.output_prefix else ""
+        )
+        json_str = (
+            "{" + ", ".join(
+                [vcf_str, config_str, outdir_str, bin_str, sort_str, prefix_str]
+            ) + "}"
+        )
         return json_str
 
 

@@ -123,7 +123,7 @@ async def download_results(request: Request, submission_id: str):
             submission_id=submission_id, status=workflow_status
         )
         if submission_status.status == VepStatus.succeeded:
-            input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
+            input_vcf_file = workflow_status["workflow"]["params"]["input"]
             results_file_path = get_vep_results_file_path(input_vcf_file)
             if results_file_path.exists():
                 return FileResponse(
@@ -171,7 +171,7 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
             submission_id=submission_id, status=workflow_status
         )
         if submission_status.status == VepStatus.succeeded:
-            input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
+            input_vcf_file = workflow_status["workflow"]["params"]["input"]
             results_file_path = get_vep_results_file_path(input_vcf_file)
             if results_file_path.exists():
                 return get_results_from_path(

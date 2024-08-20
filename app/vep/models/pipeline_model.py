@@ -13,7 +13,7 @@ from core.config import (
     NF_WORK_DIR,
 )
 from core.logging import InterceptHandler
-import logging, os
+import json, logging, os
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -24,7 +24,6 @@ class VEPConfigParams(BaseModel):
     outdir: DirectoryPath
     bin_size: int = 3000
     sort: bool = True
-    output_prefix: str = ""
 
     @model_serializer
     def vep_config_serialiser(self):
@@ -33,12 +32,9 @@ class VEPConfigParams(BaseModel):
         outdir_str = f'"outdir": "{self.outdir.as_posix()}"'
         bin_str = f'"bin_size": {self.bin_size}'
         sort_str = f'"sort": {"true" if self.sort else "false"}'
-        prefix_str = (
-            f'"output_prefix": "{self.output_prefix}"' if self.output_prefix else ""
-        )
         json_str = (
             "{" + ", ".join(
-                [vcf_str, config_str, outdir_str, bin_str, sort_str, prefix_str]
+                [vcf_str, config_str, outdir_str, bin_str, sort_str]
             ) + "}"
         )
         return json_str

@@ -42,12 +42,14 @@ logging.getLogger().handlers = [InterceptHandler()]
 
 router = APIRouter()
 
+
 class VepStatus(str, Enum):
     submitted = "SUBMITTED"
     running = "RUNNING"
     succeeded = "SUCCEEDED"
     failed = "FAILED"
     cancelled = "CANCELLED"
+
 
 @router.post("/submissions", name="submit_vep")
 async def submit_vep(request: Request):
@@ -65,7 +67,7 @@ async def submit_vep(request: Request):
             vep_config=ini_file.name,
             outdir=request_streamer.temp_dir,
         )
-        launch_params = LaunchParams(paramsText=vep_job_config_parameters, labelIds=[])
+        launch_params = LaunchParams(paramsText=vep_job_config_parameters)
         pipeline_params = PipelineParams(launch=launch_params)
         if stream_result:
             workflow_id = launch_workflow(pipeline_params)
@@ -75,6 +77,7 @@ async def submit_vep(request: Request):
     except MaxBodySizeException:
         return response_error_handler(result={"status": 413})
     except Exception as e:
+        print(e)
         return response_error_handler(result={"status": 500})
 
 
@@ -103,9 +106,12 @@ async def vep_status(request: Request, submission_id: str):
         logging.debug(e)
         return response_error_handler(result={"status": 500})
 
+
 def get_vep_results_file_path(input_vcf_file):
     input_vcf_path = FilePath(input_vcf_file)
-    vep_results_file = input_vcf_path.with_name(input_vcf_path.stem + "_VEP").with_suffix(".vcf.gz")
+    vep_results_file = input_vcf_path.with_name(
+        input_vcf_path.stem + "_VEP"
+    ).with_suffix(".vcf.gz")
     return vep_results_file
 
 
@@ -120,7 +126,11 @@ async def download_results(request: Request, submission_id: str):
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             results_file_path = get_vep_results_file_path(input_vcf_file)
             if results_file_path.exists():
-                return FileResponse(results_file_path, media_type="application/gzip", filename=results_file_path.name)
+                return FileResponse(
+                    results_file_path,
+                    media_type="application/gzip",
+                    filename=results_file_path.name,
+                )
             else:
                 response_msg = {
                     "details": f"A submission with id {submission_id} succeeded but could not find output file",
@@ -152,16 +162,21 @@ async def download_results(request: Request, submission_id: str):
         logging.debug(e)
         return response_error_handler(result={"status": 500})
 
+
 @router.get("/submissions/{submission_id}/results", name="view_results")
 async def fetch_results(request: Request, submission_id: str, page: int, per_page: int):
     try:
         workflow_status = await get_workflow_status(submission_id)
-        submission_status = PipelineStatus(submission_id=submission_id, status=workflow_status)
+        submission_status = PipelineStatus(
+            submission_id=submission_id, status=workflow_status
+        )
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["vcf"]
             results_file_path = get_vep_results_file_path(input_vcf_file)
             if results_file_path.exists():
-                return get_results_from_path(vcf_path = results_file_path, page=page, page_size = per_page)
+                return get_results_from_path(
+                    vcf_path=results_file_path, page=page, page_size=per_page
+                )
             else:
                 response_msg = {
                     "details": f"A submission with id {submission_id} succeeded but could not find output file",
@@ -178,7 +193,7 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
             )
 
     except HTTPError as http_error:
-        if http_error.response.status_code in [403,400]:
+        if http_error.response.status_code in [403, 400]:
             response_msg = json.dumps(
                 {
                     "status_code": status.HTTP_404_NOT_FOUND,

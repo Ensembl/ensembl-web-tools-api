@@ -218,8 +218,8 @@ def _get_results_from_vcfpy(
         # from competting vcf module
         location = model.Location(
             region_name=record.CHROM,
-            start=record.begin,
-            end=record.end if record.end else record.begin + ref_len,
+            start=record.POS,
+            end=record.POS + ref_len,
         )
         longest_alt = len(max((a.value for a in record.ALT), key=len))
 

@@ -8,3 +8,4 @@ python-multipart==0.0.9
 aiofiles==24.1.0
 streaming-form-data==1.15.0
 requests
+duckdb

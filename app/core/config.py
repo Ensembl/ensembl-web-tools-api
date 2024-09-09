@@ -39,11 +39,11 @@ ALLOWED_HOSTS: list[str] = config(
 with open("/data/blast_config.json") as f:
     BLAST_CONFIG = json.load(f)
 
+
 # logging configuration
+
 LOGGING_LEVEL = logging.DEBUG if DEBUG else logging.INFO
 LOGGERS = ("uvicorn.asgi", "uvicorn.access")
-
-log = logging.getLogger("gunicorn.access")
 
 logging.getLogger().handlers = [InterceptHandler()]
 for logger_name in LOGGERS:
@@ -52,14 +52,16 @@ for logger_name in LOGGERS:
 
 logger.configure(handlers=[{"sink": sys.stderr, "level": LOGGING_LEVEL}])
 
-logging.info(BLAST_CONFIG)
-
 # Nextflow Configurations
-NF_TOKEN = config("NF_TOKEN")
-NF_COMPUTE_ENV_ID = config("NF_COMPUTE_ENV_ID")
-NF_PIPELINE_URL = config("NF_PIPELINE_URL")
-NF_WORK_DIR = config("NF_WORK_DIR")
-SEQERA_API = config("SEQERA_API")
-NF_WORKSPACE_ID = config("NF_WORKSPACE_ID")
+NF_TOKEN = config("NF_TOKEN", default="")
+NF_COMPUTE_ENV_ID = config("NF_COMPUTE_ENV_ID", default="")
+NF_PIPELINE_URL = config("NF_PIPELINE_URL", default="")
+NF_WORK_DIR = config("NF_WORK_DIR", default="")
+SEQERA_API = config("SEQERA_API", default="")
+NF_WORKSPACE_ID = config("NF_WORKSPACE_ID", default="")
 
 UPLOAD_DIRECTORY = config("UPLOAD_DIRECTORY", default="/tmpdir")
+WEB_METADATA_API = config(
+    "WEB_METADATA_API", default="https://beta.ensembl.org/api/metadata/"
+)
+VEP_SUPPORT_PATH = config("VEP_SUPPORT_PATH", default="/tmpdir")

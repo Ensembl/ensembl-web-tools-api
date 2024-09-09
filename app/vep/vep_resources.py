@@ -32,9 +32,11 @@ from vep.models.pipeline_model import (
     PipelineParams,
     PipelineStatus,
 )
+from vep.models.client_model import TranscriptSet, FormConfig, Symbol, Biotype, Options
 from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 from vep.utils.nextflow import launch_workflow, get_workflow_status
 from vep.utils.vcf_results import get_results_from_path
+from vep.utils.web_metadata import get_genome_metadata
 import json
 from pydantic import FilePath
 
@@ -198,6 +200,39 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
                 {
                     "status_code": status.HTTP_404_NOT_FOUND,
                     "details": f"A submission with id {submission_id} was not found",
+                }
+            )
+            return JSONResponse(
+                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
+            )
+        return response_error_handler(
+            result={"status": http_error.response.status_code}
+        )
+    except Exception as e:
+        logging.debug(e)
+        return response_error_handler(result={"status": 500})
+
+@router.get("/form_config/{genome_id}", name="get_form_config")
+async def get_form_config(request: Request, genome_id: str):
+    try:
+        metadata = await get_genome_metadata(genome_id)
+        annotation_provider_name = metadata.annotation_provider_name
+        annotation_version = metadata.annotation_version
+
+        transcript_set=TranscriptSet(
+            label=f"{annotation_provider_name} {annotation_version}",
+        )
+        form_config = FormConfig(
+            transcript_set = transcript_set
+        )
+        return form_config
+
+    except HTTPError as http_error:
+        if http_error.response.status_code in [403, 400]:
+            response_msg = json.dumps(
+                {
+                    "status_code": status.HTTP_404_NOT_FOUND,
+                    "details": f"genome id {genome_id} not found",
                 }
             )
             return JSONResponse(

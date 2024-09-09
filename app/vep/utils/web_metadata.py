@@ -9,7 +9,7 @@ async def get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
     try:
       session = requests.Session()
       with session.get(
-          url=f"https://staging-2020.ensembl.org/api/metadata/genome/{genome_id}/details"
+          url=f"{ENSEMBL_WEB_METADATA_API}/genome/{genome_id}/details"
       ) as response:
           response.raise_for_status()
           metadata = response.json()

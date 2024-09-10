@@ -53,12 +53,12 @@ for logger_name in LOGGERS:
 logger.configure(handlers=[{"sink": sys.stderr, "level": LOGGING_LEVEL}])
 
 # Nextflow Configurations
-NF_TOKEN = config("NF_TOKEN", default="")
-NF_COMPUTE_ENV_ID = config("NF_COMPUTE_ENV_ID", default="")
-NF_PIPELINE_URL = config("NF_PIPELINE_URL", default="")
-NF_WORK_DIR = config("NF_WORK_DIR", default="")
-SEQERA_API = config("SEQERA_API", default="")
-NF_WORKSPACE_ID = config("NF_WORKSPACE_ID", default="")
+NF_TOKEN = config("NF_TOKEN")
+NF_COMPUTE_ENV_ID = config("NF_COMPUTE_ENV_ID")
+NF_PIPELINE_URL = config("NF_PIPELINE_URL")
+NF_WORK_DIR = config("NF_WORK_DIR")
+SEQERA_API = config("SEQERA_API")
+NF_WORKSPACE_ID = config("NF_WORKSPACE_ID")
 
 UPLOAD_DIRECTORY = config("UPLOAD_DIRECTORY", default="/tmpdir")
 WEB_METADATA_API = config(

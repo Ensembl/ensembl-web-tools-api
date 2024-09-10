@@ -6,7 +6,6 @@ from pydantic import (
     Field,
     AliasPath,
     field_serializer,
-    model_validator,
 )
 from core.config import (
     NF_COMPUTE_ENV_ID,

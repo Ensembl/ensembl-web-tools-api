@@ -14,7 +14,7 @@ import json
 import re
 import os
 
-from core.config import BLAST_CONFIG
+from core.config import BLAST_CONFIG, TRUST_ENV
 
 
 # @asynccontextmanager
@@ -114,10 +114,11 @@ blast_url = os.environ.get(
 )
 
 
+
 async def run_blast(
     query: dict, blast_payload: dict, genome_id: str, db_type: str
 ) -> dict:
-    app.client_session = ClientSession()
+    app.client_session = ClientSession(trust_env=TRUST_ENV)
     blast_payload["sequence"] = query["value"]
     blast_payload["database"] = get_db_path(genome_id, db_type)
     url = f"{blast_url}/run"
@@ -179,7 +180,7 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 @app.get("/jobs/{action}/{params:path}")
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
     url = f"{blast_url}/{action}/{params}"
-    app.client_session = ClientSession()
+    app.client_session = ClientSession(trust_env=TRUST_ENV)
     async with app.client_session.get(url) as resp:
         if response:
             response.status_code = resp.status  # forward the status code from JD

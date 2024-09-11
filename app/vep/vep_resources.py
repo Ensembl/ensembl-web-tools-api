@@ -58,10 +58,10 @@ async def submit_vep(request: Request):
         stream_result = await request_streamer.stream()
         vep_job_parameters = request_streamer.parameters.value.decode()
         genome_id = request_streamer.genome_id.value.decode()
-
         vep_job_parameters_dict = json.loads(vep_job_parameters)
-        ini_parameters = ConfigIniParams(**vep_job_parameters_dict)
+        ini_parameters = ConfigIniParams(**vep_job_parameters_dict, genome_id=genome_id)
         ini_file = ini_parameters.create_config_ini_file(request_streamer.temp_dir)
+
         vep_job_config_parameters = VEPConfigParams(
             vcf=request_streamer.filepath,
             vep_config=ini_file.name,

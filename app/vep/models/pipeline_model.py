@@ -15,6 +15,8 @@ from core.config import (
 from core.logging import InterceptHandler
 import json, logging, os
 
+from vep.utils.web_metadata import get_vep_support_location
+
 logging.getLogger().handlers = [InterceptHandler()]
 
 
@@ -33,9 +35,7 @@ class VEPConfigParams(BaseModel):
         bin_str = f'"bin_size": {self.bin_size}'
         sort_str = f'"sort": {"true" if self.sort else "false"}'
         json_str = (
-            "{" + ", ".join(
-                [vcf_str, config_str, outdir_str, bin_str, sort_str]
-            ) + "}"
+            "{" + ", ".join([vcf_str, config_str, outdir_str, bin_str, sort_str]) + "}"
         )
         return json_str
 
@@ -55,15 +55,19 @@ class PipelineParams(BaseModel):
 
 
 class ConfigIniParams(BaseModel):
+    genome_id: str
     force_overwrite: int = 1
     symbol: bool = False
     biotype: bool = False
     transcript_version: int = 1
     canonical: int = 1
-    gff: str = "/nfs/public/rw/enswbsites/dev/vep/test/genes.gff3.bgz"
-    fasta: str = "/nfs/public/rw/enswbsites/dev/vep/test/unmasked.fa.bgz"
+    gff: str = "genes.gff3.bgz"
+    fasta: str = "unmasked.fa.bgz"
 
     def create_config_ini_file(self, dir):
+        vep_support_location = get_vep_support_location(self.genome_id)
+        self.gff = vep_support_location + self.gff
+        self.fasta = vep_support_location + self.fasta
         symbol = 1 if self.symbol else 0
         biotype = 1 if self.biotype else 0
 
@@ -76,7 +80,6 @@ canonical {self.canonical}
 gff {self.gff}
 fasta {self.fasta}
 """
-
         try:
             with open(os.path.join(dir, "config.ini"), "w") as ini_file:
                 ini_file.write(config_ini)

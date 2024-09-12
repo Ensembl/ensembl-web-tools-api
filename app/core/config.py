@@ -44,7 +44,6 @@ with open("/data/blast_config.json") as f:
 logging.basicConfig(level=logging.DEBUG)
 LOGGING_LEVEL = logging.DEBUG if DEBUG else logging.INFO
 LOGGERS = ("uvicorn.asgi", "uvicorn.access")
-log = logging.getLogger("gunicorn.access")
 logging.getLogger().handlers = [InterceptHandler()]
 for logger_name in LOGGERS:
     logging_logger = logging.getLogger(logger_name)

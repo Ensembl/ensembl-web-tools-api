@@ -215,13 +215,15 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
 @router.get("/form_config/{genome_id}", name="get_form_config")
 async def get_form_config(request: Request, genome_id: str):
     try:
-        metadata = await get_genome_metadata(genome_id)
-        annotation_provider_name = metadata.annotation_provider_name
-        annotation_version = metadata.annotation_version
+        attributes = await get_genome_metadata(genome_id)
+        annotation_provider_name = attributes.get("genebuild.provider_name")
+        annotation_version = attributes.get("genebuild.display_version")
+        last_updated_date = attributes.get("genebuild.last_geneset_update")
 
         transcript_set=TranscriptSet(
-            label=f"{annotation_provider_name} {annotation_version}",
+            label=f"{annotation_provider_name} {annotation_version or last_updated_date}",
         )
+
         form_config = FormConfig(
             transcript_set = transcript_set
         )

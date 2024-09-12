@@ -20,7 +20,7 @@ def get_vep_support_location(genome_id):
         response.raise_for_status()
         return VEP_SUPPORT_PATH + response.json()["attributes"].pop()["value"]
     except HTTPError as http_error:
-        logging.debug(http_error)
+        logging.error(http_error)
         raise HTTPError
     except Exception as e:
-        logging.debug(e)
+        logging.error(e)

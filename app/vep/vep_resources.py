@@ -61,7 +61,6 @@ async def submit_vep(request: Request):
         vep_job_parameters_dict = json.loads(vep_job_parameters)
         ini_parameters = ConfigIniParams(**vep_job_parameters_dict, genome_id=genome_id)
         ini_file = ini_parameters.create_config_ini_file(request_streamer.temp_dir)
-
         vep_job_config_parameters = VEPConfigParams(
             vcf=request_streamer.filepath,
             vep_config=ini_file.name,
@@ -77,7 +76,7 @@ async def submit_vep(request: Request):
     except MaxBodySizeException:
         return response_error_handler(result={"status": 413})
     except Exception as e:
-        print(e)
+        logging.error(e)
         return response_error_handler(result={"status": 500})
 
 
@@ -91,6 +90,7 @@ async def vep_status(request: Request, submission_id: str):
         return JSONResponse(content=submission_status.dict())
 
     except HTTPError as http_error:
+        logging.warning(http_error)
         if http_error.response.status_code in [403, 400]:
             response_msg = {
                 "details": f"A submission with id {submission_id} was not found",
@@ -103,7 +103,7 @@ async def vep_status(request: Request, submission_id: str):
             result={"status": http_error.response.status_code}
         )
     except Exception as e:
-        logging.debug(e)
+        logging.error(e)
         return response_error_handler(result={"status": 500})
 
 
@@ -147,6 +147,7 @@ async def download_results(request: Request, submission_id: str):
             )
 
     except HTTPError as http_error:
+        logging.warning(http_error)
         if http_error.response.status_code in [403, 400]:
             response_msg = {
                 "status_code": status.HTTP_404_NOT_FOUND,
@@ -159,7 +160,7 @@ async def download_results(request: Request, submission_id: str):
             result={"status": http_error.response.status_code}
         )
     except Exception as e:
-        logging.debug(e)
+        logging.error(e)
         return response_error_handler(result={"status": 500})
 
 
@@ -207,5 +208,5 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
             result={"status": http_error.response.status_code}
         )
     except Exception as e:
-        logging.debug(e)
+        logging.error(e)
         return response_error_handler(result={"status": 500})

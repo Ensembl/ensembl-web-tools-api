@@ -26,7 +26,7 @@ def launch_workflow(pipeline_params: PipelineParams):
         return response_json["workflowId"]
 
     except Exception as e:
-        logger.exception("VEP WORKFLOW SUBMISSION ERROR: ", e)
+        logging.error("VEP WORKFLOW SUBMISSION ERROR: ", e)
         raise Exception
 
 
@@ -49,5 +49,5 @@ async def get_workflow_status(submission_id):
     except HTTPError as e:
         raise e
     except Exception as e:
-        logger.exception("VEP connection error: ", e)
+        logging.error("VEP connection error: ", e)
         raise Exception

@@ -1,11 +1,13 @@
 version: '2'
 services:
   tools_api:
+    env_file:
+      - ./app/.env
     build:
       context: .
       dockerfile: Dockerfile
     command: >
-      bash -c "uvicorn main:app --proxy-headers --lifespan on --host 0.0.0.0 --port 8013 --reload"
+      bash -c "uvicorn main:app --proxy-headers --host 0.0.0.0 --port 8013 --reload --log-level=trace"
     container_name: tools-api
     environment:
       - DEBUG=True

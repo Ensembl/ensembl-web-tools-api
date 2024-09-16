@@ -30,6 +30,7 @@ API_PREFIX = "/api/tools"
 
 config = Config(".env")
 DEBUG: bool = config("DEBUG", cast=bool, default=False)
+TRUST_ENV: bool = config("TRUST_ENV", cast=bool, default=True)
 PROJECT_NAME: str = config("PROJECT_NAME", default="Ensembl Web Tools API")
 ALLOWED_HOSTS: list[str] = config(
     "ALLOWED_HOSTS",
@@ -39,20 +40,17 @@ ALLOWED_HOSTS: list[str] = config(
 with open("/data/blast_config.json") as f:
     BLAST_CONFIG = json.load(f)
 
+
 # logging configuration
+logging.basicConfig(level=logging.DEBUG)
 LOGGING_LEVEL = logging.DEBUG if DEBUG else logging.INFO
 LOGGERS = ("uvicorn.asgi", "uvicorn.access")
-
-log = logging.getLogger("gunicorn.access")
-
 logging.getLogger().handlers = [InterceptHandler()]
 for logger_name in LOGGERS:
     logging_logger = logging.getLogger(logger_name)
     logging_logger.handlers = [InterceptHandler(level=LOGGING_LEVEL)]
 
 logger.configure(handlers=[{"sink": sys.stderr, "level": LOGGING_LEVEL}])
-
-logging.info(BLAST_CONFIG)
 
 # Nextflow Configurations
 NF_TOKEN = config("NF_TOKEN")

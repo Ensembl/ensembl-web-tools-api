@@ -63,4 +63,7 @@ SEQERA_API = config("SEQERA_API")
 NF_WORKSPACE_ID = config("NF_WORKSPACE_ID")
 
 UPLOAD_DIRECTORY = config("UPLOAD_DIRECTORY", default="/tmpdir")
-WEB_METADATA_API = config("WEB_METADATA_API")
+WEB_METADATA_API = config(
+    "WEB_METADATA_API", default="https://beta.ensembl.org/api/metadata/"
+)
+VEP_SUPPORT_PATH = config("VEP_SUPPORT_PATH", default="/tmpdir")

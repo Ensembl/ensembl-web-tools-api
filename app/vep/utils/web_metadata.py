@@ -2,14 +2,14 @@ from loguru import logger
 import requests
 from requests import HTTPError
 from typing import List
-from core.config import ENSEMBL_WEB_METADATA_API
+from core.config import WEB_METADATA_API
 from vep.models.client_model import GenomeAnnotationProvider
 import logging
 
 async def get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
     try:
         response = requests.get(
-            ENSEMBL_WEB_METADATA_API
+            WEB_METADATA_API
             + "genome/"
             + genome_id
             + "/dataset/genebuild/attributes?"
@@ -19,14 +19,13 @@ async def get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
         )
         response.raise_for_status()
         attributes = {}
-        print (attributes)
         for attribute in response.json()['attributes']:
             name = attribute['name']
             value = attribute['value']
             attributes[name] = value
         return attributes
     except HTTPError as http_error:
-        logging.debug(http_error)
+        logging.error(http_error)
         raise HTTPError
     except Exception as e:
-        logging.debug(e)
+        logging.error(e)

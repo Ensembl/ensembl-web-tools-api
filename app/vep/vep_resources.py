@@ -105,7 +105,7 @@ async def vep_status(request: Request, submission_id: str):
             result={"status": http_error.response.status_code}
         )
     except Exception as e:
-        logging.debug(e)
+        logging.error(e)
         return response_error_handler(result={"status": 500})
 
 
@@ -161,7 +161,7 @@ async def download_results(request: Request, submission_id: str):
             result={"status": http_error.response.status_code}
         )
     except Exception as e:
-        logging.debug(e)
+        logging.error(e)
         return response_error_handler(result={"status": 500})
 
 
@@ -209,7 +209,7 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
             result={"status": http_error.response.status_code}
         )
     except Exception as e:
-        logging.debug(e)
+        logging.error(e)
         return response_error_handler(result={"status": 500})
 
 @router.get("/form_config/{genome_id}", name="get_form_config")
@@ -244,5 +244,5 @@ async def get_form_config(request: Request, genome_id: str):
             result={"status": http_error.response.status_code}
         )
     except Exception as e:
-        logging.debug(e)
+        logging.error(e)
         return response_error_handler(result={"status": 500})

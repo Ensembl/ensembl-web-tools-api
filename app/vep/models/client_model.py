@@ -2,19 +2,19 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 class FieldOptions:
-    GENCODE_LABEL: str = "GENCODE"
-    GENCODE_VALUE: str = "gencode_comprehensive"
+    LABEL: str = "GENCODE"
+    VALUE: str = "gencode_comprehensive"
 
 class Options(BaseModel):
-  label: str = FieldOptions.GENCODE_LABEL
-  value: str = FieldOptions.GENCODE_VALUE
+  label: str = FieldOptions.LABEL
+  value: str = FieldOptions.VALUE
 
 class TranscriptSet(BaseModel):
     label: str
     description: str = None
     type: str = "select"
     options: List[Options] = [Options()]
-    default_value: str = FieldOptions.GENCODE_VALUE
+    default_value: str = FieldOptions.VALUE
 
 class Symbol(BaseModel):
     label: str = "Gene symbol"

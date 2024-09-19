@@ -2,7 +2,7 @@ from loguru import logger
 import requests
 from requests import HTTPError
 from typing import List
-from vep.models.client_model import GenomeAnnotationProvider
+from vep.models.submission_form import GenomeAnnotationProvider
 import logging
 from core.logging import InterceptHandler
 logging.getLogger().handlers = [InterceptHandler()]

@@ -19,7 +19,7 @@ limitations under the License.
 import logging
 
 from requests import HTTPError
-from starlette.responses import JSONResponse, PlainTextResponse, FileResponse
+from starlette.responses import JSONResponse, FileResponse
 from fastapi import Request, status, APIRouter
 from enum import Enum
 
@@ -32,7 +32,7 @@ from vep.models.pipeline_model import (
     PipelineParams,
     PipelineStatus,
 )
-from vep.models.client_model import TranscriptSet, FormConfig, Symbol, Biotype, Options
+from vep.models.submission_form import Dropdown, FormConfig
 from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 from vep.utils.nextflow import launch_workflow, get_workflow_status
 from vep.utils.vcf_results import get_results_from_path
@@ -221,7 +221,7 @@ async def get_form_config(request: Request, genome_id: str):
         annotation_version = attributes.get("genebuild.display_version")
         last_updated_date = attributes.get("genebuild.last_geneset_update")
 
-        transcript_set=TranscriptSet(
+        transcript_set=Dropdown(
             label=f"{annotation_provider_name} {annotation_version or last_updated_date}",
         )
 

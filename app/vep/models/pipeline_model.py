@@ -10,10 +10,9 @@ from pydantic import (
 from core.config import (
     NF_COMPUTE_ENV_ID,
     NF_PIPELINE_URL,
-    NF_WORK_DIR,
 )
 from core.logging import InterceptHandler
-import json, logging, os
+import logging, os
 
 from vep.utils.web_metadata import get_vep_support_location
 
@@ -43,7 +42,7 @@ class VEPConfigParams(BaseModel):
 class LaunchParams(BaseModel):
     computeEnvId: str = NF_COMPUTE_ENV_ID
     pipeline: str = NF_PIPELINE_URL
-    workDir: str = NF_WORK_DIR
+    workDir: DirectoryPath
     revision: str = "main"
     pullLatest: bool = True
     configProfiles: list[str] = ["ensembl"]

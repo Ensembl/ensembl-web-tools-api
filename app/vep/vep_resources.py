@@ -221,8 +221,16 @@ async def get_form_config(request: Request, genome_id: str):
         annotation_version = attributes.get("genebuild.display_version")
         last_updated_date = attributes.get("genebuild.last_geneset_update")
 
-        transcript_set=Dropdown(
-            label=f"{annotation_provider_name} {annotation_version or last_updated_date}",
+        options = [{
+            "label": f"{annotation_provider_name} {annotation_version or last_updated_date}",
+            "value": f"{annotation_provider_name} {annotation_version or last_updated_date}"
+        }]
+
+        default_option = options[0]
+        transcript_set = Dropdown(
+            label="Transcript set",
+            options=options,
+            default_value= default_option["value"]
         )
 
         form_config = FormConfig(

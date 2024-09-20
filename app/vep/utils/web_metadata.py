@@ -49,3 +49,4 @@ async def get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
         raise HTTPError
     except Exception as e:
         logging.error(e)
+        raise Exception

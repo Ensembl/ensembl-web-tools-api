@@ -223,7 +223,7 @@ async def get_form_config(request: Request, genome_id: str):
 
         options = [{
             "label": f"{annotation_provider_name} {annotation_version or last_updated_date}",
-            "value": f"{annotation_provider_name} {annotation_version or last_updated_date}"
+            "value": f"{annotation_provider_name}_{annotation_version or last_updated_date}"
         }]
 
         default_option = options[0]
@@ -239,7 +239,7 @@ async def get_form_config(request: Request, genome_id: str):
         return form_config
 
     except HTTPError as http_error:
-        if http_error.response.status_code in [403, 400]:
+        if http_error.response.status_code == 404:
             response_msg = json.dumps(
                 {
                     "status_code": status.HTTP_404_NOT_FOUND,

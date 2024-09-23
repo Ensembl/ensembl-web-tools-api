@@ -100,7 +100,9 @@ Review:
     AGENT: ${DEV_AGENT}
     NS: ${CI_COMMIT_REF_SLUG}
   after_script:
-    - kubectl -n ${NS}  set env deployment/ensembl-tools-api-deployment --from configmap/ensembl-tools-api-configmap
+    - git clone https://gitlab.ebi.ac.uk/ensembl-web/newsite-api-config-setup.git
+    - cd newsite-api-config-setup/dev/hl
+    - kubectl create secret generic ensembl-web-tools-api-secret --from-env-file=tools-api.secret --dry-run -o yaml | kubectl apply -f -
 
 # Stop feature branch review app (cleanup resources) 
 Stop_review:

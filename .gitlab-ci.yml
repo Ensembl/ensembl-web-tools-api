@@ -48,7 +48,6 @@ stages:
     - cd ensembl-k8s-manifests/ensembl-web-tools-api
     - sed -i "s#<NFS_SERVER>#${NFS_SERVER}#g" deployment.yaml
     - sed -i "s#<NFS_PATH>#${NFS_PATH}#g" deployment.yaml
-    - tail deployment.yaml
     - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
     - kubectl apply -k ./
   rules:

@@ -236,7 +236,7 @@ async def get_form_config(request: Request, genome_id: str):
         form_config = FormConfig(
             transcript_set = transcript_set
         )
-        return form_config
+        return { "parameters": form_config }
 
     except HTTPError as http_error:
         if http_error.response.status_code == 404:

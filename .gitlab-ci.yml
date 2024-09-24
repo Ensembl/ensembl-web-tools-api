@@ -98,7 +98,16 @@ Review:
   variables: 
     AGENT: ${DEV_AGENT}
     NS: ${CI_COMMIT_REF_SLUG}
+  before_script:
+    - kubectl config use-context ${AGENT}
+    # Check for review namespace and remove the default backend ingress
+    - kubectl get namespace ${NS} || (echo "Please create '${NS}' branch in ensembl-client and restart this pipeline" && exit 1)
+    - kubectl -n ensembl-dev delete ingress ensembl-tools-api-ingress-${NS} || true
+    - kubectl config set-context --current --namespace=${NS}
   after_script:
+    # Add the missing resources to the review namespace
+    - sed -i "s#HOST#${CI_COMMIT_REF_SLUG}.review.ensembl.org#" ingress.yaml
+    - kubectl apply -f ingress.yaml
     - git clone https://config-ro-user:${CONFIG_RO_TOKEN}@gitlab.ebi.ac.uk/ensembl-web/newsite-api-config-setup.git
     - cd newsite-api-config-setup/dev/hl
     - kubectl create secret generic ensembl-web-tools-api-secret --from-env-file=tools-api.secret --dry-run=client -o yaml | kubectl apply -f -
@@ -110,13 +119,19 @@ Stop_review:
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   environment:
     name: development
+    action: stop
+  when: manual
   variables:
     GIT_STRATEGY: none
     AGENT: ${DEV_AGENT}
     NS: ${CI_COMMIT_REF_SLUG}
+  before_script:
+    - kubectl config use-context ${AGENT}
+    - kubectl config set-context --current --namespace=${NS}
   script:
-    - kubectl -n ${NS} delete service ensembl-tools-api-svc
-    - kubectl -n ${NS} delete deploy ensembl-tools-api-deployment
+    - kubectl delete service ensembl-tools-api-svc
+    - kubectl delete deploy ensembl-tools-api-deployment
+    - kubectl delete secret ensembl-tools-api-secret
 
 Production:
   extends: 

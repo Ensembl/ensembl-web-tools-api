@@ -106,9 +106,9 @@ Review:
     - kubectl config set-context --current --namespace=${NS}
   after_script:
     # Add the missing resources to the review namespace
-    - sed -i "s#HOST#${CI_COMMIT_REF_SLUG}.review.ensembl.org#" ingress.yaml
     - ls -l
     - pwd
+    - sed -i "s#HOST#${CI_COMMIT_REF_SLUG}.review.ensembl.org#" ingress.yaml
     - kubectl apply -f ingress.yaml
     - git clone https://config-ro-user:${CONFIG_RO_TOKEN}@gitlab.ebi.ac.uk/ensembl-web/newsite-api-config-setup.git
     - cd newsite-api-config-setup/dev/hl

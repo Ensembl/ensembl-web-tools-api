@@ -48,6 +48,10 @@ class LaunchParams(BaseModel):
     configProfiles: list[str] = ["ensembl"]
     paramsText: VEPConfigParams
 
+    @field_serializer("workDir")
+    def serialize_workdir(self, workdir: DirectoryPath):
+        return workdir.as_posix()
+
 
 class PipelineParams(BaseModel):
     launch: LaunchParams

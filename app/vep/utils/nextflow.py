@@ -17,7 +17,6 @@ def launch_workflow(pipeline_params: PipelineParams):
     params = {"workspaceId": NF_WORKSPACE_ID}
     SEQERA_WORKFLOW_LAUNCH_URL = SEQERA_API + "/workflow/launch"
     payload = pipeline_params.model_dump()
-    print(payload)
     try:
         response = requests.post(
             SEQERA_WORKFLOW_LAUNCH_URL, params=params, headers=headers, json=payload

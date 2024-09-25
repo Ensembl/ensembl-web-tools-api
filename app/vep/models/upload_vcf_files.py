@@ -25,16 +25,16 @@ from starlette.requests import ClientDisconnect
 
 from streaming_form_data import StreamingFormDataParser
 from streaming_form_data.targets import FileTarget, ValueTarget
-import streaming_form_data
+from streaming_form_data.validators import ValidationError
 
-from core.config import UPLOAD_DIRECTORY
+from core.config import NF_WORK_DIR
 
 MAX_FILE_SIZE = 1024 * 1024 * 1024 * 2  # 2GB
 MAX_REQUEST_BODY_SIZE = MAX_FILE_SIZE + 1024
 
 
 class MaxBodySizeException(Exception):
-    def __init__(self, body_len: str):
+    def __init__(self, body_len: int):
         self.body_len = body_len
 
 
@@ -54,7 +54,7 @@ class Streamer:
         self.request = request
         self.filename = self.request.headers.get("Filename", "temp_name")
         self.file_name_validator(self.filename)
-        self.temp_dir = tempfile.mkdtemp(dir=UPLOAD_DIRECTORY)
+        self.temp_dir = tempfile.mkdtemp(dir=NF_WORK_DIR)
         self.filepath = os.path.join(
             str(self.temp_dir), os.path.basename(self.filename)
         )
@@ -65,7 +65,7 @@ class Streamer:
         self.genome_id = ValueTarget()
 
     @staticmethod
-    def file_name_validator(file_name: str = None):
+    def file_name_validator(file_name: str | None = None):
         if not file_name:
             raise Exception
 
@@ -89,7 +89,7 @@ class Streamer:
                 self.filepath = os.path.join(self.temp_dir, self.filename)
             return True
 
-        except (MaxBodySizeException, streaming_form_data.validators.ValidationError):
+        except (MaxBodySizeException, ValidationError):
             shutil.rmtree(self.temp_dir)
             raise MaxBodySizeException(MAX_FILE_SIZE)
         except (Exception, ClientDisconnect) as e:

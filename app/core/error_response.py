@@ -24,6 +24,8 @@ def response_error_handler(result):
         return http_501_not_implemented()
     if result["status"] == 404:
         return http_404_not_found()
+    if result["status"] == 413:
+        return http_413_not_acceptable()
     else:
         return http_unknown_error(result)
 

@@ -9,7 +9,7 @@ from core.config import WEB_METADATA_API, VEP_SUPPORT_PATH
 
 logging.getLogger().handlers = [InterceptHandler()]
 
-def get_vep_support_location(genome_id):
+def get_vep_support_location(genome_id:str) -> str:
     try:
         response = requests.get(
             WEB_METADATA_API
@@ -24,7 +24,6 @@ def get_vep_support_location(genome_id):
         raise HTTPError
     except Exception as e:
         logging.error(e)
-
 async def get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
     try:
         response = requests.get(

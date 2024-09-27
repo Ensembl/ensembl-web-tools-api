@@ -27,28 +27,28 @@ stages:
 
 # Templates
 .branch-rules-main:
-    rules:
-        - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"'
-          when: on_success
-        - when: never
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"'
+      when: on_success
+    - when: never
 
 .branch-rules-dev:
-    rules:
-        - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"'
-          when: on_success
-        - when: never
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"'
+      when: on_success
+    - when: never
 
 .branch-rules-review:
-    rules:
-        - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev")'
-          when: on_success
-        - when: never
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev")'
+      when: on_success
+    - when: never
 
 .deploy-rules:
-    rules:
-        - if: '$CI_DEPLOY_FREEZE == null'
-          when: on_success
-        - when: never
+  rules:
+    - if: "$CI_DEPLOY_FREEZE == null"
+      when: on_success
+    - when: never
 
 .deploy:
   stage: deploy
@@ -85,8 +85,6 @@ Test:
     when: always
     reports:
       junit: report.xml
-  except:
-    - /^skiptest\/.*$/
 
 # Build the docker image
 Docker:
@@ -106,12 +104,12 @@ Docker:
 
 # Deploy feature branch (for custom backend review apps)
 Review:
-  extends: 
+  extends:
     - .deploy
     - .branch-rules-review
   environment:
     name: development
-  variables: 
+  variables:
     AGENT: ${DEV_AGENT}
     NS: ${CI_COMMIT_REF_SLUG}
   before_script:
@@ -129,7 +127,7 @@ Review:
     - cd newsite-api-config-setup/dev/hl
     - kubectl create secret generic ensembl-web-tools-api-secret --from-env-file=tools-api.secret --dry-run=client -o yaml | kubectl apply -f -
 
-# Stop review app (cleanup backend resources) 
+# Stop review app (cleanup backend resources)
 Stop_review:
   extends: .branch-rules-review
   stage: deploy
@@ -148,54 +146,54 @@ Stop_review:
 
 # Deploy dev branch
 Dev:
-  extends: 
+  extends:
     - .deploy
     - .branch-rules-dev
   environment:
     name: development
-  variables: 
+  variables:
     AGENT: ${DEV_AGENT}
     NS: ${DEV_NS}
 
 Internal:
-  extends: 
+  extends:
     - .deploy
     - .branch-rules-dev
   environment:
     name: internal
-  variables: 
+  variables:
     AGENT: ${INTERNAL_AGENT}
     NS: ${INTERNAL_NS}
 
 Staging:
-  extends: 
+  extends:
     - .deploy
     - .branch-rules-dev
   environment:
     name: staging
   rules:
     - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"'
-  variables: 
+  variables:
     AGENT: ${STAGING_AGENT}
     NS: ${STAGING_NS}
 
 # Deploy main branch
 Production:
-  extends: 
+  extends:
     - .deploy
     - .branch-rules-main
   environment:
     name: production
-  variables: 
+  variables:
     AGENT: ${PROD_AGENT}
     NS: ${PROD_NS}
 
 Fallback:
-  extends: 
+  extends:
     - .deploy
     - .branch-rules-main
   environment:
     name: fallback
-  variables: 
+  variables:
     AGENT: ${FALLBACK_AGENT}
     NS: ${FALLBACK_NS}

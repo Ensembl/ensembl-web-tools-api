@@ -33,7 +33,7 @@ async def get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
             + genome_id
             + "/dataset/genebuild/attributes?"
             + "attribute_names=genebuild.provider_name&"
-            + "attribute_names=genebuild.display_version&"
+            + "attribute_names=genebuild.provider_version&"
             + "attribute_names=genebuild.last_geneset_update"
         )
         response.raise_for_status()

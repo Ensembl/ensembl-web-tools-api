@@ -139,8 +139,10 @@ Review:
 
 # Stop review app (cleanup backend resources)
 Stop_review:
-  extends: .branch-rules-review
-  when: manual
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev")'
+      when: manual
+    - when: never
   stage: deploy
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   environment:

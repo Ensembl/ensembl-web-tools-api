@@ -52,7 +52,6 @@ stages:
 
 .deploy:
   stage: deploy
-  extends: .deploy-rules
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   before_script:
     - kubectl config use-context ${AGENT}

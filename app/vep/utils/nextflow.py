@@ -1,5 +1,4 @@
 import requests
-import logging
 
 from vep.models.pipeline_model import PipelineParams
 from core.config import NF_TOKEN, SEQERA_API, NF_WORKSPACE_ID

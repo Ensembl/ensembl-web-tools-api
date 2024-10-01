@@ -101,5 +101,7 @@ class PipelineStatus(BaseModel):
     def serialize_status(self, status: str):
         if status == "UNKNOWN":
             status = "FAILED"
-            logging.info(f"Unknown status was returned for submission {self.submission_id}")
+            logging.info(
+                f"Unknown status was returned for submission {self.submission_id}"
+            )
         return status

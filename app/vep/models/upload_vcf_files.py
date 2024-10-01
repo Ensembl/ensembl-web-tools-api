@@ -92,8 +92,6 @@ class Streamer:
         except (MaxBodySizeException, ValidationError):
             shutil.rmtree(self.temp_dir)
             raise MaxBodySizeException(MAX_FILE_SIZE)
-        except (Exception, ClientDisconnect) as e:
-            print(e)
-            logging.info(e)
+        except (Exception, ClientDisconnect):
             shutil.rmtree(self.temp_dir)
-            raise Exception
+            raise

@@ -88,7 +88,6 @@ fasta {self.fasta}
                 ini_file.write(config_ini)
             return ini_file
         except Exception as e:
-            logging.info(e)
             raise RuntimeError("Could not create vep config ini file")
 
 
@@ -102,5 +101,5 @@ class PipelineStatus(BaseModel):
     def serialize_status(self, status: str):
         if status == "UNKNOWN":
             status = "FAILED"
-            logging.info("UNKNOWN STATUS WAS RETURNED HERE")
+            logging.info(f"Unknown status was returned for submission {self.submission_id}")
         return status

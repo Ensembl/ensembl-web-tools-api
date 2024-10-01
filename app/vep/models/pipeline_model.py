@@ -88,8 +88,6 @@ fasta {self.fasta}
             with open(os.path.join(dir, "config.ini"), "w") as ini_file:
                 ini_file.write(config_ini)
             return ini_file
-        except HTTPError:
-            raise
         except Exception as e:
             raise RuntimeError(f"Could not create VEP config ini file: {e}")
 

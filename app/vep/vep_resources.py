@@ -222,16 +222,21 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
 async def get_form_config(request: Request, genome_id: str):
     try:
         attributes = await get_genome_metadata(genome_id)
-        annotation_provider_name = attributes.get("genebuild.provider_name")
-        annotation_version = attributes.get("genebuild.display_version")
-        last_updated_date = attributes.get("genebuild.last_geneset_update")
+        annotation_provider_name = attributes.get("genebuild.provider_name", "")
+        annotation_version = attributes.get("genebuild.provider_version", "")
+        last_updated_date = attributes.get("genebuild.last_geneset_update", "")
 
-        options = [
-            {
-                "label": f"{annotation_provider_name} {annotation_version or last_updated_date}",
-                "value": f"{annotation_provider_name}_{annotation_version or last_updated_date}",
-            }
-        ]
+        if (annotation_version or last_updated_date):
+            label = f"{annotation_provider_name} {annotation_version or last_updated_date}"
+            value = f"{annotation_provider_name}_{annotation_version or last_updated_date}"
+        else:
+            label = f"{annotation_provider_name}"
+            value = f"{annotation_provider_name}"
+
+        options = [{
+            "label": label,
+            "value": value
+        }]
 
         default_option = options[0]
         transcript_set = Dropdown(

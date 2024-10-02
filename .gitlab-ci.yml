@@ -25,16 +25,30 @@ stages:
   - build
   - deploy
 
-.deploy-rules:
+# Templates
+.branch-rules-main:
   rules:
     - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"'
-      when: always
+      when: on_success
+    - when: never
 
-.deploy-branch-rules:
+.branch-rules-dev:
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"'
+      when: on_success
+    - when: never
+
+.branch-rules-review:
   rules:
     - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev")'
-      when: always
+      when: on_success
+    - when: never
 
+.deploy-rules:
+  rules:
+    - if: "$CI_DEPLOY_FREEZE == null"
+      when: on_success
+    - when: never
 
 .deploy:
   stage: deploy
@@ -50,13 +64,22 @@ stages:
     - sed -i "s#<NFS_PATH>#${NFS_PATH}#g" deployment.yaml
     - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
     - kubectl apply -k ./
-  rules:
-    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"'
-  when: manual
 
-# Run Tests
+.deploy-dev:
+  extends:
+    - .deploy
+    - .branch-rules-dev
+
+.deploy-main:
+  extends:
+    - .deploy
+    - .branch-rules-main
+
+# Run tests
 Test:
   stage: test
+  extends:
+    - .deploy-rules
   image: python:3.10
   before_script:
     - pip install -r requirements-dev.txt
@@ -71,12 +94,12 @@ Test:
     when: always
     reports:
       junit: report.xml
-  except:
-    - /^skiptest\/.*$/
 
 # Build the docker image
 Docker:
   stage: build
+  extends:
+    - .deploy-rules
   image: docker
   services:
     - docker:dind
@@ -88,22 +111,37 @@ Docker:
     - docker rmi ${DOCKER_IMAGE}
     - docker logout $CI_REGISTRY
 
-# Deploy feature branch (for specific review apps)
+# Deploy feature branch (for custom backend review apps)
 Review:
-  extends: 
+  extends:
     - .deploy
-    - .deploy-branch-rules
+    - .branch-rules-review
   environment:
     name: development
-  variables: 
+  variables:
     AGENT: ${DEV_AGENT}
     NS: ${CI_COMMIT_REF_SLUG}
+  before_script:
+    - kubectl config use-context ${AGENT}
+    # Check for review namespace and remove the default backend ingress
+    - kubectl get namespace ${NS} > /dev/null || (echo "Please create '${NS}' branch in ensembl-client and restart this pipeline" && exit 1)
+    - kubectl -n ensembl-dev delete ingress ensembl-tools-api-ingress-${NS} || true
+    - kubectl config set-context --current --namespace=${NS}
   after_script:
-    - kubectl -n ${NS}  set env deployment/ensembl-tools-api-deployment --from configmap/ensembl-tools-api-configmap
+    # Add the missing resources to the review namespace
+    - cd ensembl-k8s-manifests/ensembl-web-tools-api
+    - sed -i "s#HOST#${CI_COMMIT_REF_SLUG}.review.ensembl.org#" ingress.yaml
+    - kubectl apply -f ingress.yaml
+    - git clone https://config-ro-user:${CONFIG_RO_TOKEN}@gitlab.ebi.ac.uk/ensembl-web/newsite-api-config-setup.git
+    - cd newsite-api-config-setup/dev/hl
+    - kubectl create secret generic ensembl-web-tools-api-secret --from-env-file=tools-api.secret --dry-run=client -o yaml | kubectl apply -f -
 
-# Stop feature branch review app (cleanup resources) 
+# Stop review app (cleanup backend resources)
 Stop_review:
-  extends: .deploy-branch-rules
+  rules:
+    - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev")'
+      when: manual
+    - when: never
   stage: deploy
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   environment:
@@ -115,59 +153,54 @@ Stop_review:
   script:
     - kubectl -n ${NS} delete service ensembl-tools-api-svc
     - kubectl -n ${NS} delete deploy ensembl-tools-api-deployment
+    - kubectl -n ${NS} delete ingress ensembl-tools-api-ingress
+    - kubectl -n ${NS} delete secret ensembl-tools-api-secret
 
-Production:
-  extends: 
-    - .deploy
-    - .deploy-rules
+# Deploy dev branch
+Dev:
+  extends:
+    - .deploy-dev
   environment:
-    name: production
-  variables: 
-    AGENT: ${PROD_AGENT}
-    NS: ${PROD_NS}
+    name: development
+  variables:
+    AGENT: ${DEV_AGENT}
+    NS: ${DEV_NS}
 
-
-Fallback:
-  extends: 
-    - .deploy
-    - .deploy-rules
+Internal:
+  extends:
+    - .deploy-dev
   environment:
-    name: fallback
-  variables: 
-    AGENT: ${FALLBACK_AGENT}
-    NS: ${FALLBACK_NS}
-
+    name: internal
+  variables:
+    AGENT: ${INTERNAL_AGENT}
+    NS: ${INTERNAL_NS}
 
 Staging:
-  extends: 
-    - .deploy
-    - .deploy-rules
+  extends:
+    - .deploy-dev
   environment:
     name: staging
   rules:
     - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"'
-  variables: 
+  variables:
     AGENT: ${STAGING_AGENT}
     NS: ${STAGING_NS}
 
-
-Internal:
-  extends: 
-    - .deploy
-    - .deploy-rules
+# Deploy main branch
+Production:
+  extends:
+    - .deploy-main
   environment:
-    name: internal
-  variables: 
-    AGENT: ${INTERNAL_AGENT}
-    NS: ${INTERNAL_NS}
+    name: production
+  variables:
+    AGENT: ${PROD_AGENT}
+    NS: ${PROD_NS}
 
-
-Dev:
-  extends: 
-    - .deploy
-    - .deploy-rules
+Fallback:
+  extends:
+    - .deploy-main
   environment:
-    name: development
-  variables: 
-    AGENT: ${DEV_AGENT}
-    NS: ${DEV_NS}
+    name: fallback
+  variables:
+    AGENT: ${FALLBACK_AGENT}
+    NS: ${FALLBACK_NS}

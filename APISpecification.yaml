@@ -165,7 +165,7 @@ components:
         - feature_type
         - stable_id
         - gene_stable_id
-        - symbol
+        - gene_symbol
         - biotype
         - is_canonical
         - consequences
@@ -181,7 +181,7 @@ components:
         gene_stable_id:
           type: string
           description: gene stable id, versioned
-        symbol:
+        gene_symbol:
           type: string
           nullable: true
         biotype:

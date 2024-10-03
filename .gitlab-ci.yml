@@ -29,25 +29,25 @@ stages:
 # Templates
 .branch-rules-main:
   rules:
-    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"'
+    - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"
       when: on_success
     - when: never
 
 .branch-rules-dev:
   rules:
-    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"'
+    - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"
       when: on_success
     - when: never
 
 .branch-rules-review:
   rules:
-    - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev")'
+    - if: $CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev")
       when: on_success
     - when: never
 
 .deploy-rules:
   rules:
-    - if: "$CI_DEPLOY_FREEZE == null"
+    - if: $CI_DEPLOY_FREEZE == null
       when: on_success
     - when: never
 
@@ -154,6 +154,7 @@ Review:
     - .branch-rules-review
   environment:
     name: development
+    url: http://${NS}.review.ensembl.org
   variables:
     AGENT: ${DEV_AGENT}
     NS: ${CI_COMMIT_REF_SLUG}
@@ -162,10 +163,9 @@ Review:
 Stop_review:
   stage: deploy
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
+  when: manual
   rules:
-    - if: '$CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev")'
-      when: manual
-    - when: never
+    - if: $CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev"
   environment:
     name: development
   variables:

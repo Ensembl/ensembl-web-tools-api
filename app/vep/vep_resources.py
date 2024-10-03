@@ -83,7 +83,7 @@ async def submit_vep(request: Request):
             if "message" in e.response.json()
             else e.response.text
         )
-        logging.error(f"VEP submission error (upstream): {msg}")
+        logging.error(f"VEP submission error (upstream): {msg}: {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except MaxBodySizeException:
         return response_error_handler(result={"status": 413})
@@ -111,7 +111,7 @@ async def vep_status(request: Request, submission_id: str):
             if "message" in e.response.json()
             else e.response.text
         )
-        logging.error(f"VEP status error (upstream): {msg}")
+        logging.error(f"VEP status error (upstream): {msg}: {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
         logging.error(f"VEP status error: {e}")
@@ -166,9 +166,11 @@ async def download_results(request: Request, submission_id: str):
             return JSONResponse(
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
+        else:
+            logging.error(f"VEP download results error (upstream): {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.error(f"VEP download results error: f{e}")
+        logging.error(f"VEP download results error: {e}")
         return response_error_handler(result={"status": 500})
 
 
@@ -212,6 +214,8 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
             return JSONResponse(
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
+        else:
+            logging.error(f"VEP fetch results error (upstream): {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
         logging.error(f"VEP fetch results error: {e}")
@@ -222,16 +226,21 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
 async def get_form_config(request: Request, genome_id: str):
     try:
         attributes = await get_genome_metadata(genome_id)
-        annotation_provider_name = attributes.get("genebuild.provider_name")
-        annotation_version = attributes.get("genebuild.display_version")
-        last_updated_date = attributes.get("genebuild.last_geneset_update")
+        annotation_provider_name = attributes.get("genebuild.provider_name", "")
+        annotation_version = attributes.get("genebuild.provider_version", "")
+        last_updated_date = attributes.get("genebuild.last_geneset_update", "")
 
-        options = [
-            {
-                "label": f"{annotation_provider_name} {annotation_version or last_updated_date}",
-                "value": f"{annotation_provider_name}_{annotation_version or last_updated_date}",
-            }
-        ]
+        if (annotation_version or last_updated_date):
+            label = f"{annotation_provider_name} {annotation_version or last_updated_date}"
+            value = f"{annotation_provider_name}_{annotation_version or last_updated_date}"
+        else:
+            label = f"{annotation_provider_name}"
+            value = f"{annotation_provider_name}"
+
+        options = [{
+            "label": label,
+            "value": value
+        }]
 
         default_option = options[0]
         transcript_set = Dropdown(

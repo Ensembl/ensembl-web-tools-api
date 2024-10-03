@@ -130,14 +130,14 @@ Setup-review:
       when: always
   script:
     - kubectl config use-context ${AGENT}
-    # When needed: remove existing ingress, add review namespace & dockerhub credentials
+    # When needed: remove existing ingress, add review namespace & envvars
     - kubectl config set-context --current --namespace=${DEV_NS}
-    - kubectl delete ingress ensembl-tools-api-ingress-${NS} || true
+    - kubectl delete ingress ensembl-web-tools-api-ingress-${NS} || true
     - kubectl create namespace ${NS} || true
     - kubectl config set-context --current --namespace=${NS}
-    - kubectl create secret docker-registry ensemblweb-pull-secret --docker-server=${GITLAB_REGISTRY_URL}
-      --docker-username=${WEB_PULL_DOCKER_USER} --docker-password=${WEB_PULL_DOCKER_SECRET} --docker-email=${WEB_PULL_DOCKER_EMAIL} || true
-    # Setup ToolsAPI resources in review namespace (service, ingress, secret)
+    - "kubectl create secret docker-registry ensemblweb-pull-secret --docker-server=${GITLAB_REGISTRY_URL} \
+      --docker-username=${WEB_PULL_DOCKER_USER} --docker-password=${WEB_PULL_DOCKER_SECRET} --docker-email=${WEB_PULL_DOCKER_EMAIL} || true"
+    # Setup ToolsAPI resources in review namespace (service, ingress, secret) + proxy config
     - git clone --depth 1 --branch k8s123-migration https://gitlab.ebi.ac.uk/ensembl-web/ensembl-k8s-manifests.git
     - cd ensembl-k8s-manifests/ensembl-web-tools-api
     - kubectl apply -f service.yaml
@@ -145,7 +145,8 @@ Setup-review:
     - kubectl apply -f ingress.yaml
     - git clone https://config-ro-user:${CONFIG_RO_TOKEN}@gitlab.ebi.ac.uk/ensembl-web/newsite-api-config-setup.git
     - cd newsite-api-config-setup/dev/hl
-    - kubectl create secret generic ensembl-tools-api-secret --from-env-file=tools-api.secret --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl create secret generic ensembl-web-tools-api-secret --from-env-file=tools-api.secret --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl create configmap proxy-configmap --from-env-file=http-proxy.config --dry-run -o yaml | kubectl apply -f -
 
 Review:
   extends:
@@ -174,10 +175,10 @@ Stop_review:
   script:
     - kubectl config use-context ${AGENT}
     - kubectl config set-context --current --namespace=${DEV_NS}
-    - kubectl delete ingress ensembl-tools-api-ingress
-    - kubectl delete service ensembl-tools-api-svc
-    - kubectl delete deploy ensembl-tools-api-deployment
-    - kubectl delete secret ensembl-tools-api-secret
+    - kubectl delete ingress ensembl-web-tools-api-ingress
+    - kubectl delete service ensembl-web-tools-api-svc
+    - kubectl delete deploy ensembl-web-tools-api-deployment
+    - kubectl delete secret ensembl-web-tools-api-secret
     - kubectl -n ${DEV_NS} delete namespace ${NS} || echo "Please delete ${NS} branch in Ensembl-client to cleanup the review namespace"
 
 # Deploy dev branch

@@ -135,7 +135,8 @@ Setup-review:
     - kubectl delete ingress ensembl-web-tools-api-ingress-${NS} || true
     - kubectl create namespace ${NS} || true
     - kubectl config set-context --current --namespace=${NS}
-    - kubectl create secret docker-registry ensemblweb-pull-secret --docker-server=${GITLAB_REGISTRY_URL} --docker-username=${WEB_PULL_DOCKER_USER} --docker-password=${WEB_PULL_DOCKER_SECRET} --docker-email=${WEB_PULL_DOCKER_EMAIL} || true
+    - kubectl create secret docker-registry ensemblweb-pull-secret --docker-server=${GITLAB_REGISTRY_URL} 
+      --docker-username=${WEB_PULL_DOCKER_USER} --docker-password=${WEB_PULL_DOCKER_SECRET} --docker-email=${WEB_PULL_DOCKER_EMAIL} || true
     # Setup ToolsAPI resources in review namespace (service, ingress, secret) + proxy config
     - git clone --depth 1 --branch k8s123-migration https://gitlab.ebi.ac.uk/ensembl-web/ensembl-k8s-manifests.git
     - cd ensembl-k8s-manifests/ensembl-web-tools-api

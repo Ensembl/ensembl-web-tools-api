@@ -76,13 +76,13 @@ paths:
           in: query
           required: false
           schema:
-            type: number
+            type: integer
             default: 1
         - name: per_page
           in: query
           required: false
           schema:
-            type: number
+            type: integer
             default: 100
       responses:
         '200':
@@ -140,11 +140,11 @@ components:
         - total
       properties:
         page:
-          type: number
+          type: integer
         per_page:
-          type: number
+          type: integer
         total:
-          type: number
+          type: integer
     PredictedIntergenicConsequence:
       type: object
       required:
@@ -257,9 +257,9 @@ components:
             region_name:
               type: string
             start:
-              type: number
+              type: integer
             end:
-              type: number
+              type: integer
           required:
             - region_name
             - start
@@ -305,7 +305,7 @@ components:
         - status_code
       properties:
         status_code:
-          type: number
+          type: integer
           default: 404
         details:
           type: string

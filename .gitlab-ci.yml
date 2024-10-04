@@ -41,13 +41,7 @@ stages:
 
 .branch-rules-review:
   rules:
-    - if: $CI_DEPLOY_FREEZE == null && ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev")
-      when: on_success
-    - when: never
-
-.deploy-rules:
-  rules:
-    - if: $CI_DEPLOY_FREEZE == null
+    - if: $CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev"
       when: on_success
     - when: never
 
@@ -97,8 +91,6 @@ Test:
 # Build the docker image
 Docker:
   stage: build
-  extends:
-    - .deploy-rules
   image: docker
   services:
     - docker:dind
@@ -121,8 +113,7 @@ Setup-review:
     AGENT: ${DEV_AGENT}
     NS: ${CI_COMMIT_REF_SLUG}
   rules: # Run once (when a feature branch is created)
-    - if: $CI_DEPLOY_FREEZE == null &&
-          ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev") &&
+    - if: ($CI_COMMIT_BRANCH != "main" || $CI_COMMIT_BRANCH != "dev") &&
           $CI_PIPELINE_SOURCE == "push" &&
           $CI_COMMIT_BEFORE_SHA == "0000000000000000000000000000000000000000"
       when: always
@@ -204,7 +195,7 @@ Staging:
   environment:
     name: staging
   rules:
-    - if: '$CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "dev"'
+    - if: $CI_COMMIT_BRANCH == "dev"
   variables:
     AGENT: ${STAGING_AGENT}
     NS: ${STAGING_NS}

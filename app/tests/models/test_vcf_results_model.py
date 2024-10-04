@@ -16,7 +16,7 @@ from vep.models.vcf_results_model import (
 )
 
 
-class TestVEPResultModel(unittest.TestCase):
+class TestVCFResultModel(unittest.TestCase):
 
     def test_predicted_intergenic_consequence(self):
         consequence = PredictedIntergenicConsequence(

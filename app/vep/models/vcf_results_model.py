@@ -34,7 +34,7 @@ class PredictedTranscriptConsequence(BaseModel):
     feature_type: FeatureType
     stable_id: str = Field(..., description="transcript stable id, versioned")
     gene_stable_id: str = Field(..., description="gene stable id, versioned")
-    gene_symbol: Optional[str] = Field(default=None)
+    gene_symbol: Optional[str] = None
     biotype: str
     is_canonical: bool
     consequences: List[str]

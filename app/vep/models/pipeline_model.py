@@ -1,3 +1,4 @@
+import logging, os
 from pydantic import (
     BaseModel,
     DirectoryPath,
@@ -7,13 +8,13 @@ from pydantic import (
     AliasPath,
     field_serializer,
 )
+from requests import HTTPError
+
 from core.config import (
     NF_COMPUTE_ENV_ID,
     NF_PIPELINE_URL,
 )
 from core.logging import InterceptHandler
-import logging, os
-
 from vep.utils.web_metadata import get_vep_support_location
 
 logging.getLogger().handlers = [InterceptHandler()]
@@ -88,8 +89,7 @@ fasta {self.fasta}
                 ini_file.write(config_ini)
             return ini_file
         except Exception as e:
-            logging.info(e)
-            raise RuntimeError("Could not create vep config ini file")
+            raise RuntimeError(f"Could not create VEP config ini file: {e}")
 
 
 class PipelineStatus(BaseModel):
@@ -102,5 +102,7 @@ class PipelineStatus(BaseModel):
     def serialize_status(self, status: str):
         if status == "UNKNOWN":
             status = "FAILED"
-            logging.info("UNKNOWN STATUS WAS RETURNED HERE")
+            logging.info(
+                f"Unknown status was returned for submission {self.submission_id}"
+            )
         return status

@@ -68,17 +68,26 @@ async def submit_vep(request: Request):
             vep_config=ini_file.name,
             outdir=request_streamer.temp_dir,
         )
-        launch_params = LaunchParams(paramsText=vep_job_config_parameters, workDir=request_streamer.temp_dir)
+        launch_params = LaunchParams(
+            paramsText=vep_job_config_parameters, workDir=request_streamer.temp_dir
+        )
         pipeline_params = PipelineParams(launch=launch_params)
         if stream_result:
             workflow_id = launch_workflow(pipeline_params)
             return {"submission_id": workflow_id}
         else:
-            raise Exception
+            raise Exception("Failed to upload VEP input files")
+    except HTTPError as e:
+        try:
+            msg = e.response.json()["message"]
+        except Exception:
+            msg = e.response.text
+        logging.error(f"VEP submission error (upstream): {msg}: {e}")
+        return response_error_handler(result={"status": e.response.status_code})
     except MaxBodySizeException:
         return response_error_handler(result={"status": 413})
     except Exception as e:
-        logging.error(e)
+        logging.error(f"VEP submission error: {e}")
         return response_error_handler(result={"status": 500})
 
 
@@ -89,23 +98,21 @@ async def vep_status(request: Request, submission_id: str):
         submission_status = PipelineStatus(
             submission_id=submission_id, status=workflow_status
         )
-        return JSONResponse(content=submission_status.dict())
-
-    except HTTPError as http_error:
-        logging.warning(http_error)
-        if http_error.response.status_code in [403, 400]:
-            response_msg = {
-                "details": f"A submission with id {submission_id} was not found",
-            }
-            return JSONResponse(
-                content=response_msg, status_code=status.HTTP_404_NOT_FOUND
+        if submission_status.status == VepStatus.failed:
+            logging.error(
+                f"VEP submission f{submission_id} failed: f{workflow_status['workflow']['errorMessage'] or workflow_status['workflow']['errorReport']}"
             )
+        return JSONResponse(content=submission_status.model_dump())
 
-        return response_error_handler(
-            result={"status": http_error.response.status_code}
-        )
+    except HTTPError as e:
+        try:
+            msg = e.response.json()["message"]
+        except Exception:
+            msg = e.response.text
+        logging.error(f"VEP status error (upstream): {msg}: {e}")
+        return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.error(e)
+        logging.error(f"VEP status error: {e}")
         return response_error_handler(result={"status": 500})
 
 
@@ -148,9 +155,8 @@ async def download_results(request: Request, submission_id: str):
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
 
-    except HTTPError as http_error:
-        logging.warning(http_error)
-        if http_error.response.status_code in [403, 400]:
+    except HTTPError as e:
+        if e.response.status_code in [403, 400]:
             response_msg = {
                 "status_code": status.HTTP_404_NOT_FOUND,
                 "details": f"A submission with id {submission_id} was not found",
@@ -158,11 +164,11 @@ async def download_results(request: Request, submission_id: str):
             return JSONResponse(
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
-        return response_error_handler(
-            result={"status": http_error.response.status_code}
-        )
+        else:
+            logging.error(f"VEP download results error (upstream): {e}")
+        return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.error(e)
+        logging.error(f"VEP download results error: {e}")
         return response_error_handler(result={"status": 500})
 
 
@@ -195,8 +201,8 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
 
-    except HTTPError as http_error:
-        if http_error.response.status_code in [403, 400]:
+    except HTTPError as e:
+        if e.response.status_code in [403, 400]:
             response_msg = json.dumps(
                 {
                     "status_code": status.HTTP_404_NOT_FOUND,
@@ -206,12 +212,13 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
             return JSONResponse(
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
-        return response_error_handler(
-            result={"status": http_error.response.status_code}
-        )
+        else:
+            logging.error(f"VEP fetch results error (upstream): {e}")
+        return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.error(e)
+        logging.error(f"VEP fetch results error: {e}")
         return response_error_handler(result={"status": 500})
+
 
 @router.get("/form_config/{genome_id}", name="get_form_config")
 async def get_form_config(request: Request, genome_id: str):
@@ -237,16 +244,14 @@ async def get_form_config(request: Request, genome_id: str):
         transcript_set = Dropdown(
             label="Transcript set",
             options=options,
-            default_value= default_option["value"]
+            default_value=default_option["value"],
         )
 
-        form_config = FormConfig(
-            transcript_set = transcript_set
-        )
-        return { "parameters": form_config }
+        form_config = FormConfig(transcript_set=transcript_set)
+        return {"parameters": form_config}
 
-    except HTTPError as http_error:
-        if http_error.response.status_code == 404:
+    except HTTPError as e:
+        if e.response.status_code == 404:
             response_msg = json.dumps(
                 {
                     "status_code": status.HTTP_404_NOT_FOUND,
@@ -256,9 +261,9 @@ async def get_form_config(request: Request, genome_id: str):
             return JSONResponse(
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
-        return response_error_handler(
-            result={"status": http_error.response.status_code}
-        )
+        else:
+            logging.error(f"VEP form config error (upstream): {e}")
+        return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.error(e)
+        logging.error(f"VEP form config error: {e}")
         return response_error_handler(result={"status": 500})

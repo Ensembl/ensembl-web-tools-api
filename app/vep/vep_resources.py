@@ -78,11 +78,10 @@ async def submit_vep(request: Request):
         else:
             raise Exception("Failed to upload VEP input files")
     except HTTPError as e:
-        msg = (
-            e.response.json()["message"]
-            if "message" in e.response.json()
-            else e.response.text
-        )
+        try:
+            msg = e.response.json()["message"]
+        except Exception:
+            msg = e.response.text
         logging.error(f"VEP submission error (upstream): {msg}: {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except MaxBodySizeException:
@@ -106,11 +105,10 @@ async def vep_status(request: Request, submission_id: str):
         return JSONResponse(content=submission_status.model_dump())
 
     except HTTPError as e:
-        msg = (
-            e.response.json()["message"]
-            if "message" in e.response.json()
-            else e.response.text
-        )
+        try:
+            msg = e.response.json()["message"]
+        except Exception:
+            msg = e.response.text
         logging.error(f"VEP status error (upstream): {msg}: {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:

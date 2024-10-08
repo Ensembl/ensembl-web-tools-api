@@ -128,10 +128,7 @@ class TestVCFResultModel(unittest.TestCase):
                     allele_sequence="T",
                     allele_type="SNP",
                     predicted_molecular_consequences=[
-                        PredictedIntergenicConsequence(
-                            feature_type=None,
-                            consequences=["intergenic_variant"],
-                        )
+                        PredictedIntergenicConsequence()
                     ]
                 )
             ],

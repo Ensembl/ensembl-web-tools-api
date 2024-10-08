@@ -5,10 +5,12 @@ from typing import Any, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
+
 class PaginationMetadata(BaseModel):
     page: int
     per_page: int
     total: int
+
 
 class PredictedIntergenicConsequence(BaseModel):
     feature_type: Optional[Any] = Field(
@@ -16,7 +18,7 @@ class PredictedIntergenicConsequence(BaseModel):
         description="The value of this field is always null. The presence of null in this field will serve as a marker that this is a consequence of an intergenic variant.",
     )
     consequences: List[str] = Field(
-        ...,
+        default=['intergenic_variant'],
         description="The only expected member of this array will be the string 'intergenic_variant'",
     )
 
@@ -50,9 +52,9 @@ class Location(BaseModel):
     start: int
     end: int
 
+
 class Metadata(BaseModel):
     pagination: PaginationMetadata
-
 
 
 class AlternativeVariantAllele(BaseModel):

@@ -19,16 +19,9 @@ from vep.models.vcf_results_model import (
 class TestVCFResultModel(unittest.TestCase):
 
     def test_predicted_intergenic_consequence(self):
-        consequence = PredictedIntergenicConsequence(
-            feature_type=None,
-            consequences=["intergenic_variant"]
-        )
+        consequence = PredictedIntergenicConsequence()
         self.assertIsNone(consequence.feature_type)
         self.assertEqual(consequence.consequences, ["intergenic_variant"])
-
-        # Missing consequences should raise a ValidationError
-        with self.assertRaises(ValidationError):
-            PredictedIntergenicConsequence(feature_type=None)
 
     def test_predicted_transcript_consequence(self):
         consequence = PredictedTranscriptConsequence(
@@ -61,10 +54,7 @@ class TestVCFResultModel(unittest.TestCase):
             allele_type="insertion",
             representative_population_allele_frequency=None,
             predicted_molecular_consequences=[
-                PredictedIntergenicConsequence(
-                    feature_type=None,
-                    consequences=["intergenic_variant"],
-                )
+                PredictedIntergenicConsequence()
             ],
         )
         self.assertIsNone(alternative_allele.representative_population_allele_frequency)
@@ -74,10 +64,7 @@ class TestVCFResultModel(unittest.TestCase):
             allele_sequence="A",
             allele_type="insertion",
             predicted_molecular_consequences=[
-                PredictedIntergenicConsequence(
-                    feature_type=None,
-                    consequences=["intergenic_variant"],
-                )
+                PredictedIntergenicConsequence()
             ],
         )
         self.assertIsNone(alternative_allele_no_freq.representative_population_allele_frequency)
@@ -93,10 +80,7 @@ class TestVCFResultModel(unittest.TestCase):
                     allele_sequence="T",
                     allele_type="SNP",
                     predicted_molecular_consequences=[
-                        PredictedIntergenicConsequence(
-                            feature_type=None,
-                            consequences=["intergenic_variant"]
-                        )
+                        PredictedIntergenicConsequence()
                     ]
                 )
             ]
@@ -113,10 +97,7 @@ class TestVCFResultModel(unittest.TestCase):
                     allele_sequence="T",
                     allele_type="SNP",
                     predicted_molecular_consequences=[
-                        PredictedIntergenicConsequence(
-                            feature_type=None,
-                            consequences=["intergenic_variant"]
-                        )
+                        PredictedIntergenicConsequence()
                     ]
                 )
             ]

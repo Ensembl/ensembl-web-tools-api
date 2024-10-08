@@ -19,7 +19,25 @@ def launch_workflow(pipeline_params: PipelineParams):
         response.raise_for_status()
         response_json = response.json()
         return response_json["workflowId"]
-    except (requests.HTTPError, requests.ConnectionError, Exception) as e:
+    except KeyError as e:
+        e.args = (
+            f"launch_workflow(): unexpected payload from Seqera: f{response.text}",
+            *e.args,
+        )
+        raise
+    except requests.HTTPError as e:
+        e.args = (
+            "launch_workflow(): error response from Seqera:",
+            *e.args,
+        )
+        raise
+    except (requests.ConnectionError, requests.Timeout) as e:
+        e.args = (
+            "launch_workflow(): network error while connecting to Seqera:",
+            *e.args,
+        )
+        raise
+    except Exception as e:
         e.args = (f"{type(e).__name__} in launch_workflow():", *e.args)
         raise
 
@@ -39,6 +57,24 @@ async def get_workflow_status(submission_id):
         response.raise_for_status()
         response_json = response.json()
         return response_json
-    except (requests.HTTPError, requests.ConnectionError, Exception) as e:
-        e.args = (f"{type(e).__name__} in get_workflow_status():", *e.args)
+    except KeyError as e:
+        e.args = (
+            f"launch_workflow(): unexpected payload from Seqera: f{response.text}",
+            *e.args,
+        )
+        raise
+    except requests.HTTPError as e:
+        e.args = (
+            "launch_workflow(): error response from Seqera:",
+            *e.args,
+        )
+        raise
+    except (requests.ConnectionError, requests.Timeout) as e:
+        e.args = (
+            "launch_workflow(): network error while connecting to Seqera:",
+            *e.args,
+        )
+        raise
+    except Exception as e:
+        e.args = (f"{type(e).__name__} in launch_workflow():", *e.args)
         raise

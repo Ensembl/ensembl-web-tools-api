@@ -24,6 +24,7 @@ stages:
   - setup
   - test
   - build
+  - deploy-preview
   - deploy
 
 # Templates
@@ -33,15 +34,10 @@ stages:
       when: on_success
     - when: never
 
-.branch-rules-dev:
-  rules:
-    - if: $CI_COMMIT_BRANCH == "dev"
-      when: on_success
-    - when: never
 
 .branch-rules-review:
   rules:
-    - if: $CI_COMMIT_BRANCH != "main" && $CI_COMMIT_BRANCH != "dev"
+    - if: $CI_COMMIT_BRANCH != "main"
       when: on_success
     - when: never
 
@@ -60,10 +56,6 @@ stages:
     - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
     - kubectl apply -k ./
 
-.deploy-dev:
-  extends:
-    - .deploy
-    - .branch-rules-dev
 
 .deploy-main:
   extends:
@@ -113,7 +105,7 @@ Setup-review:
     AGENT: ${DEV_AGENT}
     NS: ${CI_COMMIT_REF_SLUG}
   rules: # Run once (when a feature branch is created)
-    - if: $CI_COMMIT_BRANCH != "main" && $CI_COMMIT_BRANCH != "dev" &&
+    - if: $CI_COMMIT_BRANCH != "main" &&
           $CI_PIPELINE_SOURCE == "push" &&
           $CI_COMMIT_BEFORE_SHA == "0000000000000000000000000000000000000000"
       when: always
@@ -141,6 +133,7 @@ Review:
   extends:
     - .deploy
     - .branch-rules-review
+  stage: deploy-preview
   environment:
     name: development
     url: http://${NS}.review.ensembl.org
@@ -150,11 +143,11 @@ Review:
 
 # Stop review app (cleanup backend resources)
 Stop_review:
-  stage: deploy
+  stage: deploy-preview
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   when: manual
   rules:
-    - if: $CI_COMMIT_BRANCH != "main" && $CI_COMMIT_BRANCH != "dev"
+    - if: $CI_COMMIT_BRANCH != "main"
   environment:
     name: development
   variables:
@@ -173,29 +166,22 @@ Stop_review:
 # Deploy dev branch
 Dev:
   extends:
-    - .deploy-dev
+    - .deploy-main
+  stage: deploy-preview
   environment:
     name: development
   variables:
     AGENT: ${DEV_AGENT}
     NS: ${DEV_NS}
 
-Internal:
-  extends:
-    - .deploy-dev
-  environment:
-    name: internal
-  variables:
-    AGENT: ${INTERNAL_AGENT}
-    NS: ${INTERNAL_NS}
-
 Staging:
   extends:
-    - .deploy-dev
+    - .deploy-main
+  stage: deploy-preview
   environment:
     name: staging
   rules:
-    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH == "main"
   variables:
     AGENT: ${STAGING_AGENT}
     NS: ${STAGING_NS}
@@ -206,6 +192,7 @@ Production:
     - .deploy-main
   environment:
     name: production
+  when: manual
   variables:
     AGENT: ${PROD_AGENT}
     NS: ${PROD_NS}
@@ -215,6 +202,7 @@ Fallback:
     - .deploy-main
   environment:
     name: fallback
+  when: manual
   variables:
     AGENT: ${FALLBACK_AGENT}
     NS: ${FALLBACK_NS}

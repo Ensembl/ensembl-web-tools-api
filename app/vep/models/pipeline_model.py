@@ -15,6 +15,7 @@ from core.config import (
     NF_PIPELINE_URL,
 )
 from core.logging import InterceptHandler
+
 from vep.utils.web_metadata import get_vep_support_location
 
 logging.getLogger().handlers = [InterceptHandler()]

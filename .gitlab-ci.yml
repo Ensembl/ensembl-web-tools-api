@@ -180,8 +180,7 @@ Staging:
   stage: deploy-preview
   environment:
     name: staging
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+
   variables:
     AGENT: ${STAGING_AGENT}
     NS: ${STAGING_NS}

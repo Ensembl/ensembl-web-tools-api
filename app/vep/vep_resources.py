@@ -63,6 +63,7 @@ async def submit_vep(request: Request):
         vep_job_parameters_dict = json.loads(vep_job_parameters)
         ini_parameters = ConfigIniParams(**vep_job_parameters_dict, genome_id=genome_id)
         ini_file = ini_parameters.create_config_ini_file(request_streamer.temp_dir)
+
         vep_job_config_parameters = VEPConfigParams(
             vcf=request_streamer.filepath,
             vep_config=ini_file.name,
@@ -100,8 +101,7 @@ async def vep_status(request: Request, submission_id: str):
         )
         if submission_status.status == VepStatus.failed:
             logging.error(
-                f"VEP submission f{submission_id} failed: f{workflow_status['workflow']['errorMessage'] or workflow_status['workflow']['errorReport']}"
-            )
+                f"VEP submission f{submission_id} failed: f{workflow_status['workflow']['errorMessage'] or workflow_status['workflow']['errorReport']}")
         return JSONResponse(content=submission_status.model_dump())
 
     except HTTPError as e:
@@ -155,8 +155,9 @@ async def download_results(request: Request, submission_id: str):
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
 
-    except HTTPError as e:
-        if e.response.status_code in [403, 400]:
+    except HTTPError as http_error:
+        if http_error.response.status_code in [403, 400]:
+
             response_msg = {
                 "status_code": status.HTTP_404_NOT_FOUND,
                 "details": f"A submission with id {submission_id} was not found",

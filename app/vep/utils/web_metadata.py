@@ -1,4 +1,5 @@
 import requests
+
 from vep.models.submission_form import GenomeAnnotationProvider
 
 from core.config import WEB_METADATA_API, VEP_SUPPORT_PATH
@@ -6,14 +7,20 @@ from core.config import WEB_METADATA_API, VEP_SUPPORT_PATH
 
 def get_vep_support_location(genome_id: str) -> str:
     try:
+        results_dict: dict = {}
         response = requests.get(
             WEB_METADATA_API
             + "genome/"
             + genome_id
-            + "/dataset/genebuild/attributes?attribute_names=vep.bgz_location"
+            + "/dataset/genebuild/attributes?attribute_names=vep.faa_location&attribute_names=vep.gff_location"
         )
         response.raise_for_status()
-        return VEP_SUPPORT_PATH + response.json()["attributes"].pop()["value"]
+        for result in response.json()["attributes"]:
+            if result["name"] == "vep.faa_location":
+                results_dict ["vep.faa_location"] = VEP_SUPPORT_PATH + result["value"]
+            else:
+                results_dict["vep.gff_location"] = VEP_SUPPORT_PATH + result["value"]
+        return results_dict
     except KeyError as e:
         e.args = (
             f"get_vep_support_location(): unexpected metadata API payload for f{genome_id}:",

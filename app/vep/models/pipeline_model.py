@@ -71,8 +71,8 @@ class ConfigIniParams(BaseModel):
 
     def create_config_ini_file(self, dir):
         vep_support_location = get_vep_support_location(self.genome_id)
-        self.gff = vep_support_location ["vep.gff_location"]
-        self.fasta = vep_support_location ["vep.gff_location"]
+        self.gff = vep_support_location["vep.gff_location"]
+        self.fasta = vep_support_location["vep.gff_location"]
         symbol = 1 if self.symbol else 0
         biotype = 1 if self.biotype else 0
 

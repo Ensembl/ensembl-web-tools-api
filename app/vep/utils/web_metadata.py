@@ -17,7 +17,7 @@ def get_vep_support_location(genome_id: str) -> str:
         response.raise_for_status()
         for result in response.json()["attributes"]:
             if result["name"] == "vep.faa_location":
-                results_dict ["vep.faa_location"] = VEP_SUPPORT_PATH + result["value"]
+                results_dict["vep.faa_location"] = VEP_SUPPORT_PATH + result["value"]
             else:
                 results_dict["vep.gff_location"] = VEP_SUPPORT_PATH + result["value"]
         return results_dict

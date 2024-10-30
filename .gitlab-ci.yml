@@ -32,6 +32,8 @@ stages:
   rules:
     - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"
       when: on_success
+    - when: never
+
 
 .branch-rules-review:
   rules:

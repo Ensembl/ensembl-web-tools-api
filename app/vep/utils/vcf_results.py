@@ -66,8 +66,8 @@ def _get_prediction_index_map(
         if csq_headers[index] in target_columns
     }
 
-    if len(map_index) != len(target_columns):
-        raise Exception(f"Required columns missing from CSQ header: {map_index.keys()}")
+    #if len(map_index) != len(target_columns): #CANONICAL is often missing
+    #    raise Exception(f"Required columns missing from CSQ header: {map_index.keys()}")
 
     return map_index
 

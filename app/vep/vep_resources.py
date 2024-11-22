@@ -88,7 +88,7 @@ async def submit_vep(request: Request):
     except MaxBodySizeException:
         return response_error_handler(result={"status": 413})
     except Exception as e:
-        logging.error(f"VEP submission error: {e}")
+        logging.exception(f"VEP submission error: {e}")
         return response_error_handler(result={"status": 500})
 
 

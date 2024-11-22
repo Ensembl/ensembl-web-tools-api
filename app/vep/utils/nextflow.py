@@ -1,5 +1,4 @@
 import requests
-import sys
 
 from vep.models.pipeline_model import PipelineParams
 from core.config import NF_TOKEN, SEQERA_API, NF_WORKSPACE_ID
@@ -51,9 +50,6 @@ async def get_workflow_status(submission_id):
         }
         _seqera_workflow_status_url = f"{SEQERA_API}/workflow/{submission_id}"
         params = {"workspaceId": NF_WORKSPACE_ID}
-        print(_seqera_workflow_status_url, file=sys.stderr)
-        print(params, file=sys.stderr)
-        print(_headers, file=sys.stderr)
         response = requests.get(
             _seqera_workflow_status_url, params=params, headers=_headers
         )

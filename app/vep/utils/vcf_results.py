@@ -107,7 +107,7 @@ def _get_alt_allele_details(
         else:
             cons = cons.split("&")
         if csq_values[index_map["Feature_type"]] == "Transcript":
-            is_cononical = (
+            is_canonical = (
                 _get_csq_value(csq_values, "CANONICAL", "NO", index_map) == "YES"
             )
 
@@ -124,7 +124,7 @@ def _get_alt_allele_details(
                     stable_id=_get_csq_value(csq_values, "Feature", "", index_map),
                     gene_stable_id=_get_csq_value(csq_values, "Gene", "", index_map),
                     biotype=_get_csq_value(csq_values, "BIOTYPE", "", index_map),
-                    is_canonical=is_cononical,
+                    is_canonical=is_canonical,
                     gene_symbol=_get_csq_value(csq_values, "SYMBOL", None, index_map),
                     consequences=cons,
                     strand=strand,

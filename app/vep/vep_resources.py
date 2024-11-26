@@ -217,7 +217,7 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
             logging.error(f"VEP fetch results error (upstream): {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.error(f"VEP fetch results error: {e}")
+        logging.exception(f"VEP fetch results error: {e}")
         return response_error_handler(result={"status": 500})
 
 

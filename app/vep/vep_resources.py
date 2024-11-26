@@ -16,12 +16,14 @@ limitations under the License.
 
 """
 
+from enum import Enum
+import json
 import logging
 
+from fastapi import Request, status, APIRouter
+from pydantic import FilePath
 from requests import HTTPError
 from starlette.responses import JSONResponse, FileResponse
-from fastapi import Request, status, APIRouter
-from enum import Enum
 
 from core.error_response import response_error_handler
 from core.logging import InterceptHandler
@@ -37,8 +39,6 @@ from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
 from vep.utils.nextflow import launch_workflow, get_workflow_status
 from vep.utils.vcf_results import get_results_from_path
 from vep.utils.web_metadata import get_genome_metadata
-import json
-from pydantic import FilePath
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -116,7 +116,7 @@ async def vep_status(request: Request, submission_id: str):
         return response_error_handler(result={"status": 500})
 
 
-def get_vep_results_file_path(input_vcf_file):
+def get_vep_results_file_path(input_vcf_file: str) -> FilePath:
     input_vcf_path = FilePath(input_vcf_file)
     vep_results_file = input_vcf_path.with_name(
         input_vcf_path.stem + "_VEP"
@@ -155,8 +155,8 @@ async def download_results(request: Request, submission_id: str):
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
 
-    except HTTPError as http_error:
-        if http_error.response.status_code in [403, 400]:
+    except HTTPError as e:
+        if e.response.status_code in [403, 400]:
 
             response_msg = {
                 "status_code": status.HTTP_404_NOT_FOUND,
@@ -217,7 +217,7 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
             logging.error(f"VEP fetch results error (upstream): {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.exception(f"VEP fetch results error: {e}")
+        logging.exception(f"VEP fetch results error (path: {results_file_path}): {e}")
         return response_error_handler(result={"status": 500})
 
 

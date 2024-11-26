@@ -66,7 +66,8 @@ def _get_prediction_index_map(
         if csq_headers[index] in target_columns
     }
 
-    #if len(map_index) != len(target_columns): #CANONICAL is often missing
+    # Check for expected CSQ columns. Should it raise exception?
+    #if len(map_index) != len(target_columns):
     #    raise Exception(f"Required columns missing from CSQ header: {map_index.keys()}")
 
     return map_index
@@ -207,7 +208,7 @@ def get_results_from_stream(
     vcf_records = vcfpy.Reader.from_stream(vcf_stream)
     return _get_results_from_vcfpy(page_size, page, total, vcf_records)
 
-
+import sys
 def _get_results_from_vcfpy(
     page_size: int, page: int, total: int, vcf_records: vcfpy.Reader
 ) -> model.VepResultsResponse:
@@ -215,9 +216,16 @@ def _get_results_from_vcfpy(
     APISpecification.yaml for a given VCFPY reader"""
 
     # Parse csq header
-    prediction_index_map = _get_prediction_index_map(
-        vcf_records.header.get_info_field_info("CSQ").description
-    )
+    try:
+        prediction_index_map = _get_prediction_index_map(
+            vcf_records.header.get_info_field_info("CSQ").description
+        )
+    except KeyError as e:
+        e.args = (
+            "_get_results_from_vcfpy(): CSQ header missing",
+            *e.args,
+        )
+        raise
 
     variants = []
     # populate variants page

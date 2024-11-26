@@ -66,10 +66,6 @@ def _get_prediction_index_map(
         if csq_headers[index] in target_columns
     }
 
-    # Check for expected CSQ columns. Should it raise exception?
-    #if len(map_index) != len(target_columns):
-    #    raise Exception(f"Required columns missing from CSQ header: {map_index.keys()}")
-
     return map_index
 
 
@@ -160,10 +156,18 @@ def _get_vcf_meta(vcf_path: FilePath) -> model.VcfMetadata:
             f"bcftools view -h {vcf_path} | wc -l",
             shell=True, text=True
         )
-        vcf_info = model.VcfMetadata(
-            variant_count=int(variant_count_str.split(":")[-1]),
-            header_count=int(header_count_str)
-        )
+        try:
+            vcf_info = model.VcfMetadata(
+                variant_count=int(variant_count_str.split(":")[-1]),
+                header_count=int(header_count_str)
+            )
+        except ValueError as e:
+            e.args = (
+                f"_get_vcf_meta: unexpected bcftools output: variant_count: {variant_count_str} | header_count: {header_count_str}",
+                *e.args,
+            )
+            raise
+
         with open(meta_path, "w") as meta_file:
             meta_file.write(vcf_info.model_dump_json())
     else:
@@ -178,10 +182,9 @@ def get_results_from_path(
     """Returns a page of VCF data from the given filepath.
     Slices the input VCF file to a smaller one
     and converts it to stream for get_results_from_stream"""
-    if not vcf_path.exists():
-        raise Exception(f"VEP results file not found at {vcf_path}")
 
     # Fetch a pageful of variant records with headers
+    vcf_path = FilePath("/nfs/public/rw/enswbsites/production/vep/tmp9lbix38o/test.vcf")
     vcf_info = _get_vcf_meta(vcf_path)
     total = vcf_info.variant_count
     page = max(page, 1) # normalize values
@@ -208,7 +211,6 @@ def get_results_from_stream(
     vcf_records = vcfpy.Reader.from_stream(vcf_stream)
     return _get_results_from_vcfpy(page_size, page, total, vcf_records)
 
-import sys
 def _get_results_from_vcfpy(
     page_size: int, page: int, total: int, vcf_records: vcfpy.Reader
 ) -> model.VepResultsResponse:
@@ -216,16 +218,14 @@ def _get_results_from_vcfpy(
     APISpecification.yaml for a given VCFPY reader"""
 
     # Parse csq header
-    try:
-        prediction_index_map = _get_prediction_index_map(
-            vcf_records.header.get_info_field_info("CSQ").description
-        )
-    except KeyError as e:
-        e.args = (
-            "_get_results_from_vcfpy(): CSQ header missing",
-            *e.args,
-        )
-        raise
+    csq_header = vcf_records.header.get_info_field_info("CSQ").description
+    if not csq_header:
+        raise Exception("CSQ header missing")
+
+    prediction_index_map = _get_prediction_index_map(csq_header)
+    # Required (other columns in CSQ use fallback values)
+    if "Allele" not in prediction_index_map:
+        raise Exception("Allele column missing from CSQ header")
 
     variants = []
     # populate variants page
@@ -233,6 +233,8 @@ def _get_results_from_vcfpy(
         for record in vcf_records:
             if record is None:
                 break
+            if "CSQ" not in record.INFO:
+                continue
             if record.CHROM.startswith("chr"):
                 record.CHROM = record.CHROM[3:]
 

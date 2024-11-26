@@ -146,7 +146,7 @@ def _get_alt_allele_details(
     )
 
 
-def _get_meta(vcf_path: FilePath) -> model.VcfMetadata:
+def _get_vcf_meta(vcf_path: FilePath) -> model.VcfMetadata:
     """Helper method to manage metainfo for a VCF file"""
 
     meta_path = vcf_path.with_name(META_FILE)
@@ -181,7 +181,7 @@ def get_results_from_path(
         raise Exception(f"VEP results file not found at {vcf_path}")
 
     # Fetch a pageful of variant records with headers
-    vcf_info = _get_meta(vcf_path)
+    vcf_info = _get_vcf_meta(vcf_path)
     total = vcf_info.variant_count
     page = max(page, 1) # normalize values
     page_size = min(max(page_size, 0), total)

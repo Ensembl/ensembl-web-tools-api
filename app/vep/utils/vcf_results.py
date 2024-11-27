@@ -26,7 +26,7 @@ META_FILE = "results_meta.json"
 # Taken from https://github.com/Ensembl/ensembl-hypsipyle
 # main/common/file_model/variant.py#L142
 # Needs to be moved into a shared module
-def _set_allele_type(alt_one_bp: bool, ref_one_bp: bool, ref_alt_equal_bp: bool):
+def _set_allele_type(alt_one_bp: bool, ref_one_bp: bool, ref_alt_equal_bp: bool) -> tuple[str,str]:
     """Create a allele type for a variant based on Variation
     teams logic using ref and largest alt allele sizes"""
     match [alt_one_bp, ref_one_bp, ref_alt_equal_bp]:
@@ -50,6 +50,13 @@ def _set_allele_type(alt_one_bp: bool, ref_one_bp: bool, ref_alt_equal_bp: bool)
             allele_type = "substitution"
             so_term = "SO:1000002"
     return allele_type, so_term
+
+def _get_variant_type(ref: str, alt: str) -> str:
+    """Helper function to infer variant type from allele values"""
+    if alt=="copy_number_variation":
+        return alt
+    else:
+        return _set_allele_type(len(alt) < 2, len(ref) < 2, len(alt) == len(ref))[0]
 
 
 def _get_prediction_index_map(
@@ -86,9 +93,7 @@ def _get_alt_allele_details(
     target alt allele and CSQ entires"""
     frequency = None
     consequences = []
-    allele_type = _set_allele_type(
-        len(alt) < 2, len(ref) < 2, len(alt) == len(ref)
-    )[0]
+    allele_type = _get_variant_type(ref, alt)
 
     for str_csq in csqs:
         csq_values = str_csq.split("|")
@@ -136,7 +141,7 @@ def _get_alt_allele_details(
             )
 
     return model.AlternativeVariantAllele(
-        allele_sequence=alt,
+        allele_sequence=("" if alt=="copy_number_variation" else alt),
         allele_type=allele_type,
         representative_population_allele_frequency=frequency,
         predicted_molecular_consequences=consequences,
@@ -184,7 +189,7 @@ def get_results_from_path(
     and converts it to stream for get_results_from_stream"""
 
     # Fetch a pageful of variant records with headers
-    vcf_path = FilePath("/nfs/public/rw/enswbsites/production/vep/tmp9lbix38o/test.vcf")
+    vcf_path = FilePath("/nfs/public/rw/enswbsites/production/vep/tmp9lbix38o/test2.vcf")
     vcf_info = _get_vcf_meta(vcf_path)
     total = vcf_info.variant_count
     page = max(page, 1) # normalize values
@@ -200,7 +205,6 @@ def get_results_from_path(
     vcf_stream = StringIO(vcf_headers + vcf_slice)
 
     return get_results_from_stream(page_size, page, total, vcf_stream)
-
 
 def get_results_from_stream(
     page_size: int, page: int, total: int, vcf_stream: StringIO
@@ -223,7 +227,7 @@ def _get_results_from_vcfpy(
         raise Exception("CSQ header missing")
 
     prediction_index_map = _get_prediction_index_map(csq_header)
-    # Required (other columns in CSQ use fallback values)
+    # Required CSQ column (the rest use fallback values)
     if "Allele" not in prediction_index_map:
         raise Exception("Allele column missing from CSQ header")
 
@@ -238,8 +242,6 @@ def _get_results_from_vcfpy(
             if record.CHROM.startswith("chr"):
                 record.CHROM = record.CHROM[3:]
 
-            ref_len = len(record.REF)
-
             # https://github.com/bihealth/vcfpy/blob/697768d032b6b476766fb4c524c91c8d24559330/vcfpy/record.py#L63
             # end does not look like it is implemented.
             # https://github.com/Penghui-Wang/PyVCF/blob/master/vcf/model.py#L190
@@ -247,9 +249,8 @@ def _get_results_from_vcfpy(
             location = model.Location(
                 region_name=record.CHROM,
                 start=record.POS,
-                end=record.POS + ref_len,
+                end=record.POS + len(record.REF),
             )
-            longest_alt = len(max((a.value for a in record.ALT), key=len))
 
             alt_allele_strings = list(set([
                 csq_string.split("|")[prediction_index_map["Allele"]]
@@ -261,6 +262,8 @@ def _get_results_from_vcfpy(
                 for alt in alt_allele_strings
             ]
 
+            longest_alt = max((a.value for a in record.ALT), key=len)
+
             variants.append(
                 model.Variant(
                     name=";".join(record.ID) if len(record.ID) > 0 else ".",
@@ -269,9 +272,7 @@ def _get_results_from_vcfpy(
                         allele_sequence=record.REF
                     ),
                     alternative_alleles=alt_alleles,
-                    allele_type=_set_allele_type(
-                        longest_alt < 2, ref_len < 2, longest_alt == ref_len
-                    )[0],
+                    allele_type=_get_variant_type(record.REF, longest_alt),
                 )
             )
 

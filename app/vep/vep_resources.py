@@ -83,12 +83,12 @@ async def submit_vep(request: Request):
             msg = e.response.json()["message"]
         except Exception:
             msg = e.response.text
-        logging.error(f"VEP submission error (upstream): {msg}: {e}")
+        logging.error(f"Upstream service error: {msg}: {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except MaxBodySizeException:
         return response_error_handler(result={"status": 413})
     except Exception as e:
-        logging.exception(f"VEP submission error: {e}")
+        logging.exception(f"{e.__class__.__name__}: {e}")
         return response_error_handler(result={"status": 500})
 
 
@@ -109,10 +109,10 @@ async def vep_status(request: Request, submission_id: str):
             msg = e.response.json()["message"]
         except Exception:
             msg = e.response.text
-        logging.error(f"VEP status error (upstream): {msg}: {e}")
+        logging.error(f"Upstream service error: {msg}: {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.error(f"VEP status error: {e}")
+        logging.error(f"{e.__class__.__name__}: {e}")
         return response_error_handler(result={"status": 500})
 
 
@@ -166,15 +166,16 @@ async def download_results(request: Request, submission_id: str):
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
         else:
-            logging.error(f"VEP download results error (upstream): {e}")
+            logging.error(f"Upstream service error: {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.error(f"VEP download results error: {e}")
+        logging.error(f"{e.__class__.__name__}: {e}")
         return response_error_handler(result={"status": 500})
 
 
 @router.get("/submissions/{submission_id}/results", name="view_results")
 async def fetch_results(request: Request, submission_id: str, page: int, per_page: int):
+    results_file_path = None
     try:
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
@@ -201,7 +202,6 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
             return JSONResponse(
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
-
     except HTTPError as e:
         if e.response.status_code in [403, 400]:
             response_msg = json.dumps(
@@ -214,10 +214,10 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
         else:
-            logging.error(f"VEP fetch results error (upstream): {e}")
+            logging.error(f"Upstream service error: {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.error(f"VEP fetch results error: {e.__class__.__name__}: {e} (filepath: {results_file_path})")
+        logging.error(f"{e.__class__.__name__}: {e} (VCF: {results_file_path})")
         return response_error_handler(result={"status": 500})
 
 
@@ -263,8 +263,8 @@ async def get_form_config(request: Request, genome_id: str):
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
         else:
-            logging.error(f"VEP form config error (upstream): {e}")
+            logging.error(f"Upstream service error: {e}")
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
-        logging.error(f"VEP form config error: {e}")
+        logging.error(f"{e.__class__.__name__}: {e}")
         return response_error_handler(result={"status": 500})

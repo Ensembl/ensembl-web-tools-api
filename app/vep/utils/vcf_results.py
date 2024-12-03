@@ -189,7 +189,6 @@ def get_results_from_path(
     and converts it to stream for get_results_from_stream"""
 
     # Fetch a pageful of variant records with headers
-    vcf_path = FilePath("/nfs/public/rw/enswbsites/production/vep/tmp9lbix38o/test2.vcf")
     vcf_info = _get_vcf_meta(vcf_path)
     total = vcf_info.variant_count
     page = max(page, 1) # normalize values
@@ -206,6 +205,7 @@ def get_results_from_path(
 
     return get_results_from_stream(page_size, page, total, vcf_stream)
 
+
 def get_results_from_stream(
     page_size: int, page: int, total: int, vcf_stream: StringIO
 ) -> model.VepResultsResponse:
@@ -214,6 +214,7 @@ def get_results_from_stream(
     # Load vcf
     vcf_records = vcfpy.Reader.from_stream(vcf_stream)
     return _get_results_from_vcfpy(page_size, page, total, vcf_records)
+
 
 def _get_results_from_vcfpy(
     page_size: int, page: int, total: int, vcf_records: vcfpy.Reader
@@ -237,8 +238,6 @@ def _get_results_from_vcfpy(
         for record in vcf_records:
             if record is None:
                 break
-            if "CSQ" not in record.INFO:
-                continue
             if record.CHROM.startswith("chr"):
                 record.CHROM = record.CHROM[3:]
 
@@ -252,13 +251,18 @@ def _get_results_from_vcfpy(
                 end=record.POS + len(record.REF),
             )
 
-            alt_allele_strings = list(set([
-                csq_string.split("|")[prediction_index_map["Allele"]]
-                for csq_string in record.INFO["CSQ"]
-            ]))
+            if "CSQ" not in record.INFO:
+                csq_strings = []
+                alt_allele_strings = record.ALT
+            else:
+                csq_strings = record.INFO["CSQ"]
+                alt_allele_strings = list(set([
+                    csq_string.split("|")[prediction_index_map["Allele"]]
+                    for csq_string in csq_strings
+                ]))
 
             alt_alleles = [
-                _get_alt_allele_details(alt, record.REF, record.INFO["CSQ"], prediction_index_map)
+                _get_alt_allele_details(alt, record.REF, csq_strings, prediction_index_map)
                 for alt in alt_allele_strings
             ]
 

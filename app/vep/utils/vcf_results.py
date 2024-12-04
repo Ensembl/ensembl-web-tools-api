@@ -87,7 +87,7 @@ def _get_csq_value(
 
 
 def _get_alt_allele_details(
-    alt: str, ref: str, csqs: list[str], index_map: dict[str, int]
+    ref: str, alt: str, csqs: list[str], index_map: dict[str, int]
 ) -> model.AlternativeVariantAllele:
     """Creates  AlternativeVariantAllele based on
     target alt allele and CSQ entires"""
@@ -253,7 +253,7 @@ def _get_results_from_vcfpy(
 
             if "CSQ" not in record.INFO:
                 csq_strings = []
-                alt_allele_strings = record.ALT
+                alt_allele_strings = [alt.value for alt in record.ALT]
             else:
                 csq_strings = record.INFO["CSQ"]
                 alt_allele_strings = list(set([
@@ -262,7 +262,7 @@ def _get_results_from_vcfpy(
                 ]))
 
             alt_alleles = [
-                _get_alt_allele_details(alt, record.REF, csq_strings, prediction_index_map)
+                _get_alt_allele_details(record.REF, alt, csq_strings, prediction_index_map)
                 for alt in alt_allele_strings
             ]
 

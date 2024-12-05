@@ -32,17 +32,13 @@ stages:
   rules:
     - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"
       when: on_success
-    - when: never
-
 
 .branch-rules-review:
   rules:
     - if: $CI_COMMIT_BRANCH != "main"
       when: on_success
-    - when: never
 
 .deploy:
-  stage: deploy
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
   before_script:
     - kubectl config use-context ${AGENT}
@@ -55,7 +51,6 @@ stages:
     - sed -i "s#<NFS_PATH>#${NFS_PATH}#g" deployment.yaml
     - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
     - kubectl apply -k ./
-
 
 .deploy-main:
   extends:
@@ -125,9 +120,9 @@ Setup-review:
     - sed -i "s#HOST#${NS}.review.ensembl.org#" ingress.yaml
     - kubectl apply -f ingress.yaml
     - git clone https://config-ro-user:${CONFIG_RO_TOKEN}@gitlab.ebi.ac.uk/ensembl-web/newsite-api-config-setup.git
-    - cd newsite-api-config-setup/dev/hl
-    - kubectl create secret generic ensembl-web-tools-api-secret --from-env-file=tools-api.secret --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl create configmap proxy-configmap --from-env-file=http-proxy.config --dry-run=client -o yaml | kubectl apply -f -
+    - cd newsite-api-config-setup
+    - kubectl create secret generic ensembl-web-tools-api-secret --from-env-file=review/tools-api.secret --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl create configmap proxy-configmap --from-env-file=dev/hl/http-proxy.config --dry-run=client -o yaml | kubectl apply -f -
 
 Review:
   extends:
@@ -163,7 +158,7 @@ Stop_review:
     - kubectl delete secret ensembl-web-tools-api-secret
     - kubectl -n ${DEV_NS} delete namespace ${NS} || echo "Please delete ${NS} branch in Ensembl-client to cleanup the review namespace"
 
-# Deploy dev branch
+# Deploy main branch to dev/staging
 Dev:
   extends:
     - .deploy-main
@@ -185,10 +180,11 @@ Staging:
     AGENT: ${STAGING_AGENT}
     NS: ${STAGING_NS}
 
-# Deploy main branch
+# Deploy main branch to production
 Production:
   extends:
     - .deploy-main
+  stage: deploy
   environment:
     name: production
   when: manual
@@ -199,6 +195,7 @@ Production:
 Fallback:
   extends:
     - .deploy-main
+  stage: deploy
   environment:
     name: fallback
   when: manual

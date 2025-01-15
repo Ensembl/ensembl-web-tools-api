@@ -69,10 +69,10 @@ class ConfigIniParams(BaseModel):
     gff: str = ""
     fasta: str = ""
 
-    def create_config_ini_file(self, dir):
+    def create_config_ini_file(self, directory):
         vep_support_location = get_vep_support_location(self.genome_id)
-        self.gff = vep_support_location["vep.gff_location"]
-        self.fasta = vep_support_location["vep.faa_location"]
+        self.gff = vep_support_location["gff_location"]
+        self.fasta = vep_support_location["faa_location"]
         symbol = 1 if self.symbol else 0
         biotype = 1 if self.biotype else 0
 
@@ -86,7 +86,7 @@ gff {self.gff}
 fasta {self.fasta}
 """
         try:
-            with open(os.path.join(dir, "config.ini"), "w") as ini_file:
+            with open(os.path.join(directory, "config.ini"), "w") as ini_file:
                 ini_file.write(config_ini)
             return ini_file
         except Exception as e:

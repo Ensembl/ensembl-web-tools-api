@@ -119,8 +119,8 @@ async def vep_status(request: Request, submission_id: str):
 def get_vep_results_file_path(input_vcf_file: str) -> FilePath:
     input_vcf_path = FilePath(input_vcf_file)
     vep_results_file = input_vcf_path.with_name(
-        input_vcf_path.stem + "_VEP"
-    ).with_suffix(".vcf.gz")
+        input_vcf_path.stem + "_VEP.vcf.gz"
+    )
     return vep_results_file
 
 

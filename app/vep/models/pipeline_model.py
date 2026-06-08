@@ -27,7 +27,7 @@ class VEPConfigParams(BaseModel):
     outdir: DirectoryPath
     bin_size: int = 3000
     sort: bool = True
-    vep_version: str = "114.0"
+    vep_version: str = "115.0"
 
     @model_serializer
     def vep_config_serialiser(self):
@@ -47,7 +47,7 @@ class LaunchParams(BaseModel):
     computeEnvId: str = NF_COMPUTE_ENV_ID
     pipeline: str = NF_PIPELINE_URL
     workDir: DirectoryPath
-    revision: str = "release/114"
+    revision: str = "release/115"
     pullLatest: bool = True
     configProfiles: list[str] = ["ensembl"]
     paramsText: VEPConfigParams

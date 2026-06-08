@@ -84,7 +84,7 @@ transcript_version {self.transcript_version}
 canonical {self.canonical}
 gff {self.gff}
 fasta {self.fasta}
-vep_version 115
+vep_version 114
 """
         try:
             with open(os.path.join(directory, "config.ini"), "w") as ini_file:

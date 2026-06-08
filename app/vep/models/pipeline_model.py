@@ -27,7 +27,7 @@ class VEPConfigParams(BaseModel):
     outdir: DirectoryPath
     bin_size: int = 3000
     sort: bool = True
-    vep_version: str = "115"
+    vep_version: str = "115.0"
 
     @model_serializer
     def vep_config_serialiser(self):

@@ -5,6 +5,7 @@ __pycache__
 .idea*
 .env
 .vscode
+.DS_Store
 report.xml
 tmpdir/
 venv*

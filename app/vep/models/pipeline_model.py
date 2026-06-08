@@ -27,6 +27,7 @@ class VEPConfigParams(BaseModel):
     outdir: DirectoryPath
     bin_size: int = 3000
     sort: bool = True
+    vep_version: str = "115.0"
 
     @model_serializer
     def vep_config_serialiser(self):
@@ -35,8 +36,9 @@ class VEPConfigParams(BaseModel):
         outdir_str = f'"outdir": "{self.outdir.as_posix()}"'
         bin_str = f'"bin_size": {self.bin_size}'
         sort_str = f'"sort": {"true" if self.sort else "false"}'
+        vep_version_str = f'"vep_version": "{self.vep_version}"'
         json_str = (
-            "{" + ", ".join([vcf_str, config_str, outdir_str, bin_str, sort_str]) + "}"
+            "{" + ", ".join([vcf_str, config_str, outdir_str, bin_str, sort_str, vep_version_str]) + "}"
         )
         return json_str
 
@@ -45,7 +47,7 @@ class LaunchParams(BaseModel):
     computeEnvId: str = NF_COMPUTE_ENV_ID
     pipeline: str = NF_PIPELINE_URL
     workDir: DirectoryPath
-    revision: str = "main"
+    revision: str = "release/115"
     pullLatest: bool = True
     configProfiles: list[str] = ["ensembl"]
     paramsText: VEPConfigParams

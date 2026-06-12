@@ -106,7 +106,8 @@ suffix_map = {"dna": "unmasked", "dna_sm": "softmasked"}  # dna/dna_sm/cdna/pep
 
 
 def get_db_path(genome_id: str, db_type: str) -> str:
-    return f"ensembl/{genome_id}/{suffix_map.get(db_type, db_type)}"
+    genome_id_prefix = genome_id[:3]
+    return f"ensembl/{genome_id_prefix}/{genome_id}/{suffix_map.get(db_type, db_type)}"
 
 
 # Submit a BLAST job to JD. Returns a resolvable for fetching the response.

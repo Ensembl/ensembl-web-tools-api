@@ -9,7 +9,7 @@ from core.config import API_PREFIX
 # Test config endpoint
 def test_read_config():
     with TestClient(app) as client:  # include @startup hook
-        with open("/data/blast_config.json") as f:
+        with open("/Users/bilal/git/ensembl-web-tools-api/data/blast_config.json") as f:
             config = json.load(f)
         response = client.get(API_PREFIX + "/blast/config")
         assert response.status_code == 200
@@ -26,10 +26,11 @@ def blast_payload():
 # Test BLAST database path inference
 def test_get_db_path(blast_payload):
     genome_id = blast_payload["genome_ids"][0]
+    genome_id_prefix = genome_id[:3]
     filename = get_db_path(genome_id, "dna_sm")
-    assert filename == f"ensembl/{genome_id}/softmasked"
+    assert filename == f"ensembl/{genome_id_prefix}/{genome_id}/softmasked"
     filename = get_db_path(genome_id, "pep")
-    assert filename.endswith("pep")
+    assert filename == f"ensembl/{genome_id_prefix}/{genome_id}/pep"
 
 
 # Test single BLAST job submission with a valid payload

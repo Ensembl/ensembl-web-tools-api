@@ -205,14 +205,25 @@ def test_clinvar_conflicting_breakdown_shape():
     ]
 
 
+def test_clinvar_id_from_bare_match_column():
+    """The variation id is read from the bare `ClinVar` match column (what VEP
+    fills with the matched record's ID), alongside the significance."""
+    csq = row_list(ClinVar="12345", ClinVar_CLNSIG="Pathogenic")
+    result = run("clinvar", csq)
+    assert result["id"] == "12345"
+    assert result["significance"] == ["Pathogenic"]
+
+
 def test_clinvar_non_conflicting_ignores_breakdown():
     """The `when` gate: CLNSIGCONF is present but must not be read, because the
     classification is not conflicting."""
     csq = row_list(
+        ClinVar="12345",
         ClinVar_CLNSIG="Pathogenic",
         ClinVar_CLNSIGCONF="Likely_pathogenic_(6)",
     )
     assert run("clinvar", csq) == {
+        "id": "12345",
         "significance": ["Pathogenic"],
         "conflicting_breakdown": [],
     }
@@ -222,10 +233,12 @@ def test_clinvar_when_matches_list_membership_not_substring():
     """A value that merely embeds the conflicting term must not trigger the
     breakdown — the condition is membership of the '&'-split list."""
     csq = row_list(
+        ClinVar="678",
         ClinVar_CLNSIG="Not_" + CONFLICTING,
         ClinVar_CLNSIGCONF="Benign_(2)",
     )
     assert run("clinvar", csq) == {
+        "id": "678",
         "significance": ["Not_" + CONFLICTING],
         "conflicting_breakdown": [],
     }

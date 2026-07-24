@@ -1082,6 +1082,7 @@
         "scope": "allele",
         "output": "clinvar",
         "csq_fields": [
+          "ClinVar",
           "ClinVar_CLNSIG",
           "ClinVar_CLNSIGCONF"
         ],
@@ -1089,6 +1090,12 @@
           "ClinVar_CLNSIG"
         ],
         "targets": [
+          {
+            "field": "id",
+            "from": "ClinVar",
+            "transform": "scalar",
+            "type": "string"
+          },
           {
             "field": "significance",
             "from": "ClinVar_CLNSIG",
@@ -2798,6 +2805,19 @@
               "default": false
             },
             "blocks": [
+              {
+                "kind": "rows",
+                "rows": [
+                  {
+                    "label": "ClinVar variant ID",
+                    "from": "clinvar.id",
+                    "link": {
+                      "kind": "external",
+                      "template": "https://www.ncbi.nlm.nih.gov/clinvar/variation/{value}/"
+                    }
+                  }
+                ]
+              },
               {
                 "kind": "rows",
                 "when": {

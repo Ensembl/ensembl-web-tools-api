@@ -618,7 +618,7 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
     # Variant Impact Predictions panel: EVE (Missense).
     if "pathogenicity_predictions" in by_id:
         by_id["pathogenicity_predictions"]["options"].append(
-            {"id": "eve", "label": "EVE", "type": "boolean", "default": False, "category": "Missense"}
+            {"id": "eve", "label": "EVE & popEVE", "type": "boolean", "default": False, "category": "Missense"}
         )
 
     # Variant associations: OpenTargets + Phenotypes.

@@ -402,6 +402,12 @@ class ConfigIniParams(BaseModel):
     gnomad_sv_af_nfe: bool = False
     gnomad_sv_af_rmi: bool = False
     gnomad_sv_af_sas: bool = False
+    # gnomAD SV v2.1 (human GRCh37) reuses the shared gnomad_sv master / overall /
+    # afr / amr / eas ids above; it only adds these two continental populations
+    # (European, Other). Its columns are prefix-named (`AFR_AF`) — see the GRCh37
+    # spec's gnomad_sv entry.
+    gnomad_sv_af_eur: bool = False
+    gnomad_sv_af_oth: bool = False
     # gnomAD CNV v4.1 (human GRCh38). Like gnomAD SV but *sample* frequencies
     # (SF) and no Amish; "remaining" spelled out.
     gnomad_cnv: bool = False

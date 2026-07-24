@@ -581,8 +581,26 @@ def test_af_source_descriptor_grch37_v2_grammar():
     assert rf.af_source_descriptor("gnomAD_exomes_AF_popmax", spec)["label"] == (
         "Maximum across populations"
     )
-    # SV/CNV/All of Us aren't in the GRCh37 spec, so their columns are unrecognised.
-    assert rf.af_source_descriptor("gnomAD_SV_AF", spec) is None
+    # CNV / All of Us aren't in the GRCh37 spec, so their columns are unrecognised.
+    assert rf.af_source_descriptor("gnomAD_CNV_SF", spec) is None
+
+
+def test_af_source_descriptor_grch37_sv_v2_prefix_grammar():
+    # gnomAD SV v2 (GRCh37) populations are PREFIX-named (`gnomAD_SV_AFR_AF`, not
+    # v4's suffix `gnomAD_SV_AF_afr`); the population code is the bare uppercase
+    # continental code, matching the parse key.
+    spec = load_merged_spec("human_grch37").parsing
+    assert rf.af_source_descriptor("gnomAD_SV_AFR_AF", spec) == {
+        "key": "gnomAD_SV_AFR_AF",
+        "source": "gnomad_sv",
+        "population": "AFR",
+        "label": "African",
+    }
+    assert rf.af_source_descriptor("gnomAD_SV_AF", spec)["population"] == ""  # overall
+    assert rf.af_source_descriptor("gnomAD_SV_EUR_AF", spec)["label"] == "European"
+    # the id / SVTYPE columns are not AF sources
+    assert rf.af_source_descriptor("gnomAD_SV", spec) is None
+    assert rf.af_source_descriptor("gnomAD_SV_SVTYPE", spec) is None
 
 
 def test_af_columns_discovers_v2_subset_columns():

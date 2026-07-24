@@ -1352,6 +1352,48 @@
             ]
           }
         ]
+      },
+      {
+        "plugin": "gnomad_sv_v2",
+        "scope": "allele",
+        "output": "frequencies.gnomad_sv",
+        "csq_fields": [
+          "gnomAD_SV",
+          "gnomAD_SV_SVTYPE",
+          "gnomAD_SV_AF"
+        ],
+        "require_any_output": [
+          "id"
+        ],
+        "targets": [
+          {
+            "field": "id",
+            "from": "gnomAD_SV",
+            "transform": "scalar",
+            "type": "string"
+          },
+          {
+            "field": "svtype",
+            "from": "gnomAD_SV_SVTYPE",
+            "transform": "scalar",
+            "type": "string"
+          },
+          {
+            "field": "overall",
+            "from": "gnomAD_SV_AF",
+            "transform": "scalar",
+            "type": "float"
+          },
+          {
+            "field": "populations",
+            "transform": "pattern_map",
+            "type": "float",
+            "from_pattern": "gnomAD_SV_{pop}_AF",
+            "exclude": [
+              "gnomAD_SV_AF"
+            ]
+          }
+        ]
       }
     ]
   },

@@ -665,6 +665,27 @@ def test_gnomad_genomes_v2_has_no_sas_or_non_cancer(monkeypatch, tmp_path):
     assert re.search(r"fields=([^,]+),format", line).group(1) == "AF"
 
 
+def test_gnomad_sv_v2_grch37_prefix_named_populations(monkeypatch, tmp_path):
+    # GRCh37 SV is v2: 5 continental pops, PREFIX-named (`AFR_AF`, not v4's
+    # `AF_afr`). SVTYPE rides on the master; the overall AF is on by default.
+    def sv_fields(**kwargs):
+        line = find_line(
+            build_lines_37(monkeypatch, tmp_path, gnomad_sv=True, **kwargs),
+            "short_name=gnomAD_SV",
+        )
+        assert line is not None and "gnomad_v2.1_sv.sites_AF.vcf.gz" in line
+        return re.search(r"fields=([^,]+)", line).group(1)
+
+    assert sv_fields() == "SVTYPE%AF"  # default: master + overall AF
+    assert sv_fields(
+        gnomad_sv_af_afr=True, gnomad_sv_af_eur=True, gnomad_sv_af_oth=True
+    ) == "SVTYPE%AF%AFR_AF%EUR_AF%OTH_AF"
+    assert sv_fields(
+        gnomad_sv_af_afr=True, gnomad_sv_af_amr=True, gnomad_sv_af_eas=True,
+        gnomad_sv_af_eur=True, gnomad_sv_af_oth=True,
+    ) == "SVTYPE%AF%AFR_AF%AMR_AF%EAS_AF%EUR_AF%OTH_AF"
+
+
 # --- 12. gnomAD genomes custom line (no UKB subset; ami/remaining/grpmax) -----
 
 

@@ -644,6 +644,75 @@
         }
       },
       {
+        "id": "gnomad_sv",
+        "order": 57,
+        "parsed_as": [
+          "gnomad_sv_v2"
+        ],
+        "config": {
+          "emit": "custom",
+          "params": {
+            "file": "{path}/gnomad_v2.1_sv.sites_AF.vcf.gz",
+            "type": "exact",
+            "short_name": "gnomAD_SV",
+            "format": "vcf",
+            "overlap_cutoff": {
+              "from_option": "gnomad_sv_overlap_cutoff",
+              "as": "value"
+            }
+          },
+          "fields": {
+            "builder": "gnomad_structural",
+            "join": "%",
+            "populations": [
+              {
+                "option": "gnomad_sv",
+                "codes": [
+                  "SVTYPE"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af",
+                "codes": [
+                  "AF"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_afr",
+                "codes": [
+                  "AFR_AF"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_amr",
+                "codes": [
+                  "AMR_AF"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_eas",
+                "codes": [
+                  "EAS_AF"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_eur",
+                "codes": [
+                  "EUR_AF"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_oth",
+                "codes": [
+                  "OTH_AF"
+                ]
+              }
+            ]
+          },
+          "fields_after": "format"
+        }
+      },
+      {
         "id": "clinvar_short",
         "order": 60,
         "parsed_as": [

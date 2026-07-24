@@ -363,27 +363,41 @@ _GNOMAD_SV_POPULATIONS = [
     ("sas", "South Asian"),
 ]
 
+# gnomAD SV v2.1 (human GRCh37): 5 continental populations, PREFIX-named in the
+# VCF (`AFR_AF`, not v4's suffix `AF_afr`) and broader (EUR = all Europeans, not
+# NFE). (form-option suffix [lowercase], VCF column code [uppercase], label).
+_GNOMAD_SV_V2_POPULATIONS = [
+    ("afr", "AFR", "African"),
+    ("amr", "AMR", "Admixed American"),
+    ("eas", "EAS", "East Asian"),
+    ("eur", "EUR", "European"),
+    ("oth", "OTH", "Other"),
+]
+
 
 def _gnomad_sv_af_option_id(code: str) -> str:
     """Form option id for a gnomAD SV AF population (`""` = overall)."""
     return "gnomad_sv_af" if code == "" else f"gnomad_sv_af_{code}"
 
 
-def _gnomad_sv_option() -> dict:
-    """The gnomAD SV v4.1 option: an overlap-cutoff select plus per-population AF
-    toggles (overall AF pre-selected). SVTYPE + the SV id ride along always."""
+def _gnomad_sv_option_from(label: str, populations: list[tuple[str, str]]) -> dict:
+    """A gnomAD SV option: an overlap-cutoff select plus per-population AF toggles
+    (overall AF pre-selected). SVTYPE + the SV id ride along always. `populations`
+    is (option-code, label), option-code "" = the overall AF. Shared by the v4.1
+    (GRCh38) and v2.1 (GRCh37) options — they differ only in label + population
+    set (the differing VCF column codes live in each assembly's config entry)."""
     population_options = [
         {
             "id": _gnomad_sv_af_option_id(code),
-            "label": label,
+            "label": pop_label,
             "type": "boolean",
             "default": code == "",  # overall AF pre-selected
         }
-        for code, label in _GNOMAD_SV_POPULATIONS
+        for code, pop_label in populations
     ]
     return {
         "id": "gnomad_sv",
-        "label": "gnomAD SV v4.1",
+        "label": label,
         "type": "boolean",
         "default": False,
         "sub_options": [
@@ -401,6 +415,17 @@ def _gnomad_sv_option() -> dict:
             {"type": "group", "options": population_options},
         ],
     }
+
+
+def _gnomad_sv_option() -> dict:
+    return _gnomad_sv_option_from("gnomAD SV v4.1", _GNOMAD_SV_POPULATIONS)
+
+
+def _gnomad_sv_v2_option() -> dict:
+    populations = [("", "All")] + [
+        (code, label) for code, _col, label in _GNOMAD_SV_V2_POPULATIONS
+    ]
+    return _gnomad_sv_option_from("gnomAD SV v2.1", populations)
 
 
 # gnomAD CNV v4.1 (human GRCh38): like gnomAD SV, but *sample* frequencies (SF)
@@ -482,10 +507,14 @@ _ALLOFUS_POPULATION_LABELS = {
     code: label for code, label in _ALLOFUS_POPULATIONS if code != "all"
 }
 
-# gnomAD SV population codes -> labels ("" is the overall AF -> "All").
+# gnomAD SV population codes -> labels ("" is the overall AF -> "All"). Both the
+# v4.1 (GRCh38, suffix-named, lowercase codes) and v2.1 (GRCh37, prefix-named,
+# UPPERCASE column codes) sets — disjoint by case, so they coexist in one map.
+# The v2 keys are the VCF column codes (AFR/AMR/…), which is what the parse and
+# `af_source_descriptor` derive from the columns.
 _GNOMAD_SV_POPULATION_LABELS = {
     code: label for code, label in _GNOMAD_SV_POPULATIONS if code != ""
-}
+} | {col: label for _code, col, label in _GNOMAD_SV_V2_POPULATIONS}
 
 # gnomAD CNV population codes -> labels ("" is the overall SF -> "All").
 _GNOMAD_CNV_POPULATION_LABELS = {
@@ -820,13 +849,14 @@ def _add_human_grch37_options(panels: list[dict]) -> None:
                 {"id": "clinvar_sv", "label": "Structural variants", "type": "boolean", "default": False}
             )
 
-    # Allele frequencies: gnomAD exomes/genomes v2 (the GRCh37 shape).
+    # Allele frequencies: gnomAD exomes/genomes/SV v2 (the GRCh37 shape).
     panels.append({
         "id": "allele_frequencies",
         "label": "Allele frequencies",
         "options": [
             _gnomad_v2_exomes_option(),
             _gnomad_v2_genomes_option(),
+            _gnomad_sv_v2_option(),
         ],
     })
 

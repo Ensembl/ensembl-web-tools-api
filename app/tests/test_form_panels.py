@@ -128,9 +128,9 @@ def test_human_grch37_has_37_38_options_but_not_38_only():
     assert "utrannotator" in opts
     # the reuse-tier extras (go / phenotypes / intact / clinvar_sv) are offered
     assert HUMAN_37_38_EXTRA_OPTION_IDS <= opts
-    # gnomAD v2 exomes/genomes, but not the GRCh38-only AF sources
-    assert {"gnomad_exomes", "gnomad_genomes"} <= opts
-    assert opts.isdisjoint({"allofus", "gnomad_sv", "gnomad_cnv"})
+    # gnomAD v2 exomes/genomes/SV, but not the GRCh38-only AF sources (allofus/cnv)
+    assert {"gnomad_exomes", "gnomad_genomes", "gnomad_sv"} <= opts
+    assert opts.isdisjoint({"allofus", "gnomad_cnv"})
     # but none of the GRCh38-only ones
     assert opts.isdisjoint(GRCH38_ONLY_OPTION_IDS)
 
@@ -351,6 +351,33 @@ def test_gnomad_v2_genomes_structure_grch37():
     assert [o["id"] for o in subpop_grp["options"]] == [
         f"gnomad_genomes_nfe_{sp}" for sp in ["seu", "onf", "nwe", "est"]
     ]
+
+
+def test_gnomad_sv_v2_structure_grch37():
+    # GRCh37 SV is v2: 5 continental populations (afr/amr/eas/eur/oth) — broader
+    # and fewer than v4.1's 11 — plain toggles + the overlap-cutoff select, no sex.
+    panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh37.p13")
+    af = next(p for p in panels if p["id"] == "allele_frequencies")
+    sv = next(o for o in af["options"] if o["id"] == "gnomad_sv")
+    assert sv["label"] == "gnomAD SV v2.1"
+
+    assert any(
+        s.get("id") == "gnomad_sv_overlap_cutoff" and s["type"] == "select"
+        for s in sv["sub_options"]
+    )
+    group = next(s for s in sv["sub_options"] if s.get("type") == "group")
+    assert [o["id"] for o in group["options"]] == [
+        "gnomad_sv_af",
+        *(f"gnomad_sv_af_{p}" for p in ["afr", "amr", "eas", "eur", "oth"]),
+    ]
+    assert all("sub_options" not in o for o in group["options"])  # no sex splits
+    # overall AF pre-selected, populations opt-in; the v4-only pops aren't offered
+    af_opts = {o["id"]: o for o in group["options"]}
+    assert af_opts["gnomad_sv_af"]["default"] is True
+    assert af_opts["gnomad_sv_af_eur"]["default"] is False
+    ids = option_ids(panels)
+    assert "gnomad_sv_af_eur" in ids and "gnomad_sv_af_oth" in ids
+    assert ids.isdisjoint({"gnomad_sv_af_ami", "gnomad_sv_af_nfe", "gnomad_sv_af_sas"})
 
 
 def test_allofus_structure_grch38():

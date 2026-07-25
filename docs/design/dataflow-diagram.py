@@ -19,28 +19,30 @@ CHAR = 6.7
 EVENTS = [
     ("phase", "Phase 1  —  Build the input form"),
     ("self", "FE", "User selects species + assembly"),
-    ("msg", "FE", "BE", "GET form_config  (species select, relayed)", "req"),
-    ("msg", "BE", "API", "Endpoint 1 — options + input-render spec", "req"),
+    ("msg", "FE", "BE", "GET form_config/{genome_id}", "req"),
+    ("msg", "BE", "API", "Endpoint 1 — options + input-render spec", "req", "API"),
     ("msg", "API", "BE", "options + render spec", "res"),
-    ("self", "BE", "Decide which panels show (activation)"),
-    ("msg", "BE", "FE", "panels, options, render info", "res"),
-    ("self", "FE", "Render input form (generic renderers)"),
+    ("self", "BE", "get_visible_panels — which panels/options show"),
+    ("msg", "BE", "FE", "panels + options + help", "res", "CONTRACT"),
+    ("self", "FE", "Render the form (generic renderers)"),
+    ("note", "Contract: an option id IS its submission parameter name, and every\nid must be a ConfigIniParams field — the form round-trips into config.ini"),
 
     ("phase", "Phase 2  —  Submit"),
     ("self", "FE", "User picks options + VCF, clicks Run"),
-    ("msg", "FE", "BE", "POST submissions — options + VCF", "req"),
-    ("msg", "BE", "API", "Endpoint 2 — config + parsing + display", "req"),
-    ("msg", "API", "BE", "config + parsing spec + display spec", "res"),
-    ("note", "Check config / parsing / display agree —\non failure retry the fetch (max 3), then fail + log"),
-    ("self", "BE", "Merge with always-on base config"),
-    ("self", "BE", "Pin parsing + display spec to the job"),
+    ("msg", "FE", "BE", "POST submissions — parameters + VCF", "req", "CONTRACT"),
+    ("msg", "BE", "API", "Endpoint 2 — config + parsing + display", "req", "API"),
+    ("msg", "API", "BE", "the merged spec for those options", "res"),
+    ("note", "Load-time check: config \u21c4 parsing \u21c4 display agree\n(refs resolve, formats suit the parsed types)"),
+    ("self", "BE", "Merge with the always-on base config"),
+    ("self", "BE", "Emit config.ini (config_interpreter)", "CONTRACT"),
+    ("self", "BE", "Pin: spec + expected columns + panels", "CONTRACT"),
     ("msg", "BE", "PIPE", "Launch Nextflow run via Seqera", "req", "PROD"),
     ("msg", "BE", "PIPE", "Dump config.ini to dev-data", "req", "DEV"),
     ("msg", "BE", "FE", "submission_id", "res"),
 
     ("phase", "Phase 3  —  Run the pipeline"),
-    ("self", "PIPE", "Nextflow runs, output mounted", "PROD"),
-    ("self", "PIPE", "Output VCF hand-placed in dev-data", "DEV"),
+    ("self", "PIPE", "VEP + plugins run; output VCF mounted", "PROD"),
+    ("self", "PIPE", "Manual HPC run; VCF hand-placed in dev-data", "DEV"),
 
     ("phase", "Phase 4  —  Poll status  (every 15s, until settled)"),
     ("msg", "FE", "BE", "GET status", "req"),
@@ -51,10 +53,10 @@ EVENTS = [
 
     ("phase", "Phase 5  —  Results"),
     ("msg", "FE", "BE", "GET results  (page, filters)", "req"),
-    ("note", "Check output headers cover the enabled options (extras ignored) —\nif missing, pipeline reruns to add them (max 3); dev warns"),
-    ("self", "BE", "Parse output (pinned parsing spec)"),
-    ("msg", "BE", "FE", "annotations + pinned display spec", "res"),
-    ("self", "FE", "Render results (generic + custom kit)"),
+    ("note", "Contract: the output must carry the pinned expected columns.\nMissing = fail; extra columns are ignored"),
+    ("self", "BE", "Parse with the PINNED spec, not the current one", "CONTRACT"),
+    ("msg", "BE", "FE", "annotations + pinned display spec + panels", "res", "CONTRACT"),
+    ("self", "FE", "Render results from the spec (generic renderer)"),
 
     ("phase", "Phase 6  —  Later: filter + download"),
     ("msg", "FE", "BE", "GET results?filters    /    GET download", "req"),
@@ -71,10 +73,13 @@ def esc(t):
     return html.escape(t, quote=True)
 
 
+TAG_CLASS = {"PROD": "tag-prod", "DEV": "tag-dev", "CONTRACT": "tag-ct", "API": "tag-api"}
+
+
 def tag_pill(x_right, cy, tag):
-    w = 38
+    w = 38 if tag in ("PROD", "DEV") else len(tag) * 6.2 + 14
     x = x_right - w
-    cls = "tag-prod" if tag == "PROD" else "tag-dev"
+    cls = TAG_CLASS[tag]
     frags.append(
         f'<rect x="{x:.1f}" y="{cy-8:.1f}" width="{w}" height="16" rx="8" class="{cls}"/>'
         f'<text x="{x+w/2:.1f}" y="{cy:.1f}" class="tag-t" text-anchor="middle" dominant-baseline="central">{tag}</text>'
@@ -183,7 +188,7 @@ PAGE = r"""<title>VEP end-to-end dataflow</title>
     --band-fe:#eceef1; --band-api:#e6f0f4; --band-be:#eaebf6; --band-pipe:#eeeede;
     --hd-fe:#6b7684; --hd-api:#1c6f8c; --hd-be:#4a4f8c; --hd-pipe:#6a6a3a;
     --ll-fe:#9aa6b2; --ll-api:#4f9db3; --ll-be:#8288cc; --ll-pipe:#a2a267;
-    --tag-prod:#3f6ea5; --tag-dev:#8a7a3a;
+    --tag-prod:#3f6ea5; --tag-dev:#8a7a3a; --tag-ct:#8a3d6b; --tag-api:#1c6f8c;
   }
   @media (prefers-color-scheme: dark){:root{
     --paper:#0d1116; --surface:#161d25; --ink:#eaeff4; --muted:#9aa5b1; --faint:#6f7b87;
@@ -193,7 +198,7 @@ PAGE = r"""<title>VEP end-to-end dataflow</title>
     --band-fe:#161d27; --band-api:#122b34; --band-be:#1a1c35; --band-pipe:#22220f;
     --hd-fe:#7c8794; --hd-api:#2b86a2; --hd-be:#5c62b0; --hd-pipe:#84843f;
     --ll-fe:#5a6673; --ll-api:#3d7f94; --ll-be:#5a5fa0; --ll-pipe:#6f6f45;
-    --tag-prod:#5a86bd; --tag-dev:#b6a34a;
+    --tag-prod:#5a86bd; --tag-dev:#b6a34a; --tag-ct:#d081ac; --tag-api:#5fb4c8;
   }}
   :root[data-theme="light"]{
     --paper:#f4f6f8; --surface:#ffffff; --ink:#131820; --muted:#59636f; --faint:#808b97;
@@ -203,7 +208,7 @@ PAGE = r"""<title>VEP end-to-end dataflow</title>
     --band-fe:#eceef1; --band-api:#e6f0f4; --band-be:#eaebf6; --band-pipe:#eeeede;
     --hd-fe:#6b7684; --hd-api:#1c6f8c; --hd-be:#4a4f8c; --hd-pipe:#6a6a3a;
     --ll-fe:#9aa6b2; --ll-api:#4f9db3; --ll-be:#8288cc; --ll-pipe:#a2a267;
-    --tag-prod:#3f6ea5; --tag-dev:#8a7a3a;
+    --tag-prod:#3f6ea5; --tag-dev:#8a7a3a; --tag-ct:#8a3d6b; --tag-api:#1c6f8c;
   }
   :root[data-theme="dark"]{
     --paper:#0d1116; --surface:#161d25; --ink:#eaeff4; --muted:#9aa5b1; --faint:#6f7b87;
@@ -213,7 +218,7 @@ PAGE = r"""<title>VEP end-to-end dataflow</title>
     --band-fe:#161d27; --band-api:#122b34; --band-be:#1a1c35; --band-pipe:#22220f;
     --hd-fe:#7c8794; --hd-api:#2b86a2; --hd-be:#5c62b0; --hd-pipe:#84843f;
     --ll-fe:#5a6673; --ll-api:#3d7f94; --ll-be:#5a5fa0; --ll-pipe:#6f6f45;
-    --tag-prod:#5a86bd; --tag-dev:#b6a34a;
+    --tag-prod:#5a86bd; --tag-dev:#b6a34a; --tag-ct:#d081ac; --tag-api:#5fb4c8;
   }
   *{box-sizing:border-box}
   body{margin:0}
@@ -261,6 +266,7 @@ PAGE = r"""<title>VEP end-to-end dataflow</title>
   .num-c{fill:var(--d-arrow)}
   .num-t{fill:var(--d-plate);font-size:9px;font-weight:700}
   .tag-prod{fill:var(--tag-prod)} .tag-dev{fill:var(--tag-dev)}
+  .tag-ct{fill:var(--tag-ct)} .tag-api{fill:var(--tag-api)}
   .tag-t{fill:#fff;font-size:8.5px;font-weight:700;letter-spacing:.03em}
   .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:.9rem;margin:2.4rem 0 0}
   .card{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:1rem 1.05rem}
@@ -283,6 +289,9 @@ PAGE = r"""<title>VEP end-to-end dataflow</title>
   .row p b{color:var(--ink);font-weight:600}
   .foot{margin:2.6rem 0 0;padding-top:1rem;border-top:1px solid var(--line);font-size:.8rem;color:var(--faint);
     font-family:var(--fs-mono);line-height:1.7}
+  .pill{font-family:var(--fs-mono);font-size:.62rem;color:#fff;padding:.12rem .42rem;
+        border-radius:7px;letter-spacing:.05em}
+  .pill.ct{background:var(--tag-ct)} .pill.api{background:var(--tag-api)}
   .foot b{color:var(--muted)}
 </style>
 <div class="wrap"><div class="col">
@@ -294,6 +303,8 @@ PAGE = r"""<title>VEP end-to-end dataflow</title>
     <span class="chip"><span class="dot api"></span>New API <small>currently a JSON file</small></span>
     <span class="chip"><span class="dot be"></span>Backend <small>ensembl-web-tools-api</small></span>
     <span class="chip"><span class="dot pipe"></span>Pipeline <small>Nextflow/Seqera · dev-data</small></span>
+    <span class="chip"><span class="pill ct">CONTRACT</span><small>where one side must match the other</small></span>
+    <span class="chip"><span class="pill api">API</span><small>becomes an annotation-API call</small></span>
   </div>
   <div class="plate-shell">
     <div class="plate-cap"><span>Sequence — one submission, start to finish</span><span>dev / prod branches tagged inline</span></div>

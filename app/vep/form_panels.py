@@ -138,7 +138,7 @@ _HUMAN_37_38_PANELS: list[dict] = [
     },
     {
         "id": "variant_associations",
-        "label": "Variant associations",
+        "label": "Phenotype & disease associations",
         "options": [
             {"id": "geno2mp", "label": "Geno2MP", "type": "boolean", "default": False},
             # ClinVar master: two independent sub-option toggles. "Short variants"
@@ -621,7 +621,7 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
             {"id": "eve", "label": "EVE & popEVE", "type": "boolean", "default": False, "category": "Missense"}
         )
 
-    # Variant associations: OpenTargets + Phenotypes.
+    # Phenotype & disease associations: OpenTargets + Phenotypes.
     if "variant_associations" in by_id:
         by_id["variant_associations"]["options"].extend([
             {"id": "opentargets", "label": "OpenTargets", "type": "boolean", "default": False},

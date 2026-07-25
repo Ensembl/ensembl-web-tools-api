@@ -10,9 +10,9 @@ Deliberately the *least* detailed of the three diagrams beside it:
 
 Re-run after edits; writes the HTML next to this script.
 """
-import html, os
+import html, os, re
 
-W, H = 1200, 620
+W, H = 1260, 620
 
 # --- boxes -------------------------------------------------------------------
 # id: (x, y, w, h, title, subtitle, kind)   kind: repo | seam | ext
@@ -21,8 +21,8 @@ W, H = 1200, 620
 # the whole lower right for the margin notes.
 BOX = {
     "FE":   (60,  140, 240, 116, "Frontend", "standalone-web-vep", "repo"),
-    "BE":   (560, 140, 260, 116, "Backend", "ensembl-web-tools-api · vep", "repo"),
-    "PIPE": (920, 140, 230, 116, "Pipeline", "Nextflow / Seqera", "ext"),
+    "BE":   (600, 140, 260, 116, "Backend", "ensembl-web-tools-api · vep", "repo"),
+    "PIPE": (980, 140, 230, 116, "Pipeline", "Nextflow / Seqera", "ext"),
     "API":  (400, 420, 300, 104, "Metadata API", "a JSON file today", "seam"),
 }
 
@@ -36,22 +36,22 @@ FLOWS = [
 ]
 # BE ↔ Pipeline, same row
 SIDE = [
-    ("BE", "PIPE", 3, "run + poll", 176),
-    ("PIPE", "BE", 3, "output VCF", 220),
+    ("BE", "PIPE", 3, "run + poll", 180),
+    ("PIPE", "BE", 3, "output VCF", 224),
 ]
 # (from, to, phase, label, x on the source edge, y of the horizontal run,
 #  x on the target edge) — separate run heights so they never sit on each other.
 DOWN = [
-    ("BE", "API", 1, "which options exist for this genome", 640, 320, 600),
-    ("API", "BE", 2, "config + parsing + display for them", 480, 372, 760),
+    ("BE", "API", 1, "which options exist for this genome", 680, 320, 600),
+    ("API", "BE", 2, "config + parsing + display for them", 480, 372, 800),
 ]
 
 # --- margin notes (the sketch's scribbles), in the free lower-right ----------
 NOTES = [
-    (860, 424, "②  options → config.ini,"),
-    (860, 446, "     and pin the spec to the job"),
-    (860, 478, "④  parse with the PINNED spec,"),
-    (860, 500, "     never the current one"),
+    (900, 424, "②  options → config.ini,"),
+    (900, 446, "     and pin the spec to the job"),
+    (900, 478, "④  parse with the PINNED spec,"),
+    (900, 500, "     never the current one"),
 ]
 CAPTION = [
     (60, 424, "①  Pick a species and the form is built from"),
@@ -147,7 +147,7 @@ for frm, to, phase, label, y in SIDE:
         f'<text x="{mid}" y="{y}" class="lbl" text-anchor="middle" dominant-baseline="central">{esc(label)}</text>'
     )
     if ltr:
-        num(x1 + 26, y, phase)
+        num(mid, y - 26, phase)   # above: the gap is too short to sit beside it
 
 # margin notes
 for x, y, text in NOTES + CAPTION:
@@ -165,6 +165,25 @@ for x, y, text in NOTES + CAPTION:
 for _bid, (_x, _y, _w, _h, *_rest) in BOX.items():
     if _x + _w > W - 8 or _y + _h > H - 8:
         _overflow.append(f"box {_bid} extends past the canvas")
+# phase markers vs the label backgrounds and the boxes
+_MARK = re.findall(r'<circle cx="([\d.]+)" cy="([\d.]+)" r="11"', "".join(f))
+_LBLS = [(float(a), float(b), float(c), 20.0) for a, b, c in
+         re.findall(r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="20" rx="5"', "".join(f))]
+
+
+def _hit(a, b):
+    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+
+for _mx, _my in _MARK:
+    _m = (float(_mx) - 11, float(_my) - 11, 22, 22)
+    for _l in _LBLS:
+        if _hit(_m, _l):
+            _overflow.append(f"phase marker at ({_mx},{_my}) sits on an arrow label")
+    for _bid, (_bx, _by, _bw, _bh, *_r) in BOX.items():
+        if _hit(_m, (_bx, _by, _bw, _bh)):
+            _overflow.append(f"phase marker at ({_mx},{_my}) sits on the {_bid} box")
+
 if _overflow:
     raise SystemExit("concept-map layout overflows:\n  " + "\n  ".join(_overflow))
 
@@ -185,7 +204,7 @@ PAGE = r"""<meta charset="utf-8">
     --paper:#f4f6f8; --surface:#ffffff; --ink:#131820; --muted:#59636f; --faint:#808b97;
     --line:#dde2e8; --accent:#1c6f8c; --accent-soft:#e3eef2;
     --fs-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
-    --fs-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --maxw:80rem;
+    --fs-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --maxw:84rem;
     --plate:#ffffff; --bx-repo-bg:#ffffff; --bx-repo-bd:#9aa6b2;
     --seam-bg:#e3eef2; --seam-bd:#1c6f8c; --ext-bg:#f6f0e2; --ext-bd:#a08a52;
     --ar:#5b6672; --num:#8a3d6b; --note:#4a5763;

@@ -42,8 +42,11 @@ SIDE = [
 # (from, to, phase, label, x on the source edge, y of the horizontal run,
 #  x on the target edge) — separate run heights so they never sit on each other.
 DOWN = [
-    ("BE", "API", 1, "which options exist for this genome", 680, 320, 600),
-    ("API", "BE", 2, "config + parsing + display for them", 480, 372, 800),
+    # The two dog-legs must not cross, so the ask arrives on the API's left and
+    # the answer leaves from its right. Each horizontal run is also kept wider
+    # than its own label, so the risers stay clear of the text.
+    ("BE", "API", 1, "which options exist for this genome", 710, 320, 450),
+    ("API", "BE", 2, "config + parsing + display for them", 600, 366, 840),
 ]
 
 # --- margin notes (the sketch's scribbles), in the free lower-right ----------
@@ -68,6 +71,8 @@ def esc(t):
 
 
 f = []
+SEGS = []      # (flow, x1, y1, x2, y2) for the crossing check
+LBOX = []      # (flow, x, y, w, h) label backgrounds, same
 
 # boxes
 for bid, (x, y, w, h, title, sub, kind) in BOX.items():
@@ -104,8 +109,11 @@ for frm, to, phase, label, y in FLOWS:
     x2 = tx if ltr else tx + tw
     gap = 9 if ltr else -9
     f.append(f'<line x1="{x1}" y1="{y}" x2="{x2-gap}" y2="{y}" class="ar" marker-end="url(#a)"/>')
+    _flow = f"{frm}->{to}@{y}"
+    SEGS.append((_flow, x1, y, x2 - gap, y))
     mid = (x1 + x2) / 2
     tw_ = len(label) * 6.6 + 12
+    LBOX.append((_flow, mid - tw_ / 2, y - 10, tw_, 20))
     f.append(
         f'<rect x="{mid-tw_/2:.1f}" y="{y-10}" width="{tw_:.1f}" height="20" rx="5" class="lbl-bg"/>'
         f'<text x="{mid}" y="{y}" class="lbl" text-anchor="middle" dominant-baseline="central">{esc(label)}</text>'
@@ -123,8 +131,11 @@ for frm, to, phase, label, x, midy, ex in DOWN:
     f.append(
         f'<path d="M{x},{y1} V{midy} H{ex} V{y2-gap}" class="ar ar-seam" fill="none" marker-end="url(#a)"/>'
     )
+    _flow = f"{frm}->{to}(seam)"
+    SEGS += [(_flow, x, y1, x, midy), (_flow, x, midy, ex, midy), (_flow, ex, midy, ex, y2 - gap)]
     lx = (x + ex) / 2
     tw_ = len(label) * 6.4 + 12
+    LBOX.append((_flow, lx - tw_ / 2, midy - 10, tw_, 20))
     f.append(
         f'<rect x="{lx-tw_/2:.1f}" y="{midy-10}" width="{tw_:.1f}" height="20" rx="5" class="lbl-bg"/>'
         f'<text x="{lx}" y="{midy}" class="lbl" text-anchor="middle" dominant-baseline="central">{esc(label)}</text>'
@@ -140,8 +151,11 @@ for frm, to, phase, label, y in SIDE:
     x2 = tx if ltr else tx + tw
     gap = 9 if ltr else -9
     f.append(f'<line x1="{x1}" y1="{y}" x2="{x2-gap}" y2="{y}" class="ar ar-ext" marker-end="url(#a)"/>')
+    _flow = f"{frm}->{to}@{y}"
+    SEGS.append((_flow, x1, y, x2 - gap, y))
     mid = (x1 + x2) / 2
     tw_ = len(label) * CHAR_W["lbl"] + 12
+    LBOX.append((_flow, mid - tw_ / 2, y - 10, tw_, 20))
     f.append(
         f'<rect x="{mid-tw_/2:.1f}" y="{y-10}" width="{tw_:.1f}" height="20" rx="5" class="lbl-bg"/>'
         f'<text x="{mid}" y="{y}" class="lbl" text-anchor="middle" dominant-baseline="central">{esc(label)}</text>'
@@ -165,14 +179,14 @@ for x, y, text in NOTES + CAPTION:
 for _bid, (_x, _y, _w, _h, *_rest) in BOX.items():
     if _x + _w > W - 8 or _y + _h > H - 8:
         _overflow.append(f"box {_bid} extends past the canvas")
+def _hit(a, b):
+    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
+
 # phase markers vs the label backgrounds and the boxes
 _MARK = re.findall(r'<circle cx="([\d.]+)" cy="([\d.]+)" r="11"', "".join(f))
 _LBLS = [(float(a), float(b), float(c), 20.0) for a, b, c in
          re.findall(r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="20" rx="5"', "".join(f))]
-
-
-def _hit(a, b):
-    return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
 
 
 for _mx, _my in _MARK:
@@ -183,6 +197,34 @@ for _mx, _my in _MARK:
     for _bid, (_bx, _by, _bw, _bh, *_r) in BOX.items():
         if _hit(_m, (_bx, _by, _bw, _bh)):
             _overflow.append(f"phase marker at ({_mx},{_my}) sits on the {_bid} box")
+
+def _crosses(a, b):
+    """True where one axis-aligned segment passes through the other."""
+    (_, ax1, ay1, ax2, ay2), (_, bx1, by1, bx2, by2) = a, b
+    a_vert, b_vert = ax1 == ax2, bx1 == bx2
+    if a_vert == b_vert:
+        return False                       # parallel: overlap is a separate concern
+    v, h = (a, b) if a_vert else (b, a)
+    vx, vy1, vy2 = v[1], min(v[2], v[4]), max(v[2], v[4])
+    hy, hx1, hx2 = h[2], min(h[1], h[3]), max(h[1], h[3])
+    return hx1 < vx < hx2 and vy1 < hy < vy2
+
+
+for _i in range(len(SEGS)):
+    for _j in range(_i + 1, len(SEGS)):
+        if SEGS[_i][0] != SEGS[_j][0] and _crosses(SEGS[_i], SEGS[_j]):
+            _overflow.append(f"arrows {SEGS[_i][0]} and {SEGS[_j][0]} cross")
+
+for _flow, _lx, _ly, _lw, _lh in LBOX:
+    for _s in SEGS:
+        # a label riding its own horizontal run is the whole point; its own
+        # risers, and every other flow's line, are not.
+        own_run = _s[0] == _flow and _s[2] == _s[4] and _s[2] == _ly + _lh / 2
+        if own_run:
+            continue
+        if _hit((_lx, _ly, _lw, _lh), (min(_s[1], _s[3]), min(_s[2], _s[4]),
+                                       abs(_s[3] - _s[1]) or 1, abs(_s[4] - _s[2]) or 1)):
+            _overflow.append(f"label on the {_flow} arrow sits on the {_s[0]} line")
 
 if _overflow:
     raise SystemExit("concept-map layout overflows:\n  " + "\n  ".join(_overflow))

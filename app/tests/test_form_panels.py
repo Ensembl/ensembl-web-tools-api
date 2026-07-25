@@ -380,6 +380,34 @@ def test_gnomad_sv_v2_structure_grch37():
     assert ids.isdisjoint({"gnomad_sv_af_ami", "gnomad_sv_af_nfe", "gnomad_sv_af_sas"})
 
 
+def test_allele_frequency_sources_are_categorised():
+    # The AF sources carry category headings so the form can lay them out side by
+    # side under "Short variants" / "Structural variants" instead of stacking
+    # every source in one very tall column.
+    expected = {
+        "GRCh38.p14": {
+            "gnomad_exomes": "Short variants",
+            "gnomad_genomes": "Short variants",
+            "allofus": "Short variants",
+            "gnomad_sv": "Structural variants",
+            "gnomad_cnv": "Structural variants",
+        },
+        "GRCh37.p13": {
+            "gnomad_exomes": "Short variants",
+            "gnomad_genomes": "Short variants",
+            "gnomad_sv": "Structural variants",
+        },
+    }
+    for assembly, categories in expected.items():
+        panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name=assembly)
+        af = next(p for p in panels if p["id"] == "allele_frequencies")
+        assert {o["id"]: o["category"] for o in af["options"]} == categories
+        # ...and they stay in category order, so each heading owns one run of
+        # options (groupByCategory preserves first-seen order).
+        seen = [o["category"] for o in af["options"]]
+        assert seen == sorted(seen, key=["Short variants", "Structural variants"].index)
+
+
 def test_allofus_structure_grch38():
     panels = get_visible_panels(
         species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"

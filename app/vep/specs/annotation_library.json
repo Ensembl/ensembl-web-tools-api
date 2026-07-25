@@ -864,7 +864,48 @@
           {
             "field": "phenotypes",
             "from": "PHENOTYPES",
-            "transform": "list"
+            "transform": "regex",
+            "each": true,
+            "pattern": "^(?P<type>[^+]+)\\+(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)$",
+            "as": [
+              {
+                "field": "type",
+                "type": "string"
+              },
+              {
+                "field": "source",
+                "type": "string"
+              },
+              {
+                "field": "phenotype",
+                "type": "string"
+              },
+              {
+                "field": "id",
+                "type": "string"
+              },
+              {
+                "field": "risk_allele",
+                "type": "string"
+              }
+            ],
+            "drop_when": {
+              "unless_matches": {
+                "field": "risk_allele",
+                "column": "Allele"
+              },
+              "only_if": {
+                "field": "type",
+                "equals": "Variation"
+              }
+            },
+            "item_fields": [
+              "type",
+              "source",
+              "phenotype",
+              "id",
+              "risk_allele"
+            ]
           }
         ]
       },
@@ -1763,19 +1804,27 @@
         "option_id": "phenotypes",
         "blocks": [
           {
-            "kind": "list",
+            "kind": "table",
             "heading": "Phenotypes",
             "from": "phenotype_data.phenotypes",
+            "group_by": {
+              "field": "type"
+            },
             "truncate": {
               "visible_count": 3
             },
-            "item": {
-              "cells": [
-                {
-                  "format": "phenotype"
-                }
-              ]
-            }
+            "columns": [
+              {
+                "label": "Phenotype",
+                "from": "phenotype",
+                "format": "phenotype"
+              },
+              {
+                "label": "Source",
+                "from": "source",
+                "format": "humanize"
+              }
+            ]
           }
         ]
       },

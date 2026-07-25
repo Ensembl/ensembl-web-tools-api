@@ -650,13 +650,85 @@ def test_hgvs_empty_is_none():
     assert run("hgvs", ["", "", ""], index_map) is None
 
 
-def test_phenotype_data_splits_and_drops_na():
-    # The Phenotypes plugin produces a single PHENOTYPES column; CLIN_SIG / PUBMED
-    # are co-located-variant fields from unrelated options, not Phenotypes output.
-    index_map = index_map_for("PHENOTYPES")
-    assert run("phenotype_data", ["cancer&NA&diabetes"], index_map) == {
-        "phenotypes": ["cancer", "diabetes"],  # NA dropped
+def test_phenotype_data_splits_entries_into_their_cols():
+    # The Phenotypes plugin produces a single PHENOTYPES column: '&'-separated
+    # entries, each '+'-separated into the fields named by the plugin's `cols`
+    # (type, source, phenotype, id, risk_allele). Absent trailing fields come
+    # back null.
+    index_map = index_map_for("Allele", "PHENOTYPES")
+    gene = "Gene+GenCC+Parkinson_disease+ENSG00000145335+"
+    variation = "Variation+NHGRI-EBI_GWAS_catalog+Atrial_fibrillation+rs699+A"
+    assert run("phenotype_data", ["A", f"{gene}&{variation}"], index_map) == {
+        "phenotypes": [
+            {
+                "type": "Gene",
+                "source": "GenCC",
+                "phenotype": "Parkinson_disease",
+                "id": "ENSG00000145335",
+                "risk_allele": None,
+            },
+            {
+                "type": "Variation",
+                "source": "NHGRI-EBI_GWAS_catalog",
+                "phenotype": "Atrial_fibrillation",
+                "id": "rs699",
+                "risk_allele": "A",
+            },
+        ]
     }
+
+
+def test_phenotype_data_skips_entries_missing_a_required_field():
+    """type / source / phenotype must all be present; an entry missing any of
+    them is dropped rather than rendered half-empty. (Entries with a different
+    field count are dropped for the same reason — the pattern must match.)"""
+    index_map = index_map_for("PHENOTYPES")
+    good = "Gene+GenCC+Parkinson_disease+ENSG00000145335+"
+    result = run(
+        "phenotype_data",
+        [
+            "Gene++Parkinson_disease+ENSG1+"  # no source
+            "&Gene+GenCC++ENSG2+"  # no phenotype
+            "&+GenCC+Parkinson_disease+ENSG3+"  # no type
+            "&Cancer_Gene_Census+cancer+ENSG4+"  # 4 fields (pre-`type` shape)
+            f"&{good}"
+        ],
+        index_map,
+    )
+    assert [p["id"] for p in result["phenotypes"]] == ["ENSG00000145335"]
+
+
+def test_phenotype_data_variation_is_scoped_to_its_risk_allele():
+    """A variation association belongs to the allele its risk allele names.
+
+    VEP repeats the whole PHENOTYPES value on every alt allele's CSQ row, so a
+    multi-allelic site would otherwise show every allele's associations against
+    each of them (rs139548132, alts C/G/T). `drop_when.unless_matches` keeps only
+    the associations whose risk allele is this row's `Allele`; an association
+    with no risk allele never matches, so it drops too. A gene association
+    carries no allele at all and must survive — `only_if` scopes the rule.
+    """
+    index_map = index_map_for("Allele", "PHENOTYPES")
+    entries = (
+        "Variation+ClinVar+Neurodevelopmental_disorder+rs139548132+C"
+        "&Variation+ClinVar+Inborn_genetic_diseases+rs139548132+G"
+        "&Variation+ClinVar+No_risk_allele+rs139548132+"
+        "&Gene+GenCC+Parkinson_disease+ENSG00000145335+"
+    )
+    kept = lambda allele: [  # noqa: E731
+        (p["type"], p["risk_allele"], p["phenotype"])
+        for p in run("phenotype_data", [allele, entries], index_map)["phenotypes"]
+    ]
+    assert kept("C") == [
+        ("Variation", "C", "Neurodevelopmental_disorder"),
+        ("Gene", None, "Parkinson_disease"),
+    ]
+    assert kept("G") == [
+        ("Variation", "G", "Inborn_genetic_diseases"),
+        ("Gene", None, "Parkinson_disease"),
+    ]
+    # an allele none of the associations name keeps only the gene one
+    assert kept("T") == [("Gene", None, "Parkinson_disease")]
 
 
 def test_phenotype_data_empty_is_none():

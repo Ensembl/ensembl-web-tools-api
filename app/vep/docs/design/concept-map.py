@@ -49,6 +49,15 @@ DOWN = [
     ("API", "BE", 2, "config + parsing + display for them", 600, 366, 840),
 ]
 
+# --- what actually stands in for the two non-repo boxes ----------------------
+# The pipeline has a genuine dev branch. The metadata API does not: spec_loader
+# reads app/vep/specs off disk with no env override, so the JSON is the live
+# implementation in dev and prod alike — labelled as such rather than "in dev".
+SUBS = {
+    "API":  ["dev and prod alike —", "app/vep/specs/*.json, read from disk"],
+    "PIPE": ["in dev —", "config.ini dumped to dev-data,", "manual HPC run, VCF placed back"],
+}
+
 # --- margin notes (the sketch's scribbles), in the free lower-right ----------
 NOTES = [
     (900, 424, "②  options → config.ini,"),
@@ -224,6 +233,16 @@ for _idx, (frm, to, phase, label, y) in enumerate(SIDE):
     if ("SIDE", _idx) in _START:
         star(x1 + (11 if ltr else -11), y, phase)
 
+# the dev / today stand-ins, under their box
+SUB_LINES = []
+for _bid, _lines in SUBS.items():
+    _bx, _by, _bw, _bh, *_ = BOX[_bid]
+    for _i, _line in enumerate(_lines):
+        _y = _by + _bh + 20 + _i * 15
+        _cls = "sub-k" if _i == 0 else "sub-t"
+        f.append(f'<text x="{_bx}" y="{_y}" class="{_cls}" dominant-baseline="central">{esc(_line)}</text>')
+        SUB_LINES.append((_bx, _y, _line))
+
 # margin notes
 for x, y, text in NOTES + CAPTION:
     cls = "note-t" + (" note-be" if x > 500 else "")
@@ -237,6 +256,12 @@ for x, y, text in NOTES + CAPTION:
     right = x + text_w(text, NOTE_PX, safety=1.06)
     if right > W - 8:
         _overflow.append(f"note {text!r} reaches x={right:.0f}, past the {W}px canvas")
+for _x, _y, _line in SUB_LINES:
+    _right = _x + len(_line) * 10.5 * 0.6 * 1.06        # mono: uniform advance
+    if _right > W - 8:
+        _overflow.append(f"stand-in line {_line!r} reaches x={_right:.0f}, past the {W}px canvas")
+    if _y + 8 > H - 8:
+        _overflow.append(f"stand-in line {_line!r} runs off the bottom of the canvas")
 for _bid, (_x, _y, _w, _h, *_rest) in BOX.items():
     if _x + _w > W - 8 or _y + _h > H - 8:
         _overflow.append(f"box {_bid} extends past the canvas")
@@ -381,6 +406,8 @@ PAGE = r"""<meta charset="utf-8">
   .pill-seam{fill:var(--seam-bd)} .pill-ext{fill:var(--ext-bd)}
   .pill-t{fill:#fff;font:600 9px var(--fs-mono);letter-spacing:.04em}
   .note-t{fill:var(--note);font:400 12.5px var(--fs-sans)}
+  .sub-k{fill:var(--muted);font:600 10.5px var(--fs-mono);letter-spacing:.02em}
+  .sub-t{fill:var(--muted);font:400 10.5px var(--fs-mono)}
   .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(20rem,1fr));gap:.8rem;margin-top:1.3rem}
   .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1rem 1.1rem}
   .card h3{margin:0 0 .5rem;font-size:.95rem}

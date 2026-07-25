@@ -10,6 +10,13 @@
 > refreshed in place. Genuinely-open follow-ups that remain: the AF
 > `kind: "allele_frequency"` marker, and converting the still-unspecced
 > SIFT/PolyPhen / uniprot / protein-matches tail (blocked on sample data).
+>
+> **Refreshed 2026-07-25** — §10 re-verified against the code and rewritten to
+> cover what has landed since: the spec split into a shared
+> `annotation_library.json` plus thin per-genome documents, a second genome
+> (GRCh37) with its own config, three pinned sidecars rather than one, and a
+> grown display DSL. §10 now also names the **contract points** (§10.1) and the
+> **two reads that become API calls** (§10.2), and both diagrams are regenerated.
 
 Covers both VEP repos: `ensembl-web-tools-api` (backend) and `standalone-web-vep`
 (frontend).
@@ -418,7 +425,7 @@ mechanism change — the merge is why Q1 ("join them") is the less brittle choic
 
 ## 9. Sequencing & open items
 
-**Workstreams (independent seams, can proceed in parallel):**
+**Workstreams — all three have since shipped** (kept for the rationale):
 1. **Go-flat results** — switch the response to
    `spec_interpreter.apply_plugin_spec`; generic `{plugin, scope, data}` envelope;
    frontend generic types. (The results-time seam already loads the pinned spec.)
@@ -431,8 +438,12 @@ mechanism change — the merge is why Q1 ("join them") is the less brittle choic
 **Resolved (were awaiting user input):**
 - The **link-construction templates** for the four popups — supplied and
   **shipped**; both link builders now emit templated `beta.ensembl.org` URLs.
-- The future **ProtVar template** that would retire `buildProtvarUrl` — still
-  pending upstream; `buildProtvarUrl` stays algorithmic for now.
+- The future **ProtVar template** that would retire `buildProtvarUrl` — overtaken
+  by events: once the HGVSg data gap closed, the link moved to
+  `buildProtvarUrlFromHgvsg`, built from the variant's HGVSg. That is why the
+  config entry for ProtVar carries `forces_on: ["hgvsg"]` — and why HGVSg stays
+  wired while it is hidden from the form and results (pending chromosome
+  synonyms).
 
 **Parked (lack of data / out of scope for now):**
 - SIFT/PolyPhen (relocated to typed consequence fields at the go-flat cutover —
@@ -449,46 +460,100 @@ in `ensembl-web-tools-api`).
 
 ---
 
-## 10. End-to-end request flow (verified against current code)
+## 10. End-to-end request flow (verified against current code, 2026-07-25)
 
-The new API exposes **two endpoints**:
+The new API will expose **two endpoints**:
 - **Endpoint 1** — the available options + how to render them on the input form,
   keyed on the selected species/assembly.
 - **Endpoint 2** — the config lines, parsing spec, and results-display spec for a
   specific set of *selected* options.
 
-One submission, start to finish (order confirmed in both repos):
+Today both are served from local JSON: a shared `specs/annotation_library.json`
+(parse plugins + display options) spliced into a thin per-genome document
+(`human_grch38.json`, `human_grch37.json`) that carries only `genome`, `config`
+and a `library` reference. `spec_loader._assemble_payload` joins them and
+`_select_library` keeps only the subset that genome's config enables, so
+everything downstream sees one `MergedSpec` however it was sourced.
 
-1. **Input form.** On species selection the frontend calls the backend
-   `GET /form_config` (`vepApiSlice.ts`; fired via `skip: !selectedSpecies` in
-   `VepFormOptionsSection.tsx`). The backend fetches endpoint 1, applies
-   activation (`get_visible_panels`), and returns panels + options + render info.
-   The call is **relayed, not direct** (§5). The frontend renders the form with
-   generic renderers.
-2. **Submit.** The user picks options, adds a VCF, and the frontend `POST`s
-   `/submissions` (`vep_resources.py::submit_vep`). The backend sends the selected
-   options to endpoint 2 and receives config + parsing + display.
-3. **Check + pin.** The backend runs the consistency check over the returned
-   document (config ⇄ parsing ⇄ display); on failure it retries the fetch, max 3,
-   then fails and logs. It merges the config with the always-on base (§4.5), emits
-   `config.ini`, and pins the parsing + display spec beside the job
-   (`spec_loader.write_spec_sidecar`).
+One submission, start to finish:
+
+1. **Input form.** On species selection the frontend calls
+   `GET /form_config/{genome_id}` (`vepApiSlice.ts`, fired via `skip:
+   !selectedSpecies`). The backend applies activation (`get_visible_panels`) and
+   returns panels + options + sub-options. The call is **relayed, not direct**
+   (§5), and stays so: the frontend does not hold the genome metadata needed to
+   resolve options for every species.
+2. **Submit.** The frontend `POST`s `/submissions` (`vep_resources.submit_vep`)
+   with the parameters and the VCF. The backend builds `ConfigIniParams` from
+   them — which is where an unknown option id would fail.
+3. **Resolve, check, pin.** `resolve_merged_spec(assembly_name)` picks the spec
+   for the job's assembly **at submission**, so a job is built and later read
+   with the same ruleset. The model validator runs the config⇄parsing⇄display
+   consistency check (§6.1) at load. The backend then emits `config.ini` from the
+   config half and pins **three sidecars** beside the job:
+   `parsing_spec.json` (the whole merged spec, under its content digest),
+   `expected_columns.json` (the CSQ columns these options must produce), and
+   `display_panels.json` (the option panels the submission was built against).
 4. **Run.** Prod: launch a Nextflow run via Seqera (`nextflow.launch_workflow`),
-   output mounted for the backend. Dev: dump `config.ini` to `dev-data`; the
-   output VCF is hand-placed there (the manual loop).
+   output mounted for the backend. Dev: `DUMP_INI` writes `config.ini` to
+   `dev-data` and the output VCF is hand-placed there (the manual loop).
 5. **Poll.** The frontend polls `GET /status` every 15s
-   (`vepSubmissionStatusPolling.ts`, `POLLING_INTERVAL`). Prod polls Seqera
-   (`get_workflow_status`); dev reports SUCCEEDED immediately.
-6. **Results.** The frontend calls `GET /results` (`get_results_from_path` +
-   `_load_pinned_spec`). The backend runs the missing-header check (§6.2), parses
-   with the **pinned** parsing spec, and returns the annotations plus the
-   **pinned** display spec. The frontend renders with generic renderers (+ the
-   small custom kit). NB today the results view re-fetches *live* form-config
-   panels for layout — pinning the display spec fixes that.
-7. **Later.** Filtering and download stay server-side (`parse_filters`,
+   (`vepSubmissionStatusPolling.ts`). Prod polls Seqera; dev reports SUCCEEDED
+   immediately.
+6. **Results.** `GET /results` runs the missing-expected-column check (§6.2)
+   against the pinned set, parses with the **pinned** parsing spec, and returns
+   the annotations plus the **pinned** display spec and panels. The frontend
+   renders generically from that spec — a job always shows the layout it was
+   submitted against, not whatever the current spec says.
+7. **Later.** Filtering and download stay server-side (`results_filters`,
    `stream_vep_tsv`).
 
-A rendered version of this flow (dev/prod branches inline) lives beside this doc
-as `dataflow-diagram.html` — a self-contained, theme-aware SVG (no runtime). It is
-generated by `dataflow-diagram.py` (edit the `EVENTS` list and re-run); keep this
-section and the diagram in step.
+### 10.1 Where the contracts are
+
+Each of these is a place where two sides must agree, and where a change on one
+side breaks the other unless it is made in step. Most are enforced in code; the
+rest are load-time or runtime checks.
+
+| # | Contract | Enforced by |
+|---|---|---|
+| C1 | An option id **is** its submission parameter name | `test_option_ids_are_valid_config_ini_parameters` — every form option/sub-option id must be a `ConfigIniParams` field |
+| C2 | Submitted parameters are all *declared* | **nothing at runtime** — `ConfigIniParams` takes pydantic's default and **silently drops** an unknown key. An option the form offers but the model does not declare therefore reaches the emitter as "not selected", and its config line just never appears. C1 is what actually holds this together; treat a new option id as a two-file change |
+| C3 | The fields a config line emits are the CSQ columns VEP writes | `expected_csq_columns` is derived from the *same* `build_fields` that wrote the line |
+| C4 | Config ⇄ parsing ⇄ display refer to things that exist | `MergedSpec` model validator at load (§6.1): `parsed_as` names real plugins, display refs resolve to parse targets, formats suit the parsed types |
+| C5 | A job is read with the ruleset it was built with | content digest + the three pinned sidecars (§8) |
+| C6 | The output carries the expected columns | runtime check at results (§6.2) — missing fails, extra is ignored |
+| C7 | An annotation's shape matches what the display expects | `item_fields` on a list target vs the cells/columns that read them (load-time) |
+| C8 | Per-allele annotation metadata matches the parsed keys | `af_source_descriptor` derives its population code from the same `from_pattern` the parse uses, so the frontend can join on it |
+
+### 10.2 Where the API will be contacted
+
+Only **two reads** in the backend resolve the spec, and both are the seam:
+
+- `form_panels.get_visible_panels` — which panels and options exist for this
+  species/assembly (endpoint 1). Today: hardcoded panel definitions plus the
+  per-genome additions.
+- `spec_loader.load_merged_spec` / `resolve_merged_spec` — config + parsing +
+  display for a genome (endpoint 2). Today: `annotation_library.json` + the
+  per-genome document.
+
+Everything downstream — the config interpreter, the parse interpreter, the
+display renderer, the checks, the pinning — already works off the assembled
+`MergedSpec`, so replacing the JSON with an API call is a change to those two
+reads and their failure handling (retry, then fail loudly), not to the machinery
+behind them. The frontend never reads a spec at all: it only ever sees what the
+backend serves it, so the swap is invisible there.
+
+### 10.3 The diagrams
+
+Two rendered views live beside this doc, both self-contained theme-aware SVG
+(no runtime, no mermaid):
+
+- `dataflow-diagram.html` — the **per-request sequence**, dev/prod branches
+  inline, with the contract points and the API-seam calls tagged. Generated by
+  `dataflow-diagram.py` (edit `EVENTS`, re-run).
+- `repo-overview.html` — the **two-repo overview**: what lives in each repo, the
+  path a submission takes, every hop that leaves the repos, and the same contract
+  points as markers. VEP slice only (the tools API also serves BLAST; not drawn).
+  Generated by `repo-overview.py` (edit `NODES` / `EDGES` / `CONTRACTS`, re-run).
+
+Keep this section and both diagrams in step.

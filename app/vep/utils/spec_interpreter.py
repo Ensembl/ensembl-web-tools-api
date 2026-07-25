@@ -63,11 +63,26 @@ def _column(csq_values: list[str], name: str, index_map: dict[str, int]) -> str 
     return get_csq_value(csq_values, name, None, index_map)
 
 
-def _should_drop(row: dict, drop_when) -> bool:
+def _should_drop(row: dict, drop_when, csq_values=None, index_map=None) -> bool:
     if drop_when is None:
+        return False
+    # A conditional rule only applies to elements it names (the allele rule is
+    # for a "Variation" phenotype, not a "Gene" one).
+    condition = drop_when.only_if
+    if condition is not None and row.get(condition.field) != condition.equals:
         return False
     if drop_when.all_null:
         return all(value is None for value in row.values())
+    if drop_when.unless_matches is not None:
+        match = drop_when.unless_matches
+        # None (an absent field, or a column this output doesn't carry) never
+        # matches, so the element drops.
+        column_value = (
+            _column(csq_values, match.column, index_map)
+            if csq_values is not None and index_map is not None
+            else None
+        )
+        return row.get(match.field) != column_value or column_value in (None, "")
     return row.get(drop_when.null) is None
 
 
@@ -117,7 +132,7 @@ def _apply_zip(csq_values, index_map, target: TargetSpec) -> list[dict]:
             )
             for column, field_spec in zip(columns, target.as_fields)
         }
-        if _should_drop(row, target.drop_when):
+        if _should_drop(row, target.drop_when, csq_values, index_map):
             continue
         rows.append(row)
     return _apply_post(rows, target.post)
@@ -134,14 +149,15 @@ def _apply_regex(csq_values, index_map, target: TargetSpec):
         match = compiled.match(item)
         if not match:
             continue
-        rows.append(
-            {
-                field_spec.field: _coerce(
-                    match.group(field_spec.field), field_spec.type, field_spec
-                )
-                for field_spec in target.as_fields
-            }
-        )
+        row = {
+            field_spec.field: _coerce(
+                match.group(field_spec.field), field_spec.type, field_spec
+            )
+            for field_spec in target.as_fields
+        }
+        if _should_drop(row, target.drop_when, csq_values, index_map):
+            continue
+        rows.append(row)
     if target.each:
         return rows
     return rows[0] if rows else None
@@ -205,7 +221,7 @@ def _apply_chunk(csq_values, index_map, target: TargetSpec) -> list[dict]:
     for start in range(0, len(tokens), target.size):
         group = tokens[start : start + target.size]
         row = _build_object(group, target.as_fields, "&".join(t for t in group if t))
-        if _should_drop(row, target.drop_when):
+        if _should_drop(row, target.drop_when, csq_values, index_map):
             continue
         rows.append(row)
     return _apply_post(rows, target.post)

@@ -213,7 +213,8 @@ class CellSpec(BaseModel):
 
     `from` is a field *of the list element* (not `plugin.field`) — e.g. `score`
     on a MaveDB assay. Omit it for a scalar list whose elements are the value
-    themselves (phenotype strings). `link` makes the cell an anchor.
+    themselves (phenotype strings). `link` makes the cell an anchor. An optional
+    `label` prefixes the value ("L2G 0.42").
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -368,6 +369,21 @@ class DisplayRowsBlock(BaseModel):
     rows: list[DisplayRow]
 
 
+class GroupBy(BaseModel):
+    """Split the rows into one sub-section per distinct value of an item field.
+
+    The sub-headings come from the *data* — the distinct values in first-seen
+    order — rather than being written into the spec, so a value the pipeline
+    starts emitting appears on its own without a spec change. Phenotype entries
+    carry a `type` ("Gene" / "Variation"), and each kind gets its own headed
+    table.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+
+
 class DisplayListBlock(BaseModel):
     """A variable-length list: one item (a row of cells) per element of a
     list-valued field, optionally truncated. Covers the options whose output is
@@ -377,6 +393,7 @@ class DisplayListBlock(BaseModel):
     `from` is the `<plugin>.<listField>` the elements come from; that field must
     be a parse-plugin target declaring the element's `item_fields`, which the
     cells' `from`/link templates reference.
+
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -454,6 +471,11 @@ class DisplayTableBlock(BaseModel):
     # list mode: the `<plugin>.<listField>` the rows come from.
     source: str | None = Field(default=None, alias="from")
     columns: list[TableColumn] = Field(min_length=1)
+    # list mode: split the rows into a headed table per distinct value.
+    group_by: GroupBy | None = None
+    # list mode: show this many rows, the rest behind a show-more toggle (per
+    # section when grouped). A variant can carry ~100 gene phenotype rows.
+    truncate: TruncateSpec | None = None
     # fixed mode: explicit rows.
     rows: list[TableMatrixRow] | None = None
 
@@ -482,9 +504,12 @@ class DisplayTableBlock(BaseModel):
         return plugin, field
 
     def column_field_refs(self) -> Iterator[str]:
-        """The item fields the columns read (list mode)."""
+        """The item fields the columns read, plus the field the rows group on
+        (list mode)."""
         for column in self.columns:
             yield from column.item_field_refs()
+        if self.group_by:
+            yield self.group_by.field
 
     def matrix_value_refs(self) -> Iterator[str]:
         """Every `<plugin>.<field>` a fixed table's rows read."""

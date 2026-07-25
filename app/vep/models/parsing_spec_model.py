@@ -47,24 +47,61 @@ class FieldSpec(BaseModel):
     strip: bool = False
 
 
+class ItemCondition(BaseModel):
+    """A condition on another field of the same produced element."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    equals: str
+
+
+class ColumnMatch(BaseModel):
+    """An element field that must equal the value of a CSQ column."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    column: str
+
+
 class DropWhen(BaseModel):
     """When to discard a produced element. Exactly one mode.
 
-    all_null  every field of the element came out null (MaveDB: a position where
-              neither score nor urn is real).
-    null      the named field came out null (OpenTargets: a row with no disease
-              is not an association, whatever else it carries).
+    all_null       every field of the element came out null (MaveDB: a position
+                   where neither score nor urn is real).
+    null           the named field came out null (OpenTargets: a row with no
+                   disease is not an association, whatever else it carries).
+    unless_matches the named field does not equal the given CSQ column. VEP
+                   repeats a whole plugin value on every alt allele's CSQ row, so
+                   a value that is really per-allele has to be narrowed to the
+                   row's own allele: a phenotype association is kept only where
+                   its risk allele is this allele. An element whose field is null
+                   never matches, so this also drops associations carrying no
+                   risk allele at all.
+
+    `only_if` narrows any mode to elements matching a condition on one of their
+    own fields, for a requirement that holds for some kinds of element but not
+    others — the allele rule applies to a "Variation" association, while a "Gene"
+    one legitimately carries no allele and must survive.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     all_null: bool = False
     null: str | None = None
+    unless_matches: ColumnMatch | None = None
+    only_if: ItemCondition | None = None
 
     @model_validator(mode="after")
     def _exactly_one_mode(self) -> "DropWhen":
-        if bool(self.all_null) == bool(self.null):
-            raise ValueError("drop_when needs exactly one of `all_null` or `null`")
+        modes = [bool(self.all_null), self.null is not None,
+                 self.unless_matches is not None]
+        if sum(modes) != 1:
+            raise ValueError(
+                "drop_when needs exactly one of `all_null`, `null` or "
+                "`unless_matches`"
+            )
         return self
 
 

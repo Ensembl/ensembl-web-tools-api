@@ -375,6 +375,18 @@ _GNOMAD_SV_V2_POPULATIONS = [
 ]
 
 
+# The allele-frequency sources split into two kinds of data, so the form groups
+# them under these category headings (see `groupByCategory` on the frontend)
+# rather than listing all of them in one column.
+_AF_SHORT_VARIANTS = "Short variants"
+_AF_STRUCTURAL_VARIANTS = "Structural variants"
+
+
+def _in_category(option: dict, category: str) -> dict:
+    """The option, tagged with the category heading it sits under."""
+    return {**option, "category": category}
+
+
 def _gnomad_sv_af_option_id(code: str) -> str:
     """Form option id for a gnomAD SV AF population (`""` = overall)."""
     return "gnomad_sv_af" if code == "" else f"gnomad_sv_af_{code}"
@@ -653,11 +665,11 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
         "id": "allele_frequencies",
         "label": "Allele frequencies",
         "options": [
-            _gnomad_exomes_option(),
-            _gnomad_genomes_option(),
-            _allofus_option(),
-            _gnomad_sv_option(),
-            _gnomad_cnv_option(),
+            _in_category(_gnomad_exomes_option(), _AF_SHORT_VARIANTS),
+            _in_category(_gnomad_genomes_option(), _AF_SHORT_VARIANTS),
+            _in_category(_allofus_option(), _AF_SHORT_VARIANTS),
+            _in_category(_gnomad_sv_option(), _AF_STRUCTURAL_VARIANTS),
+            _in_category(_gnomad_cnv_option(), _AF_STRUCTURAL_VARIANTS),
         ],
     })
 
@@ -854,9 +866,9 @@ def _add_human_grch37_options(panels: list[dict]) -> None:
         "id": "allele_frequencies",
         "label": "Allele frequencies",
         "options": [
-            _gnomad_v2_exomes_option(),
-            _gnomad_v2_genomes_option(),
-            _gnomad_sv_v2_option(),
+            _in_category(_gnomad_v2_exomes_option(), _AF_SHORT_VARIANTS),
+            _in_category(_gnomad_v2_genomes_option(), _AF_SHORT_VARIANTS),
+            _in_category(_gnomad_sv_v2_option(), _AF_STRUCTURAL_VARIANTS),
         ],
     })
 

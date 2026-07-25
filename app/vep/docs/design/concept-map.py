@@ -60,18 +60,58 @@ CAPTION = [
     (60, 424, "①  Pick a species and the form is built from"),
     (60, 446, "     the options that genome actually has."),
     (60, 478, "③  The run happens outside both repos."),
+    (60, 516, "★  marks where each numbered flow starts."),
 ]
 
-# Rough text extents, so the generator can refuse to emit a clipped page.
-CHAR_W = {"note": 6.7, "lbl": 6.3}
+# Text extents. A flat per-character average was badly wrong for these strings:
+# the labels are a PROPORTIONAL sans and full of spaces and narrow letters, so a
+# 6.4px/char guess drew label plates ~20% wider than the words inside them. These
+# are approximate advance widths in em, which keeps the plates snug and keeps the
+# layout guard honest.
+_ADV_DEFAULT = 0.55
+_ADV = {" ": 0.26, "i": 0.25, "l": 0.25, "j": 0.25, "t": 0.33, "f": 0.33, "r": 0.33,
+        "I": 0.28, ".": 0.28, ",": 0.28, "·": 0.31, "'": 0.2, "(": 0.33, ")": 0.33,
+        "m": 0.85, "w": 0.72, "y": 0.5, "+": 0.58, "-": 0.33, "_": 0.55,
+        "—": 1.0, "→": 1.0, "①": 1.0, "②": 1.0, "③": 1.0, "④": 1.0, "★": 1.0}
+_UPPER = 0.67
+
+
+def text_w(s, px, safety=1.04):
+    """Approximate rendered width. Deliberately a slight over-estimate: a plate
+    narrower than its text would clip the words."""
+    em = sum(_ADV.get(c, _UPPER if c.isupper() else _ADV_DEFAULT) for c in s)
+    return em * px * safety
+
+
+LBL_PX, NOTE_PX, PAD = 11.5, 12.5, 12
+
+# Each numbered flow gets a star at its tail, marking where that phase begins.
+# First declaration of a phase wins, scanning FE↔BE, then BE↔pipeline, then seam.
+_START, _seen = set(), set()
+for _tag, _rows in (("FLOWS", FLOWS), ("SIDE", SIDE), ("DOWN", DOWN)):
+    for _i, _r in enumerate(_rows):
+        if _r[2] not in _seen:
+            _seen.add(_r[2])
+            _START.add((_tag, _i))
 
 
 def esc(t):
     return html.escape(t, quote=True)
 
 
+_GLYPH = {"①": 1, "②": 2, "③": 3, "④": 4}
+
+
+def note_markup(text):
+    """Colour a leading ①②③④ to match its flow's number circle and star."""
+    if text[:1] in _GLYPH:
+        return f'<tspan class="f{_GLYPH[text[0]]}">{esc(text[0])}</tspan>{esc(text[1:])}'
+    return esc(text)
+
+
 f = []
 SEGS = []      # (flow, x1, y1, x2, y2) for the crossing check
+STARS = []     # bounding boxes of the flow-start markers
 LBOX = []      # (flow, x, y, w, h) label backgrounds, same
 
 # boxes
@@ -93,15 +133,27 @@ for bid, (x, y, w, h, title, sub, kind) in BOX.items():
         )
 
 
+def star(cx, cy, phase, r=8.0, ri=3.4):
+    """A five-pointed tail marker — the counterpart to the arrowhead."""
+    import math
+    pts = []
+    for k in range(10):
+        a = math.radians(-90 + k * 36)
+        rad = r if k % 2 == 0 else ri
+        pts.append(f"{cx + rad * math.cos(a):.1f},{cy + rad * math.sin(a):.1f}")
+    f.append(f'<polygon points="{" ".join(pts)}" class="start f{phase}"/>')
+    STARS.append((cx - r, cy - r, 2 * r, 2 * r))
+
+
 def num(cx, cy, n):
     f.append(
-        f'<circle cx="{cx}" cy="{cy}" r="11" class="num"/>'
+        f'<circle cx="{cx}" cy="{cy}" r="11" class="num f{n}"/>'
         f'<text x="{cx}" y="{cy}" class="num-t" text-anchor="middle" dominant-baseline="central">{n}</text>'
     )
 
 
 # horizontal arrows between FE and BE
-for frm, to, phase, label, y in FLOWS:
+for _idx, (frm, to, phase, label, y) in enumerate(FLOWS):
     fx, fy, fw, fh, *_ = BOX[frm]
     tx, ty, tw, th, *_ = BOX[to]
     ltr = tx > fx
@@ -112,16 +164,21 @@ for frm, to, phase, label, y in FLOWS:
     _flow = f"{frm}->{to}@{y}"
     SEGS.append((_flow, x1, y, x2 - gap, y))
     mid = (x1 + x2) / 2
-    tw_ = len(label) * 6.6 + 12
+    tw_ = text_w(label, LBL_PX) + PAD
     LBOX.append((_flow, mid - tw_ / 2, y - 10, tw_, 20))
     f.append(
         f'<rect x="{mid-tw_/2:.1f}" y="{y-10}" width="{tw_:.1f}" height="20" rx="5" class="lbl-bg"/>'
         f'<text x="{mid}" y="{y}" class="lbl" text-anchor="middle" dominant-baseline="central">{esc(label)}</text>'
     )
-    num(x1 + (26 if ltr else -26), y, phase)
+    if ("FLOWS", _idx) in _START:
+        star(x1 + (11 if ltr else -11), y, phase)
+    # the number sits between the tail (star or box edge) and the label plate
+    tail = x1 + 19 if ltr else x1 - 19
+    edge = mid - tw_ / 2 if ltr else mid + tw_ / 2
+    num((tail + edge) / 2, y, phase)
 
 # dog-legs between BE and the metadata API
-for frm, to, phase, label, x, midy, ex in DOWN:
+for _idx, (frm, to, phase, label, x, midy, ex) in enumerate(DOWN):
     fx, fy, fw, fh, *_ = BOX[frm]
     tx, ty, tw, th, *_ = BOX[to]
     down = ty > fy
@@ -134,16 +191,18 @@ for frm, to, phase, label, x, midy, ex in DOWN:
     _flow = f"{frm}->{to}(seam)"
     SEGS += [(_flow, x, y1, x, midy), (_flow, x, midy, ex, midy), (_flow, ex, midy, ex, y2 - gap)]
     lx = (x + ex) / 2
-    tw_ = len(label) * 6.4 + 12
+    tw_ = text_w(label, LBL_PX) + PAD
     LBOX.append((_flow, lx - tw_ / 2, midy - 10, tw_, 20))
     f.append(
         f'<rect x="{lx-tw_/2:.1f}" y="{midy-10}" width="{tw_:.1f}" height="20" rx="5" class="lbl-bg"/>'
         f'<text x="{lx}" y="{midy}" class="lbl" text-anchor="middle" dominant-baseline="central">{esc(label)}</text>'
     )
     num(x, y1 + (24 if down else -24), phase)
+    if ("DOWN", _idx) in _START:
+        star(x, y1 + (11 if down else -11), phase)
 
 # arrows between BE and the pipeline (same row, so drawn like the FE↔BE ones)
-for frm, to, phase, label, y in SIDE:
+for _idx, (frm, to, phase, label, y) in enumerate(SIDE):
     fx, fy, fw, fh, *_ = BOX[frm]
     tx, ty, tw, th, *_ = BOX[to]
     ltr = tx > fx
@@ -154,7 +213,7 @@ for frm, to, phase, label, y in SIDE:
     _flow = f"{frm}->{to}@{y}"
     SEGS.append((_flow, x1, y, x2 - gap, y))
     mid = (x1 + x2) / 2
-    tw_ = len(label) * CHAR_W["lbl"] + 12
+    tw_ = text_w(label, LBL_PX) + PAD
     LBOX.append((_flow, mid - tw_ / 2, y - 10, tw_, 20))
     f.append(
         f'<rect x="{mid-tw_/2:.1f}" y="{y-10}" width="{tw_:.1f}" height="20" rx="5" class="lbl-bg"/>'
@@ -162,18 +221,20 @@ for frm, to, phase, label, y in SIDE:
     )
     if ltr:
         num(mid, y - 26, phase)   # above: the gap is too short to sit beside it
+    if ("SIDE", _idx) in _START:
+        star(x1 + (11 if ltr else -11), y, phase)
 
 # margin notes
 for x, y, text in NOTES + CAPTION:
     cls = "note-t" + (" note-be" if x > 500 else "")
-    f.append(f'<text x="{x}" y="{y}" class="{cls}" dominant-baseline="central">{esc(text)}</text>')
+    f.append(f'<text x="{x}" y="{y}" class="{cls}" dominant-baseline="central">{note_markup(text)}</text>')
 
 # --- refuse to emit a page whose text runs off the canvas -------------------
 # The first version clipped the right-hand notes, and a plain eyeball of the
 # generator would not have caught it: the numbers only bite once rendered.
 _overflow = []
 for x, y, text in NOTES + CAPTION:
-    right = x + len(text) * CHAR_W["note"]
+    right = x + text_w(text, NOTE_PX, safety=1.06)
     if right > W - 8:
         _overflow.append(f"note {text!r} reaches x={right:.0f}, past the {W}px canvas")
 for _bid, (_x, _y, _w, _h, *_rest) in BOX.items():
@@ -226,6 +287,25 @@ for _flow, _lx, _ly, _lw, _lh in LBOX:
                                        abs(_s[3] - _s[1]) or 1, abs(_s[4] - _s[2]) or 1)):
             _overflow.append(f"label on the {_flow} arrow sits on the {_s[0]} line")
 
+# every arrow that carries a phase must actually show its number, and every
+# distinct phase exactly one start star (an edit once silently dropped four).
+_expect_num = len(FLOWS) + len(DOWN) + sum(1 for _f, _to, *_ in SIDE if BOX[_to][0] > BOX[_f][0])
+if len(_MARK) != _expect_num:
+    _overflow.append(f"{len(_MARK)} phase markers drawn, expected {_expect_num}")
+if len(STARS) != len({_r[2] for _r in FLOWS + SIDE + DOWN}):
+    _overflow.append(f"{len(STARS)} start stars drawn, expected one per numbered flow")
+
+for _s in STARS:
+    for _l in _LBLS:
+        if _hit(_s, _l):
+            _overflow.append(f"flow-start star at {_s[:2]} sits on an arrow label")
+    for _m in _MARK:
+        if _hit(_s, (float(_m[0]) - 11, float(_m[1]) - 11, 22, 22)):
+            _overflow.append(f"flow-start star at {_s[:2]} sits on a phase marker")
+    for _bid, (_bx, _by, _bw, _bh, *_r) in BOX.items():
+        if _hit(_s, (_bx, _by, _bw, _bh)):
+            _overflow.append(f"flow-start star at {_s[:2]} sits on the {_bid} box")
+
 if _overflow:
     raise SystemExit("concept-map layout overflows:\n  " + "\n  ".join(_overflow))
 
@@ -249,26 +329,26 @@ PAGE = r"""<meta charset="utf-8">
     --fs-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --maxw:84rem;
     --plate:#ffffff; --bx-repo-bg:#ffffff; --bx-repo-bd:#9aa6b2;
     --seam-bg:#e3eef2; --seam-bd:#1c6f8c; --ext-bg:#f6f0e2; --ext-bd:#a08a52;
-    --ar:#5b6672; --num:#8a3d6b; --note:#4a5763;
+    --ar:#5b6672; --num:#8a3d6b; --note:#4a5763; --p1:#8a3d6b; --p2:#1c6f8c; --p3:#8a5a1f; --p4:#4b5aa8;
   }
   @media (prefers-color-scheme: dark){:root{
     --paper:#0d1116; --surface:#161d25; --ink:#eaeff4; --muted:#9aa5b1; --faint:#6f7b87;
     --line:#26303a; --accent:#5fb4c8; --accent-soft:#123039;
     --plate:#0f141b; --bx-repo-bg:#131a22; --bx-repo-bd:#44515f;
     --seam-bg:#123039; --seam-bd:#5fb4c8; --ext-bg:#2a2416; --ext-bd:#b39a5c;
-    --ar:#8793a2; --num:#d081ac; --note:#9aa5b1;
-  }}
+    --ar:#8793a2; --num:#d081ac; --note:#9aa5b1; --p1:#b8497f; --p2:#2d8ba6; --p3:#98762f; --p4:#5d67c4;
+  }
   :root[data-theme="light"]{
     --paper:#f4f6f8; --surface:#ffffff; --ink:#131820; --muted:#59636f; --line:#dde2e8;
     --plate:#ffffff; --bx-repo-bg:#ffffff; --bx-repo-bd:#9aa6b2;
     --seam-bg:#e3eef2; --seam-bd:#1c6f8c; --ext-bg:#f6f0e2; --ext-bd:#a08a52;
-    --ar:#5b6672; --num:#8a3d6b; --note:#4a5763;
+    --ar:#5b6672; --num:#8a3d6b; --note:#4a5763; --p1:#8a3d6b; --p2:#1c6f8c; --p3:#8a5a1f; --p4:#4b5aa8;
   }
   :root[data-theme="dark"]{
     --paper:#0d1116; --surface:#161d25; --ink:#eaeff4; --muted:#9aa5b1; --line:#26303a;
     --plate:#0f141b; --bx-repo-bg:#131a22; --bx-repo-bd:#44515f;
     --seam-bg:#123039; --seam-bd:#5fb4c8; --ext-bg:#2a2416; --ext-bd:#b39a5c;
-    --ar:#8793a2; --num:#d081ac; --note:#9aa5b1;
+    --ar:#8793a2; --num:#d081ac; --note:#9aa5b1; --p1:#b8497f; --p2:#2d8ba6; --p3:#98762f; --p4:#5d67c4;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--fs-sans);
@@ -296,7 +376,8 @@ PAGE = r"""<meta charset="utf-8">
   .ah{fill:var(--ar)}
   .lbl{fill:var(--ink);font:400 11.5px var(--fs-sans)}
   .lbl-bg{fill:var(--plate)}
-  .num{fill:var(--num)} .num-t{fill:#fff;font:600 11px var(--fs-mono)}
+  .start{stroke:var(--paper);stroke-width:1.5}
+  .f1{fill:var(--p1)} .f2{fill:var(--p2)} .f3{fill:var(--p3)} .f4{fill:var(--p4)} .num-t{fill:#fff;font:600 11px var(--fs-mono)}
   .pill-seam{fill:var(--seam-bd)} .pill-ext{fill:var(--ext-bd)}
   .pill-t{fill:#fff;font:600 9px var(--fs-mono);letter-spacing:.04em}
   .note-t{fill:var(--note);font:400 12.5px var(--fs-sans)}

@@ -18,9 +18,16 @@ _ALWAYS_VISIBLE_PANELS: list[dict] = [
         "label": "Variant representations",
         "options": [
             # HGVS renders as a single control with linked HGVSc/HGVSp (the
-            # `hgvs` param) and a separate HGVSg (the `hgvsg` param), both off by
-            # default. The frontend builds the linked UI; the panel just carries
-            # the `hgvs` option (default off).
+            # `hgvs` param). The frontend builds the linked UI; the panel just
+            # carries the `hgvs` option (default off).
+            #
+            # HGVSg (the `hgvsg` param) is HIDDEN for now — it has no control on
+            # the form and no row in the results — because its genomic notation
+            # names chromosomes in a form we cannot yet map. Everything behind it
+            # stays wired: the `hgvsg` config entry, its parse plugin, and
+            # ProtVar's `forces_on: ["hgvsg"]`, which is what silently computes
+            # it so the ProtVar link can be built from it. Re-expose the control
+            # and the display row once chromosome synonyms are available.
             {"id": "hgvs", "label": "HGVS", "type": "boolean", "default": False},
             {"id": "spdi", "label": "SPDI", "type": "boolean", "default": False},
         ],

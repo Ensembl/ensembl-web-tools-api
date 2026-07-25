@@ -12,3 +12,9 @@ venv*
 results_meta.json
 dev-data/
 app/tmp*/
+
+# Rendered exports of the design diagrams. The .py generators and the .html they
+# emit are the source of truth; the images are just for pasting into slides and
+# docs, and re-rendering them on every tweak would bloat history.
+app/vep/docs/design/*.jpg
+app/vep/docs/design/*.png

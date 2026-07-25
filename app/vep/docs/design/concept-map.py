@@ -12,51 +12,55 @@ Re-run after edits; writes the HTML next to this script.
 """
 import html, os
 
-W, H = 1060, 660
+W, H = 1200, 620
 
 # --- boxes -------------------------------------------------------------------
 # id: (x, y, w, h, title, subtitle, kind)   kind: repo | seam | ext
+# Pipeline sits to the RIGHT of the backend rather than below it — same row, the
+# way the original sketch had "run + poll" trailing off the backend — which frees
+# the whole lower right for the margin notes.
 BOX = {
-    "FE":   (70,  128, 250, 116, "Frontend", "standalone-web-vep", "repo"),
-    "BE":   (610, 128, 270, 116, "Backend", "ensembl-web-tools-api · vep", "repo"),
-    "API":  (240, 430, 310, 104, "Metadata API", "a JSON file today", "seam"),
-    "PIPE": (650, 430, 250, 104, "Pipeline", "VEP via Nextflow / Seqera", "ext"),
+    "FE":   (60,  140, 240, 116, "Frontend", "standalone-web-vep", "repo"),
+    "BE":   (560, 140, 260, 116, "Backend", "ensembl-web-tools-api · vep", "repo"),
+    "PIPE": (920, 140, 230, 116, "Pipeline", "Nextflow / Seqera", "ext"),
+    "API":  (400, 420, 300, 104, "Metadata API", "a JSON file today", "seam"),
 }
 
 # --- arrows ------------------------------------------------------------------
-# (from, to, phase, label, y-or-x offset along the shared edge)
-# The FE↔BE arrows stack inside the boxes' shared height, like the sketch.
+# (from, to, phase, label, y along the shared edge)
 FLOWS = [
-    ("FE", "BE", 1, "form_config — on species select", 152),
-    ("BE", "FE", 1, "panels + options to render", 182),
-    ("FE", "BE", 2, "run job + the chosen options", 212),
-    ("BE", "FE", 4, "annotations + display spec", 242),
+    ("FE", "BE", 1, "form_config — on species select", 162),
+    ("BE", "FE", 1, "panels + options to render", 190),
+    ("FE", "BE", 2, "run job + the chosen options", 218),
+    ("BE", "FE", 4, "annotations + display spec", 246),
+]
+# BE ↔ Pipeline, same row
+SIDE = [
+    ("BE", "PIPE", 3, "run + poll", 176),
+    ("PIPE", "BE", 3, "output VCF", 220),
 ]
 # (from, to, phase, label, x on the source edge, y of the horizontal run,
-#  x on the target edge) — each gets its own run height so they never sit on
-# top of one another.
+#  x on the target edge) — separate run heights so they never sit on each other.
 DOWN = [
-    ("BE", "API", 1, "which options exist for this genome", 660, 312, 500),
-    ("API", "BE", 2, "config + parsing + display for them", 430, 380, 800),
-]
-SIDE = [
-    ("BE", "PIPE", 3, "run, then poll until it settles", 470),
-    ("PIPE", "BE", 3, "output VCF", 505),
+    ("BE", "API", 1, "which options exist for this genome", 640, 320, 600),
+    ("API", "BE", 2, "config + parsing + display for them", 480, 372, 760),
 ]
 
-# --- what the backend does between the arrows (the sketch's margin notes) ----
+# --- margin notes (the sketch's scribbles), in the free lower-right ----------
 NOTES = [
-    (610 + 270 + 22, 300, "②  options → config.ini"),
-    (610 + 270 + 22, 322, "     …and pin the spec to the job"),
-    (610 + 270 + 22, 352, "④  parse with the PINNED spec,"),
-    (610 + 270 + 22, 374, "     never the current one"),
+    (860, 424, "②  options → config.ini,"),
+    (860, 446, "     and pin the spec to the job"),
+    (860, 478, "④  parse with the PINNED spec,"),
+    (860, 500, "     never the current one"),
+]
+CAPTION = [
+    (60, 424, "①  Pick a species and the form is built from"),
+    (60, 446, "     the options that genome actually has."),
+    (60, 478, "③  The run happens outside both repos."),
 ]
 
-CAPTION = [
-    (70, 300, "①  Pick a species → the form is built from the options"),
-    (70, 322, "     that genome actually has."),
-    (70, 352, "③  The run happens outside both repos."),
-]
+# Rough text extents, so the generator can refuse to emit a clipped page.
+CHAR_W = {"note": 6.7, "lbl": 6.3}
 
 
 def esc(t):
@@ -127,29 +131,42 @@ for frm, to, phase, label, x, midy, ex in DOWN:
     )
     num(x, y1 + (24 if down else -24), phase)
 
-# arrows between BE and the pipeline
+# arrows between BE and the pipeline (same row, so drawn like the FE↔BE ones)
 for frm, to, phase, label, y in SIDE:
     fx, fy, fw, fh, *_ = BOX[frm]
     tx, ty, tw, th, *_ = BOX[to]
-    cx = fx + fw / 2 if frm == "BE" else tx + tw / 2
-    down = ty > fy
-    y1 = (fy + fh) if down else fy
-    y2 = ty if down else (ty + th)
-    xx = cx + (40 if down else -40)
-    gap = 9 if down else -9
-    f.append(f'<line x1="{xx}" y1="{y1}" x2="{xx}" y2="{y2-gap}" class="ar ar-ext" marker-end="url(#a)"/>')
-    tw_ = len(label) * 6.4 + 12
-    lx = xx + (tw_ / 2 + 12) * (1 if down else -1)
+    ltr = tx > fx
+    x1 = fx + fw if ltr else fx
+    x2 = tx if ltr else tx + tw
+    gap = 9 if ltr else -9
+    f.append(f'<line x1="{x1}" y1="{y}" x2="{x2-gap}" y2="{y}" class="ar ar-ext" marker-end="url(#a)"/>')
+    mid = (x1 + x2) / 2
+    tw_ = len(label) * CHAR_W["lbl"] + 12
     f.append(
-        f'<text x="{lx}" y="{(y1+y2)/2}" class="lbl" text-anchor="middle" dominant-baseline="central">{esc(label)}</text>'
+        f'<rect x="{mid-tw_/2:.1f}" y="{y-10}" width="{tw_:.1f}" height="20" rx="5" class="lbl-bg"/>'
+        f'<text x="{mid}" y="{y}" class="lbl" text-anchor="middle" dominant-baseline="central">{esc(label)}</text>'
     )
-    if down:
-        num(xx, y1 + 24, phase)
+    if ltr:
+        num(x1 + 26, y, phase)
 
 # margin notes
 for x, y, text in NOTES + CAPTION:
     cls = "note-t" + (" note-be" if x > 500 else "")
     f.append(f'<text x="{x}" y="{y}" class="{cls}" dominant-baseline="central">{esc(text)}</text>')
+
+# --- refuse to emit a page whose text runs off the canvas -------------------
+# The first version clipped the right-hand notes, and a plain eyeball of the
+# generator would not have caught it: the numbers only bite once rendered.
+_overflow = []
+for x, y, text in NOTES + CAPTION:
+    right = x + len(text) * CHAR_W["note"]
+    if right > W - 8:
+        _overflow.append(f"note {text!r} reaches x={right:.0f}, past the {W}px canvas")
+for _bid, (_x, _y, _w, _h, *_rest) in BOX.items():
+    if _x + _w > W - 8 or _y + _h > H - 8:
+        _overflow.append(f"box {_bid} extends past the canvas")
+if _overflow:
+    raise SystemExit("concept-map layout overflows:\n  " + "\n  ".join(_overflow))
 
 svg = (
     f'<svg class="d-svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" '
@@ -168,7 +185,7 @@ PAGE = r"""<meta charset="utf-8">
     --paper:#f4f6f8; --surface:#ffffff; --ink:#131820; --muted:#59636f; --faint:#808b97;
     --line:#dde2e8; --accent:#1c6f8c; --accent-soft:#e3eef2;
     --fs-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
-    --fs-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --maxw:74rem;
+    --fs-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --maxw:80rem;
     --plate:#ffffff; --bx-repo-bg:#ffffff; --bx-repo-bd:#9aa6b2;
     --seam-bg:#e3eef2; --seam-bd:#1c6f8c; --ext-bg:#f6f0e2; --ext-bd:#a08a52;
     --ar:#5b6672; --num:#8a3d6b; --note:#4a5763;

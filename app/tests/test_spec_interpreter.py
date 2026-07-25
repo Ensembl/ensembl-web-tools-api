@@ -653,13 +653,15 @@ def test_hgvs_empty_is_none():
 def test_phenotype_data_splits_entries_into_their_cols():
     # The Phenotypes plugin produces a single PHENOTYPES column: '&'-separated
     # entries, each '+'-separated into the fields named by the plugin's `cols`
-    # (type, source, phenotype, id, risk_allele). Absent trailing fields come
-    # back null.
+    # (type, source, phenotype, id, risk_allele, clinvar_clin_sig). Absent
+    # trailing fields come back null. ClinVar associations go to their own
+    # target, so this one carries none.
     index_map = index_map_for("Allele", "PHENOTYPES")
-    gene = "Gene+GenCC+Parkinson_disease+ENSG00000145335+"
-    variation = "Variation+NHGRI-EBI_GWAS_catalog+Atrial_fibrillation+rs699+A"
-    assert run("phenotype_data", ["A", f"{gene}&{variation}"], index_map) == {
-        "phenotypes": [
+    gene = "Gene+GenCC+Parkinson_disease+ENSG00000145335++"
+    variation = "Variation+NHGRI-EBI_GWAS_catalog+Atrial_fibrillation+rs699+A+"
+    result = run("phenotype_data", ["A", f"{gene}&{variation}"], index_map)
+    assert result["clinvar_phenotypes"] == []
+    assert result["phenotypes"] == [
             {
                 "type": "Gene",
                 "source": "GenCC",
@@ -675,7 +677,6 @@ def test_phenotype_data_splits_entries_into_their_cols():
                 "risk_allele": "A",
             },
         ]
-    }
 
 
 def test_phenotype_data_skips_entries_missing_a_required_field():
@@ -683,19 +684,46 @@ def test_phenotype_data_skips_entries_missing_a_required_field():
     them is dropped rather than rendered half-empty. (Entries with a different
     field count are dropped for the same reason — the pattern must match.)"""
     index_map = index_map_for("PHENOTYPES")
-    good = "Gene+GenCC+Parkinson_disease+ENSG00000145335+"
+    good = "Gene+GenCC+Parkinson_disease+ENSG00000145335++"
     result = run(
         "phenotype_data",
         [
-            "Gene++Parkinson_disease+ENSG1+"  # no source
-            "&Gene+GenCC++ENSG2+"  # no phenotype
-            "&+GenCC+Parkinson_disease+ENSG3+"  # no type
-            "&Cancer_Gene_Census+cancer+ENSG4+"  # 4 fields (pre-`type` shape)
+            "Gene++Parkinson_disease+ENSG1++"  # no source
+            "&Gene+GenCC++ENSG2++"  # no phenotype
+            "&+GenCC+Parkinson_disease+ENSG3++"  # no type
+            "&Cancer_Gene_Census+cancer+ENSG4++"  # 5 fields (pre-`type` shape)
             f"&{good}"
         ],
         index_map,
     )
     assert [p["id"] for p in result["phenotypes"]] == ["ENSG00000145335"]
+
+
+def test_phenotype_data_splits_clinvar_into_its_own_target():
+    """Only ClinVar associations carry a clinical significance, and they get
+    their own table, so they are parsed into their own target: the `phenotypes`
+    pattern excludes source "ClinVar" and the `clinvar_phenotypes` one pins it.
+    Neither leaks into the other."""
+    index_map = index_map_for("Allele", "PHENOTYPES")
+    result = run(
+        "phenotype_data",
+        [
+            "A",
+            "Variation+ClinVar+Parkinson_disease+rs1+A+pathogenic"
+            "&Variation+NHGRI-EBI_GWAS_catalog+Albumin_levels+rs2+A+"
+            "&Gene+GenCC+Parkinson_disease+ENSG1++",
+        ],
+        index_map,
+    )
+    assert [(p["source"], p["clinvar_clin_sig"]) for p in result["clinvar_phenotypes"]] == [
+        ("ClinVar", "pathogenic")
+    ]
+    assert [p["source"] for p in result["phenotypes"]] == [
+        "NHGRI-EBI_GWAS_catalog",
+        "GenCC",
+    ]
+    # the non-ClinVar target does not carry the significance field at all
+    assert "clinvar_clin_sig" not in result["phenotypes"][0]
 
 
 def test_phenotype_data_variation_is_scoped_to_its_risk_allele():
@@ -710,15 +738,17 @@ def test_phenotype_data_variation_is_scoped_to_its_risk_allele():
     """
     index_map = index_map_for("Allele", "PHENOTYPES")
     entries = (
-        "Variation+ClinVar+Neurodevelopmental_disorder+rs139548132+C"
-        "&Variation+ClinVar+Inborn_genetic_diseases+rs139548132+G"
-        "&Variation+ClinVar+No_risk_allele+rs139548132+"
-        "&Gene+GenCC+Parkinson_disease+ENSG00000145335+"
+        "Variation+ClinVar+Neurodevelopmental_disorder+rs139548132+C+pathogenic"
+        "&Variation+ClinVar+Inborn_genetic_diseases+rs139548132+G+benign"
+        "&Variation+ClinVar+No_risk_allele+rs139548132++pathogenic"
+        "&Gene+GenCC+Parkinson_disease+ENSG00000145335++"
     )
-    kept = lambda allele: [  # noqa: E731
-        (p["type"], p["risk_allele"], p["phenotype"])
-        for p in run("phenotype_data", [allele, entries], index_map)["phenotypes"]
-    ]
+    def kept(allele):
+        out = run("phenotype_data", [allele, entries], index_map)
+        return [
+            (p["type"], p["risk_allele"], p["phenotype"])
+            for p in out["clinvar_phenotypes"] + out["phenotypes"]
+        ]
     assert kept("C") == [
         ("Variation", "C", "Neurodevelopmental_disorder"),
         ("Gene", None, "Parkinson_disease"),

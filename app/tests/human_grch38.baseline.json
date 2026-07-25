@@ -265,7 +265,7 @@
           "name": "Phenotypes",
           "params": {
             "file": "{path}/Phenotypes.pm_homo_sapiens_116_GRCh38.gvf.gz",
-            "cols": "type&source&phenotype&id&risk_allele"
+            "cols": "type&source&phenotype&id&risk_allele&clinvar_clin_sig"
           }
         }
       },
@@ -1750,57 +1750,109 @@
         "csq_fields": [
           "PHENOTYPES"
         ],
-        "require_any_output": [
-          "phenotypes"
-        ],
-        "targets": [
-          {
-            "field": "phenotypes",
-            "from": "PHENOTYPES",
-            "transform": "regex",
-            "each": true,
-            "pattern": "^(?P<type>[^+]+)\\+(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)$",
-            "as": [
-              {
-                "field": "type",
-                "type": "string"
+          "require_any_output": [
+            "phenotypes",
+            "clinvar_phenotypes"
+          ],
+          "targets": [
+            {
+              "field": "phenotypes",
+              "from": "PHENOTYPES",
+              "transform": "regex",
+              "each": true,
+              "pattern": "^(?P<type>[^+]+)\\+(?!ClinVar\\+)(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)\\+[^+]*$",
+              "as": [
+                {
+                  "field": "type",
+                  "type": "string"
+                },
+                {
+                  "field": "source",
+                  "type": "string"
+                },
+                {
+                  "field": "phenotype",
+                  "type": "string"
+                },
+                {
+                  "field": "id",
+                  "type": "string"
+                },
+                {
+                  "field": "risk_allele",
+                  "type": "string"
+                }
+              ],
+              "drop_when": {
+                "unless_matches": {
+                  "field": "risk_allele",
+                  "column": "Allele"
+                },
+                "only_if": {
+                  "field": "type",
+                  "equals": "Variation"
+                }
               },
-              {
-                "field": "source",
-                "type": "string"
-              },
-              {
-                "field": "phenotype",
-                "type": "string"
-              },
-              {
-                "field": "id",
-                "type": "string"
-              },
-              {
-                "field": "risk_allele",
-                "type": "string"
-              }
-            ],
-            "drop_when": {
-              "unless_matches": {
-                "field": "risk_allele",
-                "column": "Allele"
-              },
-              "only_if": {
-                "field": "type",
-                "equals": "Variation"
-              }
+              "item_fields": [
+                "type",
+                "source",
+                "phenotype",
+                "id",
+                "risk_allele"
+              ]
             },
-            "item_fields": [
-              "type",
-              "source",
-              "phenotype",
-              "id",
-              "risk_allele"
-            ]
-          }
-        ]
+            {
+              "field": "clinvar_phenotypes",
+              "from": "PHENOTYPES",
+              "transform": "regex",
+              "each": true,
+              "pattern": "^(?P<type>[^+]+)\\+(?P<source>ClinVar)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)\\+(?P<clinvar_clin_sig>[^+]*)$",
+              "as": [
+                {
+                  "field": "type",
+                  "type": "string"
+                },
+                {
+                  "field": "source",
+                  "type": "string"
+                },
+                {
+                  "field": "phenotype",
+                  "type": "string"
+                },
+                {
+                  "field": "id",
+                  "type": "string"
+                },
+                {
+                  "field": "risk_allele",
+                  "type": "string"
+                },
+                {
+                  "field": "clinvar_clin_sig",
+                  "type": "string"
+                }
+              ],
+              "drop_when": {
+                "unless_matches": {
+                  "field": "risk_allele",
+                  "column": "Allele"
+                },
+                "only_if": {
+                  "field": "type",
+                  "equals": "Variation"
+                }
+              },
+              "item_fields": [
+                "type",
+                "source",
+                "phenotype",
+                "id",
+                "risk_allele",
+                "clinvar_clin_sig"
+              ]
+            }
+          ]
       },
       {
         "plugin": "dosage_sensitivity",
@@ -2581,23 +2633,58 @@
       },
       {
         "option_id": "phenotypes",
-        "blocks": [
-          {
-            "kind": "table",
-            "heading": "Phenotypes",
-            "from": "phenotype_data.phenotypes",
-            "group_by": {
-              "field": "type"
-            },
-            "truncate": {
-              "visible_count": 3
-            },
-            "columns": [
-              { "label": "Phenotype", "from": "phenotype", "format": "phenotype" },
-              { "label": "Source", "from": "source", "format": "humanize" }
-            ]
-          }
-        ]
+          "blocks": [
+            {
+              "kind": "group",
+              "heading": "Phenotypes",
+              "blocks": [
+                {
+                  "kind": "table",
+                  "from": "phenotype_data.phenotypes",
+                  "group_by": {
+                    "field": "type"
+                  },
+                  "truncate": {
+                    "visible_count": 3
+                  },
+                  "columns": [
+                    {
+                      "label": "Phenotype",
+                      "from": "phenotype",
+                      "format": "phenotype"
+                    },
+                    {
+                      "label": "Source",
+                      "from": "source",
+                      "format": "humanize"
+                    }
+                  ]
+                },
+                {
+                  "kind": "table",
+                  "from": "phenotype_data.clinvar_phenotypes",
+                  "group_by": {
+                    "field": "source"
+                  },
+                  "truncate": {
+                    "visible_count": 3
+                  },
+                  "columns": [
+                    {
+                      "label": "Phenotype",
+                      "from": "phenotype",
+                      "format": "phenotype"
+                    },
+                    {
+                      "label": "Classifier",
+                      "from": "clinvar_clin_sig",
+                      "format": "humanize"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
       },
       {
         "option_id": "go",

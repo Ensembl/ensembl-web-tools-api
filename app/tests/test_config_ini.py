@@ -288,7 +288,7 @@ def test_phenotypes_requests_its_columns(monkeypatch, tmp_path):
         assert line is not None, assembly
         assert line.endswith(
             f"/Phenotypes.pm_homo_sapiens_116_{genome_build}.gvf.gz,"
-            "cols=type&source&phenotype&id&risk_allele"
+            "cols=type&source&phenotype&id&risk_allele&clinvar_clin_sig"
         ), line
 
 

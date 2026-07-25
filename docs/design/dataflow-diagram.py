@@ -309,7 +309,7 @@ PAGE = r"""<meta charset="utf-8">
     <span class="chip"><span class="pill api">API</span><small>becomes a metadata API call</small></span>
   </div>
   <div class="plate-shell">
-    <div class="plate-cap"><span>Sequence - one submission, start to finish</span><span>dev / prod branches tagged inline</span></div>
+    <div class="plate-cap"><span>Sequence — one submission, start to finish</span><span>dev / prod branches tagged inline</span></div>
     <div class="plate">__SVG__</div>
   </div>
   <div class="grid2">
@@ -319,8 +319,8 @@ PAGE = r"""<meta charset="utf-8">
       <li>Triggers submission; polls status every 15s</li>
       <li>Requests filtered pages + downloads</li></ul></div>
     <div class="card"><h3><span class="dot api"></span>Metadata API owns</h3><ul>
-      <li><b>Endpoint 1</b> - options + input-render spec, keyed on species</li>
-      <li><b>Endpoint 2</b> - config + parsing spec + display spec, for the selected options</li>
+      <li><b>Endpoint 1</b> — options + input-render spec, keyed on species</li>
+      <li><b>Endpoint 2</b> — config + parsing spec + display spec, for the selected options</li>
       <li>Pure data: no logic, backend-authoritative for parsing</li></ul></div>
     <div class="card"><h3><span class="dot be"></span>Backend owns</h3><ul>
       <li><b>Relays endpoint 1</b> and applies activation (<code>get_visible_panels</code>)</li>
@@ -328,8 +328,8 @@ PAGE = r"""<meta charset="utf-8">
       <li><b>Pins</b> parsing + display spec per job</li>
       <li>Both checks; launches/polls the pipeline; parses; filters + downloads</li></ul></div>
     <div class="card"><h3><span class="dot pipe"></span>Pipeline</h3><ul>
-      <li><b>Prod</b> - Nextflow via Seqera; output mounted for the backend</li>
-      <li><b>Dev</b> - manual HPC run; output hand-placed in <code>dev-data</code></li>
+      <li><b>Prod</b> — Nextflow via Seqera; output mounted for the backend</li>
+      <li><b>Dev</b> — manual HPC run; output hand-placed in <code>dev-data</code></li>
       <li>Adds required headers on rerun when they're missing</li></ul></div>
   </div>
 </div></div>

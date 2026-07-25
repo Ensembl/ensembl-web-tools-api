@@ -138,7 +138,7 @@ _HUMAN_37_38_PANELS: list[dict] = [
                 "type": "boolean",
                 "default": False,
                 "sub_options": [
-                    {"id": "dosage_sensitivity_cover", "label": "Coverage", "type": "boolean", "default": False},
+                    {"id": "dosage_sensitivity_cover", "label": "Require full transcript overlap", "type": "boolean", "default": False},
                 ],
             },
         ],

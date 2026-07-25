@@ -13,7 +13,7 @@ feeds both the `eve` and `popeve` parsers; `hgvs`+`hgvsg` feed one `hgvs` parser
 carried on each config entry's `parsed_as`, and this model's `model_validator`
 is the load-time **consistency check** (design §6.1) that guards it.
 
-See docs/design/merged-annotation-spec.md.
+See app/vep/docs/design/merged-annotation-spec.md.
 """
 
 import logging

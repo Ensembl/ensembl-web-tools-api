@@ -10,7 +10,7 @@ option combinations) before it replaces it.
 NOT here: the always-on base config (`force_overwrite`, `numbers`, `symbol`, …
 and the assembly-gated `mane`/`assembly`). Those are VEP-invocation invariants
 that stay in the backend next to the per-genome `gff`/`fasta` resolution — this
-module only turns *selected options* into lines. See docs/design/.
+module only turns *selected options* into lines. See app/vep/docs/design/.
 """
 
 from typing import Callable

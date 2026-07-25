@@ -11,7 +11,7 @@ header, import and doc comment (everything up to `= `).
 
 Usage (from the repo root, with a sibling standalone-web-vep checkout):
 
-    PYTHONPATH=app .venv/bin/python scripts/generate_display_fixture.py
+    PYTHONPATH=app .venv/bin/python app/vep/scripts/generate_display_fixture.py
 
 Pass an explicit fixture path as the first argument to override the default
 (which assumes standalone-web-vep sits beside this repo).
@@ -26,8 +26,8 @@ from vep.utils.spec_loader import load_merged_spec
 GENOME = "human_grch38"
 MARKER = "export const displaySpecFixture: DisplaySpec = "
 
-# .../vep/ensembl-web-tools-api/scripts/this.py -> parents[2] == .../vep
-_REPOS_DIR = Path(__file__).resolve().parents[2]
+# .../vep/ensembl-web-tools-api/app/vep/scripts/this.py -> parents[4] == .../vep
+_REPOS_DIR = Path(__file__).resolve().parents[4]
 DEFAULT_FIXTURE = (
     _REPOS_DIR
     / "standalone-web-vep/src/content/app/tools/vep/views/vep-submission-results"

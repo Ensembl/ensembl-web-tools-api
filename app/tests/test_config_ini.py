@@ -277,6 +277,22 @@ def test_static_plugins_emit_expected_line(monkeypatch, tmp_path, option, prefix
     assert any(line.startswith(prefix) for line in lines)
 
 
+def test_phenotypes_requests_its_columns(monkeypatch, tmp_path):
+    # The Phenotypes plugin only reports the fields named in `cols`, written
+    # straight after the data file. Same set on both assemblies.
+    for build, assembly, genome_build in (
+        (build_lines, "GRCh38", "GRCh38"),
+        (build_lines_37, "GRCh37", "GRCh37"),
+    ):
+        line = find_line(build(monkeypatch, tmp_path, phenotypes=True), "plugin Phenotypes,")
+        assert line is not None, assembly
+        assert line.endswith(
+            f"/Phenotypes.pm_homo_sapiens_116_{genome_build}.gvf.gz,"
+            "cols=source&phenotype&id&clinvar_ref_allele&risk_allele"
+            "&beta_coef&p_value"
+        ), line
+
+
 # --- 7. sub-flag plugins (ProtVar / mutfunc / DosageSensitivity) -------------
 
 

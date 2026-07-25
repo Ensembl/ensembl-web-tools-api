@@ -264,7 +264,8 @@
           "emit": "plugin",
           "name": "Phenotypes",
           "params": {
-            "file": "{path}/Phenotypes.pm_homo_sapiens_116_GRCh38.gvf.gz"
+            "file": "{path}/Phenotypes.pm_homo_sapiens_116_GRCh38.gvf.gz",
+            "cols": "source&phenotype&id&clinvar_ref_allele&risk_allele&beta_coef&p_value"
           }
         }
       },

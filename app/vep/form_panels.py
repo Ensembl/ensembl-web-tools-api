@@ -335,7 +335,10 @@ def _allofus_option() -> dict:
             "id": f"allofus_{pop}",
             "label": label,
             "type": "boolean",
-            "default": pop == "all",  # "All" pre-selected -> fields=gvs_all_af
+            # Suggested defaults: the overall AF, plus the maximum subpopulation
+            # — the two that are useful without knowing which population matters
+            # for a given variant.
+            "default": pop in ("all", "max"),
         }
         for pop, label in _ALLOFUS_POPULATIONS
     ]

@@ -805,7 +805,9 @@ def test_allofus_default_line(monkeypatch, tmp_path):
     assert f"file={PLUGIN_PATH}/AllOfUs_chr###CHR###.vcf.gz" in line
     assert "short_name=AoU" in line
     assert line.endswith("format=vcf,type=exact")
-    assert "fields=gvs_all_af," in line  # default: All
+    # suggested defaults: the overall AF and the maximum subpopulation, the
+    # latter contributing both its AF and the subpopulation it came from
+    assert "fields=gvs_all_af%gvs_max_af%gvs_max_subpop," in line
 
 
 def test_allofus_max_emits_two_fields(monkeypatch, tmp_path):
@@ -829,6 +831,7 @@ def test_allofus_multiple_populations_in_order(monkeypatch, tmp_path):
             monkeypatch,
             tmp_path,
             allofus=True,
+            allofus_max=False,  # isolate the ordering from the default max
             allofus_afr=True,
             allofus_sas=True,
         )
@@ -838,7 +841,13 @@ def test_allofus_multiple_populations_in_order(monkeypatch, tmp_path):
 
 def test_allofus_enabled_but_nothing_selected_emits_no_line(monkeypatch, tmp_path):
     line = allofus_line(
-        build_lines(monkeypatch, tmp_path, allofus=True, allofus_all=False)
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            allofus=True,
+            allofus_all=False,
+            allofus_max=False,  # both suggested defaults off
+        )
     )
     assert line is None
 

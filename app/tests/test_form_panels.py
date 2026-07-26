@@ -600,3 +600,47 @@ def test_af_label_unrecognised_falls_back_to_code():
 def test_af_max_subpopulation_label_single_and_joined():
     assert form_panels.af_max_subpopulation_label("eur") == "European"
     assert form_panels.af_max_subpopulation_label("eur&afr") == "European / African"
+
+
+def test_form_defaults_match_the_config_parameter_defaults():
+    """A sub-option left at its default is never written into the submitted
+    parameters, so the form's default only takes effect if ConfigIniParams
+    carries the same one. They are declared in two files and nothing else keeps
+    them in step — the All of Us "Maximum subpopulation" default was set in the
+    form and had no effect until this was noticed."""
+    from app.vep.models.pipeline_model import ConfigIniParams
+
+    panels = get_visible_panels(
+        species_taxonomy_id="9606", assembly_name="GRCh38.p14"
+    )
+    config_defaults = {
+        name: field.default
+        for name, field in ConfigIniParams.model_fields.items()
+        if isinstance(field.default, bool)
+    }
+
+    mismatched = []
+
+    def walk(options):
+        for option in options:
+            if option.get("type") == "group":
+                walk(option.get("options", []))
+                continue
+            option_id, default = option.get("id"), option.get("default")
+            if (
+                isinstance(default, bool)
+                and option_id in config_defaults
+                and config_defaults[option_id] != default
+            ):
+                mismatched.append(
+                    f"{option_id}: form={default}, ConfigIniParams="
+                    f"{config_defaults[option_id]}"
+                )
+            walk(option.get("sub_options", []) or [])
+
+    for panel in panels:
+        walk(panel.get("options", []))
+
+    assert not mismatched, "form and config defaults disagree:\n  " + "\n  ".join(
+        mismatched
+    )

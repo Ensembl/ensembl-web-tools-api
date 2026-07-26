@@ -377,8 +377,11 @@ class ConfigIniParams(BaseModel):
     # NIH All of Us frequencies (human GRCh38). A VEP `custom` line whose `fields`
     # list is built from the selected population toggles (no sex split).
     allofus: bool = False
+    # Suggested defaults, and they must match form_panels: an untouched
+    # sub-option is never written into the submitted parameters, so the form's
+    # default only takes effect if the same default is set here too.
     allofus_all: bool = True  # pre-selected so enabling yields fields=gvs_all_af
-    allofus_max: bool = False  # -> gvs_max_af + gvs_max_subpop
+    allofus_max: bool = True  # -> gvs_max_af + gvs_max_subpop
     allofus_afr: bool = False
     allofus_amr: bool = False
     allofus_eas: bool = False

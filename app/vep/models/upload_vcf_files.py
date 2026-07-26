@@ -18,6 +18,7 @@ limitations under the License.
 
 import os
 import logging
+import re
 import tempfile
 import shutil
 
@@ -31,6 +32,22 @@ from core.config import NF_WORK_DIR
 
 MAX_FILE_SIZE = 1024 * 1024 * 1024 * 2  # 2GB
 MAX_REQUEST_BODY_SIZE = MAX_FILE_SIZE + 1024
+
+# What a client may call its upload. Deliberately a strict allowlist rather than
+# a denylist of dangerous characters: this name becomes a real path, that path is
+# handed to bcftools, and it round-trips through the pipeline before coming back
+# to us on the status response — so it is worth being able to say what it can
+# contain rather than guessing at what it cannot. Covers every real VCF name
+# (`sample_1.vcf.gz`, `NA12878.chr1-22.vcf`).
+SAFE_FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$")
+
+
+class UnsafeFileNameException(Exception):
+    """The client's `Filename` header is not a plain file name."""
+
+    def __init__(self, file_name: str):
+        self.file_name = file_name
+        super().__init__(f"unacceptable file name: {file_name!r}")
 
 
 class MaxBodySizeException(Exception):
@@ -66,8 +83,18 @@ class Streamer:
 
     @staticmethod
     def file_name_validator(file_name: str | None = None):
+        """Reject anything that is not a plain, safe file name.
+
+        `os.path.basename` alone is not enough — it strips directories but
+        leaves shell metacharacters, so `a$(...).vcf` reaches the shell intact.
+        The command interpolations it fed are now argument lists, but the name
+        also becomes a path and travels through the pipeline, so it is checked
+        at the door as well.
+        """
         if not file_name:
             raise Exception
+        if not SAFE_FILENAME.fullmatch(file_name):
+            raise UnsafeFileNameException(file_name)
 
     async def stream(self):
         body_validator = MaxBodySizeValidator(MAX_REQUEST_BODY_SIZE)
@@ -81,11 +108,19 @@ class Streamer:
                 self.parser.data_received(chunk)
 
             if self.filename == "temp_name":
+                # A second, independent source of the name: the multipart part's
+                # own filename, used when the client sent no `Filename` header.
+                # It gets the same gate — validating only the header would leave
+                # the door open next to the lock.
+                multipart_name = os.path.basename(
+                    self._input_file.multipart_filename or ""
+                )
+                self.file_name_validator(multipart_name)
                 os.rename(
                     self.filepath,
-                    os.path.join(self.temp_dir, self._input_file.multipart_filename),
+                    os.path.join(self.temp_dir, multipart_name),
                 )
-                self.filename = self._input_file.multipart_filename
+                self.filename = multipart_name
                 self.filepath = os.path.join(self.temp_dir, self.filename)
             return True
 

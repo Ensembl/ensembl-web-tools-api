@@ -38,7 +38,11 @@ from vep.models.pipeline_model import (
     PipelineStatus,
 )
 from vep.models.submission_form import Dropdown, FormConfig
-from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
+from vep.models.upload_vcf_files import (
+    Streamer,
+    MaxBodySizeException,
+    UnsafeFileNameException,
+)
 from vep.utils.nextflow import launch_workflow, get_workflow_status
 from vep.utils.dump_ini import dump_config_ini
 from vep.utils.vcf_results import get_results_from_path, stream_filtered_vcf_text
@@ -148,6 +152,11 @@ async def submit_vep(request: Request):
         return response_error_handler(result={"status": e.response.status_code})
     except MaxBodySizeException:
         return response_error_handler(result={"status": 413})
+    except UnsafeFileNameException as e:
+        # The client's fault, not ours — a 500 here would read as a server bug
+        # and tell the user nothing about how to fix their upload.
+        logging.warning(f"rejected upload file name: {e}")
+        return response_error_handler(result={"status": 400})
     except Exception as e:
         logging.exception(f"{e.__class__.__name__}: {e}")
         return response_error_handler(result={"status": 500})

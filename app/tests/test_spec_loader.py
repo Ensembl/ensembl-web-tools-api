@@ -9,6 +9,7 @@ import pytest
 from pydantic import FilePath
 
 from app.vep.utils.spec_loader import (
+    _species_annotations,
     EXPECTED_COLUMNS_SIDECAR_FILE,
     SPEC_SIDECAR_FILE,
     _content_digest,
@@ -213,16 +214,68 @@ def test_grch37_is_the_reuse_tier_without_gnomad_or_grch38_only():
     )
 
 
-def test_resolve_unknown_assembly_raises():
-    """No spec exists yet for non-human assemblies. This must fail loudly rather
-    than silently falling back to a human spec for, say, a mouse submission."""
-    with pytest.raises(ValueError, match="GRCm39"):
-        resolve_merged_spec("GRCm39")
+# The ubiquitous options — the only ids the base spec and a human spec share.
+BASE_IDS = {
+    "updownstream_distance", "hgvs", "hgvsg", "spdi", "protein",
+    "tss_distance", "nearest_gene", "nearest_exon_jb",
+}
 
 
-def test_resolve_empty_assembly_raises():
-    with pytest.raises(ValueError):
-        resolve_merged_spec("")
+def test_an_assembly_with_no_spec_of_its_own_still_resolves():
+    """VEP needs only a GFF and a FASTA, both of which the metadata API serves
+    for every genome it knows, so an unlisted species must still be submittable
+    — it is simply offered fewer options. It used to raise, which meant the form
+    showed a usable panel and Run then returned a 500."""
+    spec = resolve_merged_spec("Wibble_v1")
+    assert [e.id for e in spec.config.entries] == [
+        e.id for e in load_merged_spec("base").config.entries
+    ]
+
+
+def test_the_fallback_is_the_base_spec_never_a_human_one():
+    """The original reason this raised: never silently annotate a mouse
+    submission with human data files. The base spec carries no data files at
+    all, so the fallback cannot do that."""
+    spec = resolve_merged_spec("Wibble_v1")  # matches nothing in the table
+    assert {e.id for e in spec.config.entries} == BASE_IDS
+    for entry in spec.config.entries:
+        # no data files at all, so nothing species-specific can leak in
+        params = getattr(entry.config, "params", {}) or {}
+        assert not [v for v in params.values() if isinstance(v, str) and "{path}" in v]
+
+
+def test_resolve_empty_assembly_falls_back_rather_than_raising():
+    assert resolve_merged_spec("").config.entries
+
+
+def test_a_species_with_data_gets_its_own_files():
+    spec = resolve_merged_spec("ARS-UCD2.0")  # cattle
+    files = {
+        e.id: e.config.params["file"]
+        for e in spec.config.entries
+        if e.id in ("go", "phenotypes")
+    }
+    assert files == {
+        "go": "{path}/GO.pm_bos_taurus_116.gff.gz",
+        "phenotypes": "{path}/Phenotypes.pm_bos_taurus_116.gvf.gz",
+    }
+
+
+def test_a_species_with_only_some_data_gets_only_that():
+    spec = resolve_merged_spec("mOrnAna1.p.v1")  # platypus: GO, no phenotypes
+    ids = {e.id for e in spec.config.entries}
+    assert "go" in ids and "phenotypes" not in ids
+
+
+def test_every_species_in_the_table_resolves_and_names_its_own_files():
+    """The table is the single source of the file names; this walks all of it."""
+    for row in _species_annotations()["species"]:
+        spec = resolve_merged_spec(row["assembly"])
+        ids = {e.id for e in spec.config.entries}
+        assert set(row["datasets"]) <= ids, row["assembly"]
+        for entry in spec.config.entries:
+            if entry.id in ("go", "phenotypes"):
+                assert row["production_name"] in entry.config.params["file"]
 
 
 # --- sidecar ---------------------------------------------------------------

@@ -14,6 +14,7 @@ and the same one pinned alongside a job at submission time.
 
 import hashlib
 import json
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic import FilePath
@@ -130,7 +131,7 @@ def _select_library(library: dict, config_entries: list[dict]) -> dict:
     }
 
 
-def _assemble_payload(name: str) -> dict:
+def _assemble_payload(name: str, extra_entries: list[dict] | None = None) -> dict:
     """The full merged-spec payload for a bundled genome, assembled from the
     shared library it references.
 
@@ -146,6 +147,13 @@ def _assemble_payload(name: str) -> dict:
     sidecar loaded via `load_merged_spec_file`) is returned unchanged.
     """
     doc = json.loads((SPEC_DIR / f"{name}.json").read_text())
+    if extra_entries:
+        # Added before the library is selected: the selection is driven by the
+        # config entries, so an entry appended afterwards would name a plugin
+        # that had already been filtered out.
+        doc["config"]["entries"] = sorted(
+            doc["config"]["entries"] + extra_entries, key=lambda e: e["order"]
+        )
     library_name = doc.pop("library", None)
     if library_name is None:
         return doc
@@ -165,14 +173,70 @@ def load_merged_spec(name: str) -> MergedSpec:
 # picked using the same notion of "which genome is this" as the ini builder.
 # Human GRCh38 and GRCh37 have specs; a submission for any other assembly fails
 # loudly here rather than being silently parsed with the wrong one.
+# Assemblies that offer MORE than the base. Not a gate: an assembly absent from
+# here still runs, on `BASE_SPEC`. VEP works on any genome with a GFF and a
+# FASTA, so a spec decides which extra options a species is offered — never
+# whether it can be submitted.
 _ASSEMBLY_SPECS = {
     "GRCh38": "human_grch38",
     "GRCh37": "human_grch37",
 }
 
+# The options every genome gets: VEP mechanics read off the genome's own
+# gene set, with no species data files behind them.
+BASE_SPEC = "base"
+
+
+# Species that carry GO / Phenotypes data files of their own. Keyed by assembly
+# so the submit path can use it — `species_taxonomy_id` is not sent at submit.
+# Deliberately a table, not one document per species: the file names follow
+# entirely from the production name, so the rule is stated once in the document's
+# `templates` and the table only says which species have which data. The form
+# reads the same table, so the options offered and the spec used cannot drift.
+SPECIES_ANNOTATIONS_FILE = "species_annotations"
+
+
+@lru_cache(maxsize=1)
+def _species_annotations() -> dict:
+    return json.loads((SPEC_DIR / f"{SPECIES_ANNOTATIONS_FILE}.json").read_text())
+
+
+def species_annotation_entry(assembly_name: str) -> dict | None:
+    """The extras table's row for an assembly, or None."""
+    for row in _species_annotations()["species"]:
+        if (assembly_name or "").startswith(row["assembly"]):
+            return row
+    return None
+
+
+def species_extra_config_entries(assembly_name: str) -> list[dict]:
+    """The GO / Phenotypes config entries for a species, built from the shared
+    templates with its own production name. Empty for a species with no data."""
+    row = species_annotation_entry(assembly_name)
+    if row is None:
+        return []
+    templates = _species_annotations()["templates"]
+    entries = []
+    for dataset in row["datasets"]:
+        entry = json.loads(json.dumps(templates[dataset]))
+        params = entry["config"]["params"]
+        # Only the production name is substituted; `{path}` is resolved later,
+        # per entry, by the config interpreter.
+        params["file"] = params["file"].replace(
+            "{production_name}", row["production_name"]
+        )
+        entries.append(entry)
+    return entries
+
 
 def resolve_merged_spec(assembly_name: str) -> MergedSpec:
     """The merged spec for a submission's assembly.
+
+    An assembly with no spec of its own falls back to the base spec rather than
+    failing: the pipeline needs only a GFF and a FASTA, both of which the
+    metadata API serves for every genome it knows, so there is nothing about an
+    unlisted species that stops a job running — it is simply offered fewer
+    options.
 
     Only `assembly_name` is available at submission time (it is a field on
     ConfigIniParams already); `species_taxonomy_id` is not — that is only ever
@@ -182,7 +246,16 @@ def resolve_merged_spec(assembly_name: str) -> MergedSpec:
     for prefix, spec_name in _ASSEMBLY_SPECS.items():
         if (assembly_name or "").startswith(prefix):
             return load_merged_spec(spec_name)
-    raise ValueError(f"No spec available for assembly {assembly_name!r}")
+    extras = species_extra_config_entries(assembly_name)
+    if not extras:
+        return load_merged_spec(BASE_SPEC)
+    payload = _assemble_payload(BASE_SPEC, extra_entries=extras)
+    row = species_annotation_entry(assembly_name)
+    payload["genome"] = {
+        "species_taxonomy_id": row["species_taxonomy_id"],
+        "assembly": row["assembly"],
+    }
+    return _finalize(payload)
 
 
 def write_spec_sidecar(directory: str | Path, spec: MergedSpec) -> Path:

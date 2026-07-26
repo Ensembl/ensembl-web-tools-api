@@ -1,0 +1,125 @@
+{
+  "config": {
+    "entries": [
+      {
+        "id": "updownstream_distance",
+        "order": 5,
+        "parsed_as": [],
+        "config": {
+          "emit": "setting",
+          "keyword": "distance",
+          "value": {
+            "from_option": "updownstream_distance_bp",
+            "as": "value"
+          }
+        }
+      },
+      {
+        "id": "hgvs",
+        "order": 10,
+        "parsed_as": [
+          "hgvs"
+        ],
+        "config": {
+          "emit": "flag",
+          "keyword": "hgvs"
+        }
+      },
+      {
+        "id": "hgvsg",
+        "order": 11,
+        "parsed_as": [
+          "hgvs",
+          "hgvsg"
+        ],
+        "config": {
+          "emit": "flag",
+          "keyword": "hgvsg"
+        }
+      },
+      {
+        "id": "spdi",
+        "order": 12,
+        "parsed_as": [
+          "spdi"
+        ],
+        "config": {
+          "emit": "flag",
+          "keyword": "spdi"
+        }
+      },
+      {
+        "id": "protein",
+        "order": 13,
+        "parsed_as": [
+          "protein"
+        ],
+        "config": {
+          "emit": "flag",
+          "keyword": "protein"
+        }
+      },
+      {
+        "id": "tss_distance",
+        "order": 50,
+        "parsed_as": [],
+        "config": {
+          "emit": "plugin",
+          "name": "TSSDistance"
+        }
+      },
+      {
+        "id": "nearest_gene",
+        "order": 51,
+        "parsed_as": [
+          "nearest_gene"
+        ],
+        "config": {
+          "emit": "plugin",
+          "name": "NearestGene",
+          "params": {
+            "gff3": "{gff}",
+            "regulatory": "0",
+            "vep_filter": "1"
+          },
+          "flags": {
+            "options": [
+              {
+                "option": "nearest_gene_both_directions",
+                "keyword": "both_directions"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "nearest_exon_jb",
+        "order": 52,
+        "parsed_as": [
+          "nearest_exon_jb"
+        ],
+        "config": {
+          "emit": "plugin",
+          "name": "NearestExonJB",
+          "params": {
+            "gff3": "{gff}",
+            "vep_filter": "1",
+            "max_range": {
+              "from_option": "nearest_exon_jb_max_range",
+              "as": "value"
+            }
+          },
+          "flags": {
+            "options": [
+              {
+                "option": "nearest_exon_jb_intronic",
+                "keyword": "intronic"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "library": "annotation_library"
+}

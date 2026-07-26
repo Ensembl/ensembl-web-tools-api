@@ -1,0 +1,178 @@
+{
+  "templates": {
+    "go": {
+      "id": "go",
+      "order": 31,
+      "parsed_as": [
+        "go"
+      ],
+      "config": {
+        "emit": "plugin",
+        "name": "GO",
+        "params": {
+          "file": "{path}/GO.pm_{production_name}_116.gff.gz"
+        }
+      }
+    },
+    "phenotypes": {
+      "id": "phenotypes",
+      "order": 30,
+      "parsed_as": [
+        "phenotype_data"
+      ],
+      "config": {
+        "emit": "plugin",
+        "name": "Phenotypes",
+        "params": {
+          "file": "{path}/Phenotypes.pm_{production_name}_116.gvf.gz",
+          "cols": "type&source&phenotype&id&risk_allele&clinvar_clin_sig"
+        }
+      }
+    }
+  },
+  "species": [
+    {
+      "assembly": "Felis_catus_9.0",
+      "production_name": "felis_catus_abyssinian",
+      "species_taxonomy_id": "9685",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "ARS-UCD2.0",
+      "production_name": "bos_taurus",
+      "species_taxonomy_id": "9913",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "bGalGal1.mat.broiler.GRCg7b",
+      "production_name": "gallus_gallus",
+      "species_taxonomy_id": "9031",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "GRCg6a",
+      "production_name": "gallus_gallus_gca000002315v5",
+      "species_taxonomy_id": "9031",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "ROS_Cfam_1.0",
+      "production_name": "canis_lupus_familiaris",
+      "species_taxonomy_id": "9612",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "Dog10K_Boxer_Tasha",
+      "production_name": "canis_lupus_familiarisboxer",
+      "species_taxonomy_id": "9612",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "F.catus_Fca126_mat1.0",
+      "production_name": "felis_catus",
+      "species_taxonomy_id": "9685",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "ARS1",
+      "production_name": "capra_hircus",
+      "species_taxonomy_id": "9925",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "EquCab3.0",
+      "production_name": "equus_caballus",
+      "species_taxonomy_id": "9796",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "GRCm39",
+      "production_name": "mus_musculus",
+      "species_taxonomy_id": "10090",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "GRCr8",
+      "production_name": "rattus_norvegicus",
+      "species_taxonomy_id": "10116",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "Sscrofa11.1",
+      "production_name": "sus_scrofa",
+      "species_taxonomy_id": "9823",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "mOrnAna1.p.v1",
+      "production_name": "ornithorhynchus_anatinus",
+      "species_taxonomy_id": "9258",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "ARS-UI_Ramb_v3.0",
+      "production_name": "ovis_aries",
+      "species_taxonomy_id": "9940",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "Oar_v3.1",
+      "production_name": "ovis_aries_texel",
+      "species_taxonomy_id": "9940",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "GRCz11",
+      "production_name": "danio_rerio",
+      "species_taxonomy_id": "7955",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    }
+  ]
+}

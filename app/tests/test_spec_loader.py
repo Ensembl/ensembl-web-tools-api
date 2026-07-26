@@ -9,7 +9,9 @@ import pytest
 from pydantic import FilePath
 
 from app.vep.utils.spec_loader import (
+    _is_same_assembly,
     _species_annotations,
+    species_annotation_entry,
     EXPECTED_COLUMNS_SIDECAR_FILE,
     SPEC_SIDECAR_FILE,
     _content_digest,
@@ -278,6 +280,36 @@ def test_every_species_in_the_table_resolves_and_names_its_own_files():
         for entry in spec.config.entries:
             if entry.id in ("go", "phenotypes"):
                 assert row["production_name"] in entry.config.params["file"]
+
+
+def test_a_short_assembly_name_does_not_swallow_an_unrelated_genome():
+    """Ciona's assembly is literally `KH`. Under a bare prefix match any genome
+    whose name merely started with those letters would be handed Ciona's GO
+    file, so the match requires a separator after the table's name."""
+    assert species_annotation_entry("KH")["production_name"] == "ciona_intestinalis"
+    assert species_annotation_entry("KHv2") is None
+    assert species_annotation_entry("ARS12_Fake") is None  # vs goat's ARS1
+
+
+def test_a_patch_suffix_still_matches_its_assembly():
+    """The tolerance the separator rule preserves: a patched assembly is still
+    the same assembly and keeps its data."""
+    row = species_annotation_entry("GRCm39.p1")
+    assert row and row["production_name"] == "mus_musculus"
+
+
+def test_no_table_assembly_is_a_prefix_of_another():
+    """First match wins, so one row prefixing another would shadow it — and
+    which one is shadowed would depend on table order."""
+    names = [row["assembly"] for row in _species_annotations()["species"]]
+    assert len(names) == len(set(names))
+    overlaps = [
+        (short, long)
+        for short in names
+        for long in names
+        if short != long and _is_same_assembly(long, short)
+    ]
+    assert not overlaps
 
 
 # --- sidecar ---------------------------------------------------------------

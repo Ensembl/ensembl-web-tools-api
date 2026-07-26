@@ -99,6 +99,16 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                 seen.add(key)
                 unique.append(row)
             rows = unique
+        elif operation.op == "exclude":
+            unwanted = {value.casefold() for value in operation.values or []}
+            rows = [
+                row
+                for row in rows
+                if not (
+                    isinstance(row.get(operation.by), str)
+                    and row[operation.by].casefold() in unwanted
+                )
+            ]
         elif operation.op == "sort":
             nulls_last = operation.nulls == "last"
             # A null key sorts to whichever end `nulls` asks for, whatever `desc`
@@ -158,8 +168,10 @@ def _apply_regex(csq_values, index_map, target: TargetSpec):
         if _should_drop(row, target.drop_when, csq_values, index_map):
             continue
         rows.append(row)
+    # Whole-list ops only mean something for the per-item form; `each: false`
+    # produces one object, not a list.
     if target.each:
-        return rows
+        return _apply_post(rows, target.post)
     return rows[0] if rows else None
 
 

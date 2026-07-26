@@ -1794,6 +1794,17 @@
                 "phenotype",
                 "id",
                 "risk_allele"
+              ],
+              "post": [
+                {
+                  "op": "exclude",
+                  "by": "phenotype",
+                  "values": [
+                    "ClinVar:_phenotype_not_specified",
+                    "not_specified",
+                    "not_provided"
+                  ]
+                }
               ]
             },
             {
@@ -1845,6 +1856,17 @@
                 "id",
                 "risk_allele",
                 "clinvar_clin_sig"
+              ],
+              "post": [
+                {
+                  "op": "exclude",
+                  "by": "phenotype",
+                  "values": [
+                    "ClinVar:_phenotype_not_specified",
+                    "not_specified",
+                    "not_provided"
+                  ]
+                }
               ]
             }
           ]
@@ -2646,7 +2668,11 @@
                   "kind": "table",
                   "from": "phenotype_data.phenotypes",
                   "group_by": {
-                    "field": "type"
+                    "field": "type",
+                    "labels": {
+                      "Gene": "Gene associated",
+                      "Variation": "Variant associated"
+                    }
                   },
                   "truncate": {
                     "visible_count": 3
@@ -2667,15 +2693,13 @@
                 {
                   "kind": "table",
                   "from": "phenotype_data.clinvar_phenotypes",
-                  "group_by": {
-                    "field": "source"
-                  },
+                  "indent": true,
                   "truncate": {
                     "visible_count": 3
                   },
                   "columns": [
                     {
-                      "label": "Phenotype",
+                      "label": "Phenotype (ClinVar)",
                       "from": "phenotype",
                       "format": "phenotype"
                     },

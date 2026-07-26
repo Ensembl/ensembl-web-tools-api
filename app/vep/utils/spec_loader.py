@@ -201,10 +201,30 @@ def _species_annotations() -> dict:
     return json.loads((SPEC_DIR / f"{SPECIES_ANNOTATIONS_FILE}.json").read_text())
 
 
+# Characters that may follow a table assembly name and still be the same
+# assembly — a patch or sub-version suffix, e.g. GRCm39 matching "GRCm39.p1".
+_ASSEMBLY_SUFFIX_BOUNDARIES = (".", "_", "-")
+
+
+def _is_same_assembly(assembly_name: str, table_name: str) -> bool:
+    """Whether a submitted assembly name is the table's `table_name`.
+
+    A plain `startswith` was fine when every name was long and distinctive, but
+    the table now holds short ones — Ciona's assembly is literally `KH` — and a
+    bare prefix test would hand an unrelated `KH…` genome Ciona's GO file.
+    Requiring a separator keeps the patch-suffix tolerance without that.
+    """
+    if assembly_name == table_name:
+        return True
+    if not assembly_name.startswith(table_name):
+        return False
+    return assembly_name[len(table_name)] in _ASSEMBLY_SUFFIX_BOUNDARIES
+
+
 def species_annotation_entry(assembly_name: str) -> dict | None:
     """The extras table's row for an assembly, or None."""
     for row in _species_annotations()["species"]:
-        if (assembly_name or "").startswith(row["assembly"]):
+        if _is_same_assembly(assembly_name or "", row["assembly"]):
             return row
     return None
 

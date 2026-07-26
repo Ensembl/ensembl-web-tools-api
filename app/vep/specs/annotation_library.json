@@ -2391,7 +2391,8 @@
                 "sub_option": {
                   "id": "intact_feature_short_label",
                   "default": false
-                }
+                },
+                "lift_when_invariant": true
               },
               {
                 "label": "Affected Protein",
@@ -2404,7 +2405,8 @@
                   "kind": "external",
                   "template": "https://www.uniprot.org/uniprotkb/{value}/entry"
                 },
-                "link_prefix": "uniprotkb:"
+                "link_prefix": "uniprotkb:",
+                "lift_when_invariant": true
               },
               {
                 "label": "PubMed Links",

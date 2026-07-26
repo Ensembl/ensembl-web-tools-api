@@ -445,6 +445,12 @@ class TableColumn(BaseModel):
     # accession. A value without the prefix is not a UniProt accession at all, so
     # it renders as plain text rather than becoming a broken link.
     link_prefix: str | None = None
+    # When every row of the table shares one value for this column, show it once
+    # above the table instead of repeating it down a column. IntAct's affected
+    # protein and feature short label are usually the same for every interaction
+    # a variant takes part in — a column of ten identical values costs width the
+    # columns that do vary need. If the value does vary, it stays a column.
+    lift_when_invariant: bool = False
 
     @model_validator(mode="after")
     def _prefix_and_split_need_a_link(self) -> "TableColumn":

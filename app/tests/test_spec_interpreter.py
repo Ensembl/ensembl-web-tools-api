@@ -761,6 +761,44 @@ def test_phenotype_data_variation_is_scoped_to_its_risk_allele():
     assert kept("T") == [("Gene", None, "Parkinson_disease")]
 
 
+def test_phenotype_data_drops_placeholder_phenotypes():
+    """A source's stand-in for "we have no phenotype" is not an association:
+    ClinVar emits "ClinVar:_phenotype_not_specified" (and bare "not_specified" /
+    "not_provided") where a real term would go, and showing those as rows tells
+    the reader nothing. Dropped from both targets, whatever the casing."""
+    index_map = index_map_for("Allele", "PHENOTYPES")
+    result = run(
+        "phenotype_data",
+        [
+            "A",
+            "Variation+ClinVar+ClinVar:_phenotype_not_specified+rs1+A+pathogenic"
+            "&Variation+ClinVar+Neurodevelopmental_disorder+rs1+A+pathogenic"
+            "&Gene+GenCC+Not_provided+ENSG1++"
+            "&Gene+GenCC+Parkinson_disease+ENSG1++",
+        ],
+        index_map,
+    )
+    assert [p["phenotype"] for p in result["clinvar_phenotypes"]] == [
+        "Neurodevelopmental_disorder"
+    ]
+    assert [p["phenotype"] for p in result["phenotypes"]] == ["Parkinson_disease"]
+
+
+def test_phenotype_data_all_placeholders_is_none():
+    """Every association being a placeholder leaves nothing to show, which
+    `require_any_output` turns into no annotation at all rather than an empty
+    table."""
+    index_map = index_map_for("Allele", "PHENOTYPES")
+    assert (
+        run(
+            "phenotype_data",
+            ["A", "Variation+ClinVar+ClinVar:_phenotype_not_specified+rs1+A+pathogenic"],
+            index_map,
+        )
+        is None
+    )
+
+
 def test_phenotype_data_empty_is_none():
     index_map = index_map_for("PHENOTYPES")
     assert run("phenotype_data", [""], index_map) is None

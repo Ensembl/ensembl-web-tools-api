@@ -391,11 +391,16 @@ class GroupBy(BaseModel):
     starts emitting appears on its own without a spec change. Phenotype entries
     carry a `type` ("Gene" / "Variation"), and each kind gets its own headed
     table.
+
+    `labels` renames individual headings for display where the pipeline's own
+    word is not the one to show ("Variation" -> "Variant associated"). Values
+    with no entry keep the data's own wording, so the data-driven default holds.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     field: str
+    labels: dict[str, str] | None = None
 
 
 class DisplayListBlock(BaseModel):
@@ -514,6 +519,12 @@ class DisplayTableBlock(BaseModel):
     requires_selected: SelectedGate | None = None
     when: WhenSpec | None = None
     view: BlockView | None = None
+    # Sit one indent step in, as if under a heading. For a table with no heading
+    # standing beside headed siblings: the ClinVar phenotype table names its
+    # source in a column rather than a heading, but still belongs at the depth of
+    # the "Gene associated" / "Variant associated" tables it sits with, not a step
+    # out from them.
+    indent: bool = False
     # list mode: the `<plugin>.<listField>` the rows come from.
     source: str | None = Field(default=None, alias="from")
     columns: list[TableColumn] = Field(min_length=1)

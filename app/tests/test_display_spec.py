@@ -454,6 +454,43 @@ def test_table_column_format_is_type_checked():
         )
 
 
+def _grouped_table(group_by):
+    return _doc(
+        {"options": [{"option_id": "p", "blocks": [
+            {
+                "kind": "table",
+                "from": "p.assays",
+                "group_by": group_by,
+                "columns": [{"label": "Score", "from": "sc", "format": "num"}],
+            }
+        ]}]},
+        plugins=_TYPED_PLUGIN,
+    )
+
+
+def test_group_by_labels_rename_headings():
+    """`labels` renames the headings the data supplies, for the values it names —
+    phenotypes group on `type` but read as "Variant associated", not
+    "Variation"."""
+    spec = MergedSpec.model_validate(
+        _grouped_table({"field": "urn", "labels": {"a": "Ay"}})
+    )
+    assert spec.display.options[0].blocks[0].group_by.labels == {"a": "Ay"}
+
+
+def test_group_by_labels_are_optional():
+    spec = MergedSpec.model_validate(_grouped_table({"field": "urn"}))
+    assert spec.display.options[0].blocks[0].group_by.labels is None
+
+
+def test_group_by_field_must_be_an_item_field():
+    """The field the rows group on is checked like a column's."""
+    with pytest.raises(
+        ValidationError, match=r"table p.assays references item field 'nope'"
+    ):
+        MergedSpec.model_validate(_grouped_table({"field": "nope"}))
+
+
 # --- the `table` block, fixed / matrix mode (SpliceAI) ----------------------
 
 

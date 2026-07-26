@@ -108,19 +108,28 @@ class DropWhen(BaseModel):
 class PostOp(BaseModel):
     """An operation over the whole produced list, applied in order.
 
-    dedup  drop elements identical to an earlier one (the OpenTargets plugin
-           currently emits duplicate rows).
-    sort   order by `by`. `nulls` places elements whose key is null, and is
-           independent of `desc` — "strongest first, unscored last" needs
-           desc + nulls: last.
+    dedup   drop elements identical to an earlier one (the OpenTargets plugin
+            currently emits duplicate rows).
+    sort    order by `by`. `nulls` places elements whose key is null, and is
+            independent of `desc` — "strongest first, unscored last" needs
+            desc + nulls: last.
+    exclude drop elements whose `by` field is one of `values` — placeholder terms
+            a source emits in place of real data ("ClinVar:_phenotype_not
+            _specified" is not a phenotype). Compared case-insensitively against
+            the parsed value, so the spec need not mirror a source's casing.
+
+    `exclude` is a post-op rather than a `drop_when` mode because `drop_when`
+    takes exactly one mode and the phenotype targets already spend theirs on the
+    per-allele rule.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    op: Literal["dedup", "sort"]
+    op: Literal["dedup", "sort", "exclude"]
     by: str | None = None
     desc: bool = False
     nulls: Literal["first", "last"] = "last"
+    values: list[str] | None = None
 
     @model_validator(mode="after")
     def _check_op_shape(self) -> "PostOp":
@@ -128,6 +137,10 @@ class PostOp(BaseModel):
             raise ValueError("sort requires `by`")
         if self.op == "dedup" and self.by:
             raise ValueError("dedup takes no `by`")
+        if self.op == "exclude" and not (self.by and self.values):
+            raise ValueError("exclude requires `by` and `values`")
+        if self.op != "exclude" and self.values is not None:
+            raise ValueError("`values` belongs to exclude")
         return self
 
 

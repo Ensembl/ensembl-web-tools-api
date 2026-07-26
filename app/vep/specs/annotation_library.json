@@ -2355,20 +2355,7 @@
         "option_id": "intact",
         "blocks": [
           {
-            "kind": "rows",
-            "view": "default",
-            "rows": [
-              {
-                "label": "IntAct",
-                "from": "intact.interactions",
-                "format": "count",
-                "placeholder": "\u2014"
-              }
-            ]
-          },
-          {
             "kind": "table",
-            "view": "show_all",
             "heading": "IntAct",
             "from": "intact.interactions",
             "columns": [

@@ -38,7 +38,7 @@ RowFormat = Literal[
 # Which view a block belongs to: the default annotation view or "Show all". A
 # block without `view` renders in both (the common case). ProtVar uses it to
 # show detailed pocket / interface rows by default but sub-option counts in Show
-# all; IntAct, its single-row default vs a breakdown block in Show all.
+# all.
 BlockView = Literal["default", "show_all"]
 
 # `{field}` placeholders in a link template — the item fields interpolated into

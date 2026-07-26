@@ -371,7 +371,13 @@ class MergedSpec(BaseModel):
                     item_fields = set(
                         targets_by_plugin[plugin][list_field].item_fields or []
                     )
-                    for item_field in block.item.item_field_refs():
+                    refs = list(block.item.item_field_refs())
+                    if block.group_by:
+                        # The field the items group on is an item field too, and
+                        # a typo there would silently collapse every item into
+                        # one unnamed section rather than fail.
+                        refs.append(block.group_by.field)
+                    for item_field in refs:
                         if item_field not in item_fields:
                             errors.append(
                                 f"display option {oid!r} list "

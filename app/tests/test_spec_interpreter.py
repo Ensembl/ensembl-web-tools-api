@@ -553,10 +553,30 @@ GO_INDEX = index_map_for("GO")
 
 
 def test_go_terms_split_id_from_name():
+    """The aspect is not in the plugin's output — it comes from the shipped
+    `go_namespaces` table, which is what lets the display group the terms."""
     values = ["GO:0001558:regulation_of_cell_growth&GO:0005509:calcium_ion_binding"]
     assert run("go", values, GO_INDEX)["go_terms"] == [
-        {"id": "GO:0001558", "name": "regulation of cell growth"},
-        {"id": "GO:0005509", "name": "calcium ion binding"},
+        {
+            "id": "GO:0001558",
+            "name": "regulation of cell growth",
+            "namespace": "biological_process",
+        },
+        {
+            "id": "GO:0005509",
+            "name": "calcium ion binding",
+            "namespace": "molecular_function",
+        },
+    ]
+
+
+def test_a_go_id_the_table_does_not_know_is_null_not_an_error():
+    """GO releases and the annotation files move independently, so a term the
+    shipped table has never heard of is a normal state — it groups as unknown
+    rather than failing the parse."""
+    parsed = run("go", ["GO:9999999:not_a_real_term"], GO_INDEX)["go_terms"]
+    assert parsed == [
+        {"id": "GO:9999999", "name": "not a real term", "namespace": None}
     ]
 
 
@@ -565,7 +585,7 @@ def test_go_entry_without_a_term_name_is_null_not_empty_string():
     dev-data/output.vcf.gz, e.g. "GO:0050911:"). An absent name is null, as
     everywhere else in the spec."""
     assert run("go", ["GO:0050911:"], GO_INDEX)["go_terms"] == [
-        {"id": "GO:0050911", "name": None}
+        {"id": "GO:0050911", "name": None, "namespace": "biological_process"}
     ]
 
 
@@ -1075,3 +1095,16 @@ def test_utr_annotation_malformed_piece_is_dropped_not_raised():
 
 def test_utr_annotation_empty_is_none():
     assert run("utr_annotation", ["", "", "", "", ""], UTR_INDEX) is None
+
+
+def test_lookup_needs_all_three_of_by_into_and_table():
+    """A half-specified lookup would silently write nothing on every row, so it
+    fails at load rather than at results time."""
+    from pydantic import ValidationError
+
+    from app.vep.models.parsing_spec_model import PostOp
+
+    with pytest.raises(ValidationError, match="lookup requires"):
+        PostOp.model_validate({"op": "lookup", "by": "id", "into": "namespace"})
+    with pytest.raises(ValidationError, match="belong to lookup"):
+        PostOp.model_validate({"op": "dedup", "table": "go_namespaces"})

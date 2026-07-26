@@ -446,6 +446,10 @@ class DisplayListBlock(BaseModel):
     when: WhenSpec | None = None
     view: BlockView | None = None
     source: str = Field(alias="from")
+    # Split the items into a headed sub-section per distinct value of an item
+    # field — GO terms by aspect. Same semantics as a table's: headings come from
+    # the data, `labels` renames them, and `truncate` then applies per section.
+    group_by: GroupBy | None = None
     # Defaults to the house style (see DEFAULT_TRUNCATE_VISIBLE_COUNT); set an
     # explicit `visible_count` to show a different number.
     truncate: TruncateSpec = Field(default_factory=_default_truncate)

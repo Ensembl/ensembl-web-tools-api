@@ -9,7 +9,10 @@ wired into the response. This runs alongside them so the two can be compared
 over the same CSQ fixtures (see tests/test_spec_interpreter.py).
 """
 
+import json
 import re
+from functools import lru_cache
+from pathlib import Path
 
 from vep.models.parsing_spec_model import PluginSpec, TargetSpec, WhenSpec
 from vep.utils.csq import (
@@ -86,9 +89,43 @@ def _should_drop(row: dict, drop_when, csq_values=None, index_map=None) -> bool:
     return row.get(drop_when.null) is None
 
 
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+
+
+@lru_cache(maxsize=None)
+def _lookup_table(name: str) -> dict[str, str]:
+    """A shipped reference table, as value -> label.
+
+    Stored grouped (`{label: [members]}`) because that is far smaller for the one
+    table there is — GO's 38k ids across three aspects — and inverted once here.
+    Members are compared as strings so a table may store them as numbers: GO ids
+    lose their `GO:` prefix and become ints on disk, which is most of the saving.
+    """
+    path = DATA_DIR / f"{name}.json"
+    grouped = json.loads(path.read_text())
+    return {str(member): label for label, members in grouped.items() for member in members}
+
+
+def _lookup_key(value) -> str | None:
+    """The table key for a parsed value. GO ids arrive as `GO:0000122`, and the
+    table stores `122` — the prefix is on every id and carries nothing."""
+    if not isinstance(value, str):
+        return None
+    _, _, tail = value.partition(":")
+    if not tail:
+        return None
+    return str(int(tail)) if tail.isdigit() else tail
+
+
 def _apply_post(rows: list[dict], post) -> list[dict]:
     """Whole-list operations, in the order the spec lists them."""
     for operation in post or []:
+        if operation.op == "lookup":
+            table = _lookup_table(operation.table)
+            for row in rows:
+                key = _lookup_key(row.get(operation.by))
+                row[operation.into] = table.get(key) if key else None
+            continue
         if operation.op == "dedup":
             seen = set()
             unique = []

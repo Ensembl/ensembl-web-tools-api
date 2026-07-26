@@ -35,16 +35,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      # vcf_meta.py and vcf_results.py shell out to bcftools, so it is a real
+      # runtime dependency, not just a test one. test_paging and
+      # test_negative_paging are the two tests that reach it.
+      - name: Install bcftools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends bcftools
+
       # tests/test_blast.py reads /data/blast_config.json by absolute path, so
       # the config has to be staged there. Same step the GitLab pipeline runs.
       - name: Stage the blast config
         run: sudo cp -r ./data /data
 
-      # test_vep.py is excluded because it resolves its fixture through a
-      # cwd-relative path, exactly as the GitLab pipeline excludes it. Fixing
-      # that path would let both drop the ignore and recover 11 tests.
       - name: Run tests
         working-directory: app
         run: |
           cp .env.sample .env
-          python -m pytest --ignore=tests/test_vep.py -q
+          python -m pytest -q

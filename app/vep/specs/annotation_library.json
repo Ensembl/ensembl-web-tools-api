@@ -1741,7 +1741,11 @@
                 "label": "Gap frequency",
                 "from": "popeve.gap_frequency",
                 "format": "num",
-                "help": "Authors recommend filtering if > 0.5"
+                "help": "Authors recommend filtering if > 0.5",
+                "help_link": {
+                  "href": "https://www.nature.com/articles/s41588-025-02400-1",
+                  "label": "popEVE paper"
+                }
               }
             ]
           }

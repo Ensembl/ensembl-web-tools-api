@@ -83,6 +83,23 @@ class SubOption(BaseModel):
     default: bool = False
 
 
+class HelpLink(BaseModel):
+    """A citation shown inside a row's help popup.
+
+    A fixed reference for the help text — the paper a recommended threshold
+    comes from — not a per-row link built from the annotation (that is
+    `LinkSpec`). `label` is the anchor's text; without one the frontend uses its
+    own wording.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # `href`, not `url`, to match the form side's OptionHelpLink: the two help
+    # systems should converge rather than grow a second name for one thing.
+    href: str
+    label: str | None = None
+
+
 class WhenSpec(BaseModel):
     """A condition gating whether a block renders, tested against one field.
 
@@ -190,6 +207,11 @@ class DisplayRow(BaseModel):
     # Help text for a (?) button beside the label. The text is data; the button
     # is a frontend primitive.
     help: str | None = None
+    # A source to cite inside that help popup — popEVE's threshold is the
+    # authors' recommendation, so the help says where to read it. Deliberately
+    # not a `LinkSpec`: those build a URL per row from the annotation's own
+    # values, whereas this is one fixed reference belonging to the help text.
+    help_link: HelpLink | None = None
     # The sub-option this row's value comes from. Only affects "Show all": a
     # selected-but-empty sub-option shows a dash there; the default view still
     # drops it. Rows without one behave exactly as before.

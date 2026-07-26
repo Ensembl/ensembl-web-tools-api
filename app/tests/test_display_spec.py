@@ -679,11 +679,19 @@ def test_no_pinned_spec_means_no_display_payload():
     assert _resolve_display_payload(None) is None
 
 
-def test_unknown_assembly_falls_back_to_nothing_rather_than_raising():
+def test_unknown_assembly_falls_back_to_the_base_display():
+    """A job pinned before the display section existed, on a genome with no spec
+    of its own, now renders the base options rather than nothing — the same
+    fallback the submit path uses."""
     legacy = MergedSpec.model_validate(
         {**_legacy_document(), "genome": {"assembly": "Nothing_v1"}}
     )
-    assert _resolve_display_payload(legacy) is None
+    payload = _resolve_display_payload(legacy)
+    assert payload is not None
+    base = load_merged_spec("base")
+    assert {o.option_id for o in payload.options} == {
+        o.option_id for o in base.display.options
+    }
 
 
 # --- linked table columns (IntAct) ------------------------------------------

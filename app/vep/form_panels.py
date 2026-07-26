@@ -161,7 +161,7 @@ _HUMAN_37_38_PANELS: list[dict] = [
                 "type": "boolean",
                 "default": False,
                 "sub_options": [
-                    {"id": "clinvar_short", "label": "Short variants", "type": "boolean", "default": False},
+                    {"id": "clinvar_short", "label": "Short variants", "type": "boolean", "default": True},
                 ],
             },
         ],

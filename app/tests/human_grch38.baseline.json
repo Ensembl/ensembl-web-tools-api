@@ -2949,7 +2949,7 @@
             "kind": "group",
             "requires_selected": {
               "id": "clinvar_short",
-              "default": false
+              "default": true
             },
             "blocks": [
               {

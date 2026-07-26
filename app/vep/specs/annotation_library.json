@@ -2245,12 +2245,15 @@
         "blocks": [
           {
             "kind": "rows",
-            "view": "default",
             "rows": [
               {
-                "label": "Stability",
+                "label": "Protein Structure Stability",
                 "from": "protvar.structure_stability_score",
                 "format": "num",
+                "sub_option": {
+                  "id": "protvar_stability",
+                  "default": true
+                },
                 "link": {
                   "kind": "external",
                   "builder": "protvar"
@@ -2260,7 +2263,7 @@
           },
           {
             "kind": "list",
-            "view": "default",
+            "heading": "Protein Pockets",
             "from": "protvar.pockets",
             "item": {
               "label": {
@@ -2279,8 +2282,26 @@
             }
           },
           {
+            "kind": "rows",
+            "view": "show_all",
+            "when": {
+              "empty": "protvar.pockets"
+            },
+            "rows": [
+              {
+                "label": "Protein Pockets",
+                "from": "protvar.pockets",
+                "format": "count",
+                "sub_option": {
+                  "id": "protvar_pocket",
+                  "default": true
+                }
+              }
+            ]
+          },
+          {
             "kind": "list",
-            "view": "default",
+            "heading": "Protein-Protein Interaction Interface",
             "from": "protvar.interaction_interfaces",
             "item": {
               "label": {
@@ -2301,33 +2322,10 @@
           {
             "kind": "rows",
             "view": "show_all",
+            "when": {
+              "empty": "protvar.interaction_interfaces"
+            },
             "rows": [
-              {
-                "label": "Protein Structure Stability",
-                "from": "protvar.structure_stability_score",
-                "format": "num",
-                "sub_option": {
-                  "id": "protvar_stability",
-                  "default": true
-                },
-                "link": {
-                  "kind": "external",
-                  "builder": "protvar"
-                }
-              },
-              {
-                "label": "Protein Pockets",
-                "from": "protvar.pockets",
-                "format": "count",
-                "sub_option": {
-                  "id": "protvar_pocket",
-                  "default": true
-                },
-                "link": {
-                  "kind": "external",
-                  "builder": "protvar"
-                }
-              },
               {
                 "label": "Protein-Protein Interaction Interface",
                 "from": "protvar.interaction_interfaces",
@@ -2335,10 +2333,6 @@
                 "sub_option": {
                   "id": "protvar_int",
                   "default": true
-                },
-                "link": {
-                  "kind": "external",
-                  "builder": "protvar"
                 }
               }
             ]

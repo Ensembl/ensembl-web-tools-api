@@ -1653,17 +1653,6 @@
             "heading": "SpliceAI",
             "blocks": [
               {
-                "kind": "rows",
-                "requires": "spliceai",
-                "rows": [
-                  {
-                    "key": "symbol",
-                    "label": "Gene",
-                    "from": "spliceai.symbol"
-                  }
-                ]
-              },
-              {
                 "kind": "table",
                 "requires": "spliceai",
                 "columns": [

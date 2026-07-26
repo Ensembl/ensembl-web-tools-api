@@ -903,6 +903,22 @@ def _add_species_annotation_options(panels: list[dict], assembly_name: str | Non
             {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False}
         )
 
+    if "cadd" in datasets:
+        # The Variant Impact Predictions panel is human-only today, so a species
+        # with CADD but none of the human-only predictors needs it created.
+        panel = by_id.get("pathogenicity_predictions")
+        if panel is None:
+            panel = {
+                "id": "pathogenicity_predictions",
+                "label": "Variant Impact Predictions",
+                "options": [],
+            }
+            panels.append(panel)
+        panel["options"].append(
+            {"id": "cadd", "label": "CADD", "type": "boolean", "default": False,
+             "category": "Genome wide"}
+        )
+
     if "phenotypes" in datasets:
         # The associations panel exists only for human today, so a species with
         # phenotype data but none of the human-only sources needs it created.

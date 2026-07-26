@@ -28,6 +28,20 @@
           "cols": "type&source&phenotype&id&risk_allele&clinvar_clin_sig"
         }
       }
+    },
+    "cadd": {
+      "id": "cadd",
+      "order": 41,
+      "parsed_as": [
+        "cadd"
+      ],
+      "config": {
+        "emit": "plugin",
+        "name": "CADD",
+        "params": {
+          "snv": "{path}/{file}"
+        }
+      }
     }
   },
   "species": [
@@ -64,8 +78,12 @@
       "species_taxonomy_id": "9031",
       "datasets": [
         "go",
-        "phenotypes"
-      ]
+        "phenotypes",
+        "cadd"
+      ],
+      "files": {
+        "cadd": "chCADD_updated.tsv.gz"
+      }
     },
     {
       "assembly": "ROS_Cfam_1.0",
@@ -136,8 +154,12 @@
       "species_taxonomy_id": "9823",
       "datasets": [
         "go",
-        "phenotypes"
-      ]
+        "phenotypes",
+        "cadd"
+      ],
+      "files": {
+        "cadd": "ALL_pCADD-PHRED-scores.tsv.gz"
+      }
     },
     {
       "assembly": "mOrnAna1.p.v1",
@@ -173,6 +195,17 @@
         "go",
         "phenotypes"
       ]
+    },
+    {
+      "assembly": "Turkey_5.1",
+      "production_name": "meleagris_gallopavo",
+      "species_taxonomy_id": "9103",
+      "datasets": [
+        "cadd"
+      ],
+      "files": {
+        "cadd": "tCADD.tsv.gz"
+      }
     }
   ]
 }

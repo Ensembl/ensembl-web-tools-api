@@ -170,6 +170,10 @@ def test_a_go_only_species_is_not_offered_phenotypes():
     assert "variant_associations" not in panel_ids(panels)
 
 
+# Every dataset a species row can name; the option id is the dataset name.
+DATASET_OPTION_IDS = {"go", "phenotypes", "cadd"}
+
+
 def test_form_options_match_the_spec_a_submission_would_get():
     """The form and the spec loader read the same table, so what a species is
     offered and what its submission actually configures cannot drift."""
@@ -180,11 +184,11 @@ def test_form_options_match_the_spec_a_submission_would_get():
             species_taxonomy_id=row["species_taxonomy_id"],
             assembly_name=row["assembly"],
         )
-        offered = {i for i in option_ids(panels) if i in ("go", "phenotypes")}
+        offered = {i for i in option_ids(panels) if i in DATASET_OPTION_IDS}
         configured = {
             e.id
             for e in resolve_merged_spec(row["assembly"]).config.entries
-            if e.id in ("go", "phenotypes")
+            if e.id in DATASET_OPTION_IDS
         }
         assert offered == configured == set(row["datasets"]), row["assembly"]
 

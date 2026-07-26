@@ -219,12 +219,19 @@ def species_extra_config_entries(assembly_name: str) -> list[dict]:
     entries = []
     for dataset in row["datasets"]:
         entry = json.loads(json.dumps(templates[dataset]))
-        params = entry["config"]["params"]
-        # Only the production name is substituted; `{path}` is resolved later,
-        # per entry, by the config interpreter.
-        params["file"] = params["file"].replace(
-            "{production_name}", row["production_name"]
-        )
+        # `{production_name}` where the name follows from the species (GO,
+        # Phenotypes); `{file}` where it does not and the row names it (CADD's
+        # files are named per-project, not per-species). `{path}` is left alone —
+        # the config interpreter resolves it per entry, later.
+        substitutions = {
+            "{production_name}": row["production_name"],
+            "{file}": (row.get("files") or {}).get(dataset, ""),
+        }
+        for key, value in entry["config"]["params"].items():
+            if isinstance(value, str):
+                for token, replacement in substitutions.items():
+                    value = value.replace(token, replacement)
+                entry["config"]["params"][key] = value
         entries.append(entry)
     return entries
 

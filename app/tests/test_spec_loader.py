@@ -356,3 +356,42 @@ def test_load_pinned_spec_unreadable_sidecar_is_none_not_raised(tmp_path):
     (tmp_path / SPEC_SIDECAR_FILE).write_text("{ not valid json")
     (tmp_path / "output.vcf.gz").write_bytes(b"")
     assert _load_pinned_spec(FilePath(tmp_path / "output.vcf.gz")) is None
+
+
+def test_species_cadd_uses_a_named_file_and_only_snv():
+    """Other-species CADD is a single SNV file with a per-project name, not the
+    production-name pattern GO and Phenotypes follow, and not human's
+    snv+indels pair."""
+    expected = {
+        "GRCg6a": "chCADD_updated.tsv.gz",              # chicken, red junglefowl
+        "Sscrofa11.1": "ALL_pCADD-PHRED-scores.tsv.gz",  # pig reference
+        "Turkey_5.1": "tCADD.tsv.gz",
+    }
+    for assembly, filename in expected.items():
+        entry = next(
+            e for e in resolve_merged_spec(assembly).config.entries if e.id == "cadd"
+        )
+        assert entry.config.params == {"snv": "{path}/" + filename}, assembly
+
+
+def test_human_cadd_is_untouched_by_the_species_table():
+    entry = next(
+        e for e in load_merged_spec("human_grch38").config.entries if e.id == "cadd"
+    )
+    assert set(entry.config.params) == {"snv", "indels"}
+
+
+def test_a_phred_only_species_still_expects_both_cadd_columns():
+    """Pig and chicken emit both columns; RAW is simply never scored. So the
+    expected-column contract is unchanged and the RAW display row drops itself
+    on a null — no per-species parse or display variant is needed."""
+    spec = resolve_merged_spec("Sscrofa11.1")
+    assert {"CADD_PHRED", "CADD_RAW"} <= spec.expected_csq_columns({"cadd": True})
+    raw_row = [
+        row
+        for option in spec.display.options if option.option_id == "cadd"
+        for block in option.blocks
+        for row in getattr(block, "rows", [])
+        if row.source == "cadd.raw"
+    ]
+    assert raw_row and raw_row[0].placeholder is None  # absent -> dropped

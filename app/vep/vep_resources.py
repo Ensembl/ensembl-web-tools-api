@@ -45,6 +45,7 @@ from vep.utils.vcf_results import get_results_from_path, stream_filtered_vcf_tex
 from vep.utils.tsv_export import stream_vep_tsv, flatten_vcf_lines, gzip_text_stream
 from vep.utils.results_filters import parse_filters, FilterError, ResultsFilter
 from vep.utils.web_metadata import get_genome_metadata
+from vep.utils.species_presets import get_species_presets
 from vep.utils.spec_loader import (
     resolve_merged_spec,
     write_display_panels_sidecar,
@@ -465,4 +466,21 @@ async def get_form_config(
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
         logging.error(f"{e.__class__.__name__}: {e}")
+        return response_error_handler(result={"status": 500})
+
+
+@router.get("/species_presets", name="get_species_presets")
+async def species_presets(request: Request):
+    """Quick-select species for the form, resolved to the current integrated
+    release rather than shipped as hardcoded genome UUIDs in the frontend.
+
+    Always 200. An accession that cannot be resolved is dropped from the list
+    (see species_presets.get_species_presets); the form simply shows one fewer
+    button, which is a far better failure than a button that submits jobs
+    against a stale or partial release.
+    """
+    try:
+        return await get_species_presets()
+    except Exception as e:
+        logging.exception(f"{e.__class__.__name__}: {e}")
         return response_error_handler(result={"status": 500})

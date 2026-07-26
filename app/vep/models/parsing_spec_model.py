@@ -118,6 +118,14 @@ class PostOp(BaseModel):
             _specified" is not a phenotype). Compared case-insensitively against
             the parsed value, so the spec need not mirror a source's casing.
 
+    lookup  add a field derived from another via a shipped reference table —
+            GO's aspect, which the plugin's output does not carry (it emits an
+            id and a name only). `by` is the field to look up, `into` the field
+            to write, `table` the table's name in `vep/data/`. An id the table
+            does not know writes null rather than failing: GO releases and the
+            annotation files move independently, so an unknown term is a normal
+            state, not a broken spec.
+
     `exclude` is a post-op rather than a `drop_when` mode because `drop_when`
     takes exactly one mode and the phenotype targets already spend theirs on the
     per-allele rule.
@@ -125,11 +133,14 @@ class PostOp(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    op: Literal["dedup", "sort", "exclude"]
+    op: Literal["dedup", "sort", "exclude", "lookup"]
     by: str | None = None
     desc: bool = False
     nulls: Literal["first", "last"] = "last"
     values: list[str] | None = None
+    # `lookup` only.
+    into: str | None = None
+    table: str | None = None
 
     @model_validator(mode="after")
     def _check_op_shape(self) -> "PostOp":
@@ -141,6 +152,10 @@ class PostOp(BaseModel):
             raise ValueError("exclude requires `by` and `values`")
         if self.op != "exclude" and self.values is not None:
             raise ValueError("`values` belongs to exclude")
+        if self.op == "lookup" and not (self.by and self.into and self.table):
+            raise ValueError("lookup requires `by`, `into` and `table`")
+        if self.op != "lookup" and (self.into or self.table):
+            raise ValueError("`into`/`table` belong to lookup")
         return self
 
 

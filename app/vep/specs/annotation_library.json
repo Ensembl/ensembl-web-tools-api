@@ -585,7 +585,16 @@
             ],
             "item_fields": [
               "id",
-              "name"
+              "name",
+              "namespace"
+            ],
+            "post": [
+              {
+                "op": "lookup",
+                "by": "id",
+                "into": "namespace",
+                "table": "go_namespaces"
+              }
             ]
           }
         ],
@@ -1923,26 +1932,31 @@
         "option_id": "go",
         "blocks": [
           {
-            "kind": "list",
+            "kind": "table",
             "heading": "Gene Ontology",
             "from": "go.go_terms",
-            "truncate": {
-              "visible_count": 3
+            "group_by": {
+              "field": "namespace",
+              "labels": {
+                "biological_process": "Biological process",
+                "cellular_component": "Cellular component",
+                "molecular_function": "Molecular function"
+              }
             },
-            "item": {
-              "cells": [
-                {
-                  "from": "id",
-                  "link": {
-                    "kind": "external",
-                    "template": "https://amigo.geneontology.org/amigo/term/{id}"
-                  }
-                },
-                {
-                  "from": "name"
+            "columns": [
+              {
+                "label": "Term",
+                "from": "id",
+                "link": {
+                  "kind": "external",
+                  "template": "https://amigo.geneontology.org/amigo/term/{value}"
                 }
-              ]
-            }
+              },
+              {
+                "label": "Name",
+                "from": "name"
+              }
+            ]
           }
         ]
       },

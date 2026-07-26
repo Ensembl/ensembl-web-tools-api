@@ -377,7 +377,33 @@ class DisplayItemSpec(BaseModel):
             yield from row.item_field_refs()
 
 
-class DisplayRowsBlock(BaseModel):
+class _GatedBlock(BaseModel):
+    """What every display block has, however it renders.
+
+    A block is a thing that may or may not appear, and four gates decide:
+    `requires_selected` (was the sub-option chosen for this job), `when` (does
+    the data satisfy a condition), `view` (default panel or "Show all"), and —
+    for the block kinds that carry it — `requires` (did a plugin produce anything
+    at all).
+
+    Declared once so a new block kind cannot arrive missing one. Before this,
+    each of the four kinds redeclared the same five fields, and `group_by` had
+    already been added to two of them separately.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    heading: str | None = None
+    # Render only when this sub-option was selected (ClinVar short/structural).
+    requires_selected: SelectedGate | None = None
+    # A data condition: render only when the named field is present / empty
+    # (ClinVar's bare vs headed shapes).
+    when: WhenSpec | None = None
+    # Restrict this block to the default view or "Show all" (ProtVar / IntAct).
+    view: BlockView | None = None
+
+
+class DisplayRowsBlock(_GatedBlock):
     """A run of fixed rows, optionally under the option's own sub-heading.
 
     `heading` present -> the frontend's `renderRowBlock` (an `OptionBlock` whose
@@ -390,18 +416,8 @@ class DisplayRowsBlock(BaseModel):
     eight dashes instead of nothing (the hand-written case returned early).
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     kind: Literal["rows"] = "rows"
-    heading: str | None = None
     requires: str | None = None
-    # Render only when this sub-option was selected (ClinVar short/structural).
-    requires_selected: SelectedGate | None = None
-    # A data condition on top of `requires`: render this block only when the
-    # named field is present / empty (ClinVar's bare vs headed shapes).
-    when: WhenSpec | None = None
-    # Restrict this block to the default view or "Show all" (ProtVar / IntAct).
-    view: BlockView | None = None
     rows: list[DisplayRow]
 
 
@@ -425,7 +441,7 @@ class GroupBy(BaseModel):
     labels: dict[str, str] | None = None
 
 
-class DisplayListBlock(BaseModel):
+class DisplayListBlock(_GatedBlock):
     """A variable-length list: one item (a row of cells) per element of a
     list-valued field, optionally truncated. Covers the options whose output is
     a repeat rather than a fixed set of rows — phenotypes, GO terms, MaveDB
@@ -440,11 +456,7 @@ class DisplayListBlock(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     kind: Literal["list"]
-    heading: str | None = None
     requires: str | None = None
-    requires_selected: SelectedGate | None = None
-    when: WhenSpec | None = None
-    view: BlockView | None = None
     source: str = Field(alias="from")
     # Split the items into a headed sub-section per distinct value of an item
     # field — GO terms by aspect. Same semantics as a table's: headings come from
@@ -524,7 +536,7 @@ class TableMatrixRow(BaseModel):
     values: list[str] = Field(default_factory=list)
 
 
-class DisplayTableBlock(BaseModel):
+class DisplayTableBlock(_GatedBlock):
     """A small table with a header row of column labels. Two shapes:
 
     * list mode (`from`): one body row per element of a `<plugin>.<listField>`,
@@ -540,11 +552,7 @@ class DisplayTableBlock(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     kind: Literal["table"]
-    heading: str | None = None
     requires: str | None = None
-    requires_selected: SelectedGate | None = None
-    when: WhenSpec | None = None
-    view: BlockView | None = None
     # Sit one indent step in, as if under a heading. For a table with no heading
     # standing beside headed siblings: the ClinVar phenotype table names its
     # source in a column rather than a heading, but still belongs at the depth of
@@ -615,7 +623,7 @@ class DisplayTableBlock(BaseModel):
                     yield ref, column.format
 
 
-class DisplayGroupBlock(BaseModel):
+class DisplayGroupBlock(_GatedBlock):
     """A run of sub-blocks under one optional heading, gated as a whole by `when`.
 
     Lets a heading span more than one block conditionally: ClinVar's conflicting

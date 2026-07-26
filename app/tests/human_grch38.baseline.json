@@ -1914,7 +1914,10 @@
               },
               {
                 "field": "feature_type",
-                "type": "string"
+                "type": "string",
+                "replace": {
+                  "_": " "
+                }
               },
               {
                 "field": "interaction_participants",

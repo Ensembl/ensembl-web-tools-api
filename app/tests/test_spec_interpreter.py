@@ -842,7 +842,8 @@ def test_intact_zips_the_parallel_columns_into_one_row_per_interaction():
     }
     # The last entry has three participants, not two — the display splits them.
     assert interactions[-1]["interaction_ac"] == "EBI-27092683"
-    assert interactions[-1]["feature_type"] == "mutation_increasing_strength"
+    # underscores are the vocabulary's word separators, restored for display
+    assert interactions[-1]["feature_type"] == "mutation increasing strength"
     assert interactions[-1]["interaction_participants"].count("_and_") == 2
     assert interactions[-1]["pmid"] == "26643113"
 

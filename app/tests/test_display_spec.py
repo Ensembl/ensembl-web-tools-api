@@ -23,6 +23,7 @@ from app.vep.models.display_spec_model import (
     DisplayGroupBlock,
     DisplayListBlock,
     DisplayRowsBlock,
+    DisplayTableBlock,
 )
 from app.vep.models.merged_spec_model import MergedSpec
 from app.vep.utils.spec_loader import (
@@ -645,3 +646,73 @@ def test_unknown_assembly_falls_back_to_nothing_rather_than_raising():
         {**_legacy_document(), "genome": {"assembly": "Nothing_v1"}}
     )
     assert _resolve_display_payload(legacy) is None
+
+
+# --- linked table columns (IntAct) ------------------------------------------
+
+
+def _intact_table():
+    """The IntAct interactions table from the shipped spec."""
+    spec = load_merged_spec("human_grch38")
+    option = next(o for o in spec.display.options if o.option_id == "intact")
+    return next(b for b in option.blocks if b.kind == "table")
+
+
+def test_intact_table_columns_are_in_the_agreed_order():
+    assert [c.label for c in _intact_table().columns] == [
+        "Interaction AC",
+        "Feature Type",
+        "Interaction Participants",
+        "Feature short label",
+        "Affected Protein",
+        "PubMed Links",
+    ]
+
+
+def test_only_the_always_emitted_intact_columns_are_ungated():
+    """interaction_ac and feature_type come back whatever is selected; the other
+    four are sub-option columns, so the table is 2 to 6 columns wide."""
+    columns = {c.label: c for c in _intact_table().columns}
+    ungated = [label for label, c in columns.items() if c.sub_option is None]
+    assert sorted(ungated) == ["Feature Type", "Interaction AC"]
+    assert columns["Interaction Participants"].sub_option.id == (
+        "intact_interaction_participants"
+    )
+    assert columns["Affected Protein"].sub_option.id == "intact_ap_ac"
+
+
+def test_intact_uniprot_columns_split_and_require_the_uniprotkb_prefix():
+    """Participants pack several accessions into one value, and a value without
+    the `uniprotkb:` prefix is not an accession at all — it must not be linked."""
+    columns = {c.label: c for c in _intact_table().columns}
+
+    participants = columns["Interaction Participants"]
+    assert participants.split == "_and_"
+    assert participants.link_prefix == "uniprotkb:"
+    assert participants.link.template == "https://www.uniprot.org/uniprotkb/{value}/entry"
+
+    affected = columns["Affected Protein"]
+    assert affected.link_prefix == "uniprotkb:"
+    assert affected.split is None  # a single accession
+
+
+def test_intact_identifier_columns_link_to_their_own_resources():
+    columns = {c.label: c for c in _intact_table().columns}
+    assert columns["Interaction AC"].link.template == (
+        "https://www.ebi.ac.uk/intact/details/interaction/{value}"
+    )
+    assert columns["PubMed Links"].link.template == (
+        "http://europepmc.org/abstract/MED/{value}"
+    )
+    # These are never prefixed, so they are linked unconditionally.
+    assert columns["Interaction AC"].link_prefix is None
+    assert columns["PubMed Links"].link_prefix is None
+
+
+def test_split_or_prefix_without_a_link_is_rejected_at_load():
+    with pytest.raises(ValidationError, match="only apply to a linked column"):
+        DisplayTableBlock.model_validate({
+            "kind": "table",
+            "from": "intact.interactions",
+            "columns": [{"label": "Participants", "from": "x", "split": "_and_"}],
+        })

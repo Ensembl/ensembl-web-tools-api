@@ -373,7 +373,10 @@ def test_intact_no_sub_options_is_base_line(monkeypatch, tmp_path):
     assert "=1" not in line.split("mapping_file=")[1]  # no sub-flags appended
 
 
-def test_intact_all_sub_options_uses_all(monkeypatch, tmp_path):
+def test_intact_all_sub_options_lists_them_rather_than_all(monkeypatch, tmp_path):
+    """Selecting everything used to collapse to `all=1`, which also switched on
+    feature_annotation — sparse, and awkward to parse. Every selection is now
+    named explicitly, so the emitted columns are exactly the ones chosen."""
     line = find_line(
         build_lines(
             monkeypatch,
@@ -381,14 +384,18 @@ def test_intact_all_sub_options_uses_all(monkeypatch, tmp_path):
             intact=True,
             intact_feature_ac=True,
             intact_feature_short_label=True,
-            intact_feature_annotation=True,
             intact_ap_ac=True,
             intact_interaction_participants=True,
             intact_pmid=True,
         ),
         "plugin IntAct",
     )
-    assert line.endswith(",all=1")
+    assert line.endswith(
+        ",feature_ac=1,feature_short_label=1,ap_ac=1,"
+        "interaction_participants=1,pmid=1"
+    )
+    assert "all=1" not in line
+    assert "feature_annotation" not in line
 
 
 def test_intact_partial_sub_options_lists_selected_in_order(monkeypatch, tmp_path):

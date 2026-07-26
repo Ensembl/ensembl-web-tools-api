@@ -38,7 +38,7 @@ RowFormat = Literal[
 # Which view a block belongs to: the default annotation view or "Show all". A
 # block without `view` renders in both (the common case). ProtVar uses it to
 # show detailed pocket / interface rows by default but sub-option counts in Show
-# all; IntAct, its single-row default vs a breakdown block in Show all.
+# all.
 BlockView = Literal["default", "show_all"]
 
 # `{field}` placeholders in a link template — the item fields interpolated into
@@ -430,6 +430,36 @@ class TableColumn(BaseModel):
     source: str | None = Field(default=None, alias="from")
     format: RowFormat | None = None
     mono: bool = False
+    # A column present only when its sub-option ran, so a table's width follows
+    # what the user selected. Same gate the rows use.
+    sub_option: SubOption | None = None
+    # Link the cell value out. `{value}` in the template is the cell's own text
+    # (after `split` and `link_prefix` have been applied).
+    link: LinkSpec | None = None
+    # Some sources pack several values into one column — IntAct joins interaction
+    # participants with `_and_`. Splitting here renders them as separate items,
+    # each linked in its own right, rather than one link over the whole string.
+    split: str | None = None
+    # Only link a value that carries this prefix, and strip it before filling the
+    # template: IntAct writes `uniprotkb:P37840`, and UniProt's URL wants the bare
+    # accession. A value without the prefix is not a UniProt accession at all, so
+    # it renders as plain text rather than becoming a broken link.
+    link_prefix: str | None = None
+    # When every row of the table shares one value for this column, show it once
+    # above the table instead of repeating it down a column. IntAct's affected
+    # protein and feature short label are usually the same for every interaction
+    # a variant takes part in — a column of ten identical values costs width the
+    # columns that do vary need. If the value does vary, it stays a column.
+    lift_when_invariant: bool = False
+
+    @model_validator(mode="after")
+    def _prefix_and_split_need_a_link(self) -> "TableColumn":
+        if (self.split or self.link_prefix) and self.link is None:
+            raise ValueError(
+                "`split`/`link_prefix` only apply to a linked column; "
+                f"column {self.label!r} has neither a link nor a reason for them"
+            )
+        return self
 
     def item_field_refs(self) -> Iterator[str]:
         if self.source:

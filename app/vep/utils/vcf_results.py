@@ -1,7 +1,8 @@
 """ Module for loading a VCF and parsing it into a VepResultsResponse
 object as defined in APISpecification"""
 
-from collections import deque
+from collections import deque, OrderedDict
+from dataclasses import dataclass
 from io import StringIO
 from typing import Iterable, Iterator
 import gzip
@@ -459,6 +460,74 @@ def _read_indexed_page(
 
 
 
+
+# ---------------------------------------------------------------------------
+# Filtered-scan cache
+#
+# Pagination needs the match total, so a filtered page has to scan the whole
+# file — and did so again for every page: on a 999k-record output an
+# allele-frequency filter cost ~22s per page click, page 200 exactly as much as
+# page 1. The scan's expensive half is evaluating the filters, not reading the
+# file, so the ordinals of the matching records are remembered and later pages
+# of the same filter set skip straight to rebuilding what they need.
+#
+# Keyed on the file's identity *and* mtime, so a regenerated output (the dev
+# harness rewrites one fixed path) can never be served against a stale match
+# set. Bounded to a handful of entries: a filter set over a million records is
+# ~1M ints worst case, a few MB, and the common case is far smaller.
+# ---------------------------------------------------------------------------
+_SCAN_CACHE_MAX_ENTRIES = 4
+_scan_cache: "OrderedDict[tuple, _ScanResult]" = OrderedDict()
+
+
+@dataclass
+class _ScanResult:
+    """What a full filtered pass learned, minus the page itself."""
+
+    matches: list[int]
+    scanned_total: int
+    stats: list[results_filters.FilterStat]
+
+
+def _scan_cache_key(
+    vcf_path: FilePath, filters: list[results_filters.ResultsFilter]
+) -> tuple | None:
+    """Identity of (this file as it is now, this exact filter set), or None if the
+    file cannot be stat'd — in which case nothing is cached rather than risking a
+    stale answer."""
+    try:
+        stat = Path(vcf_path).stat()
+    except OSError:
+        return None
+    condition = tuple(
+        (f.field, f.operator, tuple(f.values), f.threshold, f.match) for f in filters
+    )
+    return (str(vcf_path), stat.st_mtime_ns, stat.st_size, condition)
+
+
+def _scan_cache_get(key: tuple | None) -> _ScanResult | None:
+    if key is None:
+        return None
+    result = _scan_cache.get(key)
+    if result is not None:
+        _scan_cache.move_to_end(key)
+    return result
+
+
+def _scan_cache_put(key: tuple | None, result: _ScanResult) -> None:
+    if key is None:
+        return
+    _scan_cache[key] = result
+    _scan_cache.move_to_end(key)
+    while len(_scan_cache) > _SCAN_CACHE_MAX_ENTRIES:
+        _scan_cache.popitem(last=False)
+
+
+def clear_scan_cache() -> None:
+    """Drop every cached scan (tests; and anything that rewrites outputs)."""
+    _scan_cache.clear()
+
+
 def _get_filtered_results(
     page_size: int,
     page: int,
@@ -480,6 +549,7 @@ def _get_filtered_results(
     page = max(page, 1)
     page_size = max(page_size, 0)
     start = (page - 1) * page_size
+    cache_key = _scan_cache_key(vcf_path, filters)
 
     header_lines: list[str] = []
     with gzip.open(vcf_path, "rt") as handle:
@@ -502,9 +572,36 @@ def _get_filtered_results(
             if first_data_line is None
             else itertools.chain((first_data_line,), handle)
         )
-        outcome = results_filters.filter_records(
-            data_lines, compiled, start=start, count=page_size
-        )
+        cached = _scan_cache_get(cache_key)
+        if cached is not None:
+            # The answer is already known; only this page's records need
+            # rebuilding, and no filter is evaluated for the rest.
+            page_lines = results_filters.replay_matches(
+                data_lines, compiled, cached.matches, start=start, count=page_size
+            )
+            outcome = results_filters.FilterOutcome(
+                page=page_lines,
+                matched_total=len(cached.matches),
+                scanned_total=cached.scanned_total,
+                stats=cached.stats,
+            )
+        else:
+            matches: list[int] = []
+            outcome = results_filters.filter_records(
+                data_lines,
+                compiled,
+                start=start,
+                count=page_size,
+                record_matches=matches,
+            )
+            _scan_cache_put(
+                cache_key,
+                _ScanResult(
+                    matches=matches,
+                    scanned_total=outcome.scanned_total,
+                    stats=outcome.stats,
+                ),
+            )
 
     stream = StringIO("".join(header_lines) + "".join(outcome.page))
     response = get_results_from_stream(

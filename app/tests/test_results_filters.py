@@ -882,3 +882,151 @@ def test_with_display_panels_labels_max_subpopulation():
     )
     data = out.variants[0].alternative_alleles[0].annotations[0].data
     assert data["max_subpopulation_label"] == "European"
+
+
+# --- bounded CSQ splitting ---------------------------------------------------
+
+
+def test_bounded_split_round_trips():
+    """The safety property the optimisation rests on: an entry split only as far
+    as the filters read still rejoins byte for byte, because split(sep, maxsplit)
+    leaves the remainder whole. Without this, narrowing a record's CSQ on the
+    download path would silently truncate every entry."""
+    entry = "|".join(str(i) for i in range(135))
+    for bound in (0, 1, 71, 134):
+        parts = entry.split("|", bound + 1)
+        assert len(parts) <= bound + 2
+        assert "|".join(parts) == entry
+
+
+def test_csq_split_bound_is_the_highest_column_any_filter_reads():
+    consequence = rf.compile_filters(
+        [_consequence_filter("missense_variant")], INDEX_MAP
+    )
+    assert rf.csq_split_bound(consequence) == INDEX_MAP["Consequence"]
+
+    both = rf.compile_filters(
+        [
+            _consequence_filter("missense_variant"),
+            rf.ResultsFilter(
+                field=rf.GENE_SYMBOL_FIELD, operator=rf.OPERATOR_IN, values=["GENE1"]
+            ),
+        ],
+        INDEX_MAP,
+    )
+    # the pipeline must split as far as the *deepest* reader, not the first
+    assert rf.csq_split_bound(both) == max(
+        INDEX_MAP["Consequence"], INDEX_MAP["SYMBOL"]
+    )
+
+
+def test_a_bounded_scan_matches_an_unbounded_one():
+    """End to end: bounding the split must not change which records survive, nor
+    the exact lines they rebuild to."""
+    lines = [
+        _record(1, ["missense_variant", "synonymous_variant"]),
+        _record(2, ["synonymous_variant"]),
+        _record(3, ["missense_variant"]),
+    ]
+    compiled = rf.compile_filters([_consequence_filter("missense_variant")], INDEX_MAP)
+    bounded = rf.filter_records(iter(lines), compiled)
+
+    # the pre-optimisation behaviour: no declared bound -> split everything
+    unbounded_filters = [
+        rf.CompiledFilter(
+            field=cf.field,
+            keep_entry=cf.keep_entry,
+            line_prefilter=cf.line_prefilter,
+            max_csq_index=None,
+        )
+        for cf in compiled
+    ]
+    unbounded = rf.filter_records(iter(lines), unbounded_filters)
+
+    assert rf.csq_split_bound(unbounded_filters) is None  # the full-split path
+    assert bounded.matched_total == unbounded.matched_total == 2
+    assert bounded.page == unbounded.page
+
+
+# --- filtered-scan cache -----------------------------------------------------
+
+
+def _filtered_names(vcf_path, page, page_size=2):
+    response = get_results_from_path(
+        page_size, page, FilePath(vcf_path), [_consequence_filter("missense_variant")]
+    )
+    return [variant.name for variant in response.variants], response
+
+
+def test_a_warm_page_is_identical_to_a_cold_one(tmp_path):
+    """The cache must change how long a page takes, never what it contains."""
+    records = [
+        _record(i, ["missense_variant" if i % 2 else "synonymous_variant"])
+        for i in range(1, 21)
+    ]
+    vcf_path = _write_vcf(tmp_path, records)
+
+    for page in (1, 2, 5):
+        vcf_results.clear_scan_cache()
+        cold_names, cold = _filtered_names(vcf_path, page)
+        warm_names, warm = _filtered_names(vcf_path, page)  # cache now warm
+        assert cold_names == warm_names
+        assert cold.metadata.filters.filtered_total == warm.metadata.filters.filtered_total
+        assert cold.metadata.filters.unfiltered_total == warm.metadata.filters.unfiltered_total
+        assert [s.removed for s in cold.metadata.filters.stats] == [
+            s.removed for s in warm.metadata.filters.stats
+        ]
+
+
+def test_a_rewritten_file_is_not_served_from_the_old_scan(tmp_path):
+    """The dev harness rewrites one fixed output path, so a cache keyed on the
+    path alone would serve a stale match set. The key carries mtime and size."""
+    vcf_results.clear_scan_cache()
+    first = [_record(i, ["missense_variant"]) for i in range(1, 6)]
+    vcf_path = _write_vcf(tmp_path, first)
+    names_before, before = _filtered_names(vcf_path, 1, page_size=10)
+    assert before.metadata.filters.filtered_total == 5
+
+    # regenerate the same path with different content
+    import os
+    import time as _time
+
+    _time.sleep(0.01)
+    rewritten = [_record(i, ["synonymous_variant"]) for i in range(1, 6)]
+    _write_vcf(tmp_path, rewritten)
+    os.utime(vcf_path, None)
+
+    _, after = _filtered_names(vcf_path, 1, page_size=10)
+    assert after.metadata.filters.filtered_total == 0, "served a stale match set"
+
+
+def test_two_filter_sets_do_not_share_a_cache_entry(tmp_path):
+    vcf_results.clear_scan_cache()
+    records = [
+        _record(1, ["missense_variant"]),
+        _record(2, ["synonymous_variant"]),
+        _record(3, ["stop_gained"]),
+    ]
+    vcf_path = _write_vcf(tmp_path, records)
+
+    missense = get_results_from_path(
+        10, 1, FilePath(vcf_path), [_consequence_filter("missense_variant")]
+    )
+    stop = get_results_from_path(
+        10, 1, FilePath(vcf_path), [_consequence_filter("stop_gained")]
+    )
+    assert missense.metadata.filters.filtered_total == 1
+    assert stop.metadata.filters.filtered_total == 1
+    assert missense.variants[0].name != stop.variants[0].name
+
+
+def test_the_cache_is_bounded(tmp_path):
+    """It holds one int per matching record; unbounded, a long-lived process
+    accumulating filter sets would grow without limit."""
+    vcf_results.clear_scan_cache()
+    vcf_path = _write_vcf(tmp_path, [_record(1, ["missense_variant"])])
+    for i in range(vcf_results._SCAN_CACHE_MAX_ENTRIES + 3):
+        get_results_from_path(
+            10, 1, FilePath(vcf_path), [_consequence_filter(f"term_{i}")]
+        )
+    assert len(vcf_results._scan_cache) <= vcf_results._SCAN_CACHE_MAX_ENTRIES

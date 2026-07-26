@@ -375,7 +375,17 @@ def test_clinvar_sub_option_requires_the_master():
     assert _expected(clinvar_short=True) == set()
     assert _expected(clinvar_sv=True) == set()
     # With the master on, each sub-option expects its own custom's columns.
+    # Short variants are on by default, so they come along with the master.
     assert _expected(clinvar=True, clinvar_sv=True) == {
+        "ClinVar",
+        "ClinVar_CLNSIG",
+        "ClinVar_CLNSIGCONF",
+        "ClinVar_SV",
+        "ClinVar_SV_CLNSIG",
+        "ClinVar_SV_ORIGIN",
+    }
+    # ...and turning them off leaves only the structural columns.
+    assert _expected(clinvar=True, clinvar_sv=True, clinvar_short=False) == {
         "ClinVar_SV",
         "ClinVar_SV_CLNSIG",
         "ClinVar_SV_ORIGIN",

@@ -885,9 +885,22 @@ def test_clinvar_sub_option_requires_the_master(monkeypatch, tmp_path):
     assert find_line(lines, "short_name=ClinVar,") is None
 
 
-def test_clinvar_master_on_but_no_sub_option_emits_nothing(monkeypatch, tmp_path):
-    # Enabling the master alone runs neither custom until a sub-option is picked.
+def test_clinvar_master_on_gives_short_variants_by_default(monkeypatch, tmp_path):
+    # Short variants are the default sub-option, so enabling the master alone
+    # runs that custom — but not the structural one, which stays opt-in.
     lines = build_lines(monkeypatch, tmp_path, clinvar=True)
+    assert find_line(lines, "short_name=ClinVar,") is not None
+    assert find_line(lines, "short_name=ClinVar_SV,") is None
+
+
+def test_clinvar_master_on_with_both_sub_options_off_emits_nothing(
+    monkeypatch, tmp_path
+):
+    # The master is still only a gate: turning both sub-options off runs neither
+    # custom, however the defaults are set.
+    lines = build_lines(
+        monkeypatch, tmp_path, clinvar=True, clinvar_short=False, clinvar_sv=False
+    )
     assert find_line(lines, "short_name=ClinVar,") is None
     assert find_line(lines, "short_name=ClinVar_SV,") is None
 

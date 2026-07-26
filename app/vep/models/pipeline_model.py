@@ -449,7 +449,9 @@ class ConfigIniParams(BaseModel):
     # original ClinVar CLNSIG custom (human GRCh37/GRCh38); `clinvar_sv` is the
     # ClinVar_SV structural-variant custom (GRCh38-only).
     clinvar: bool = False
-    clinvar_short: bool = False
+    # Default ON: enabling the ClinVar master should give you short variants
+    # without a second click. It still runs nothing unless `clinvar` is on.
+    clinvar_short: bool = True
     clinvar_sv: bool = False
     # GENCODE promoter windows (human GRCh38). A VEP `custom` gff overlap line
     # (no `fields=`; VEP emits the gff attributes itself).

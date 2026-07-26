@@ -21,6 +21,8 @@ from app.vep.utils.spec_loader import (
     write_expected_columns_sidecar,
     write_spec_sidecar,
 )
+from app.vep.utils.csq import get_prediction_index_map
+from app.vep.utils.spec_interpreter import apply_plugin_spec
 from app.vep.utils.vcf_results import _load_pinned_spec
 
 SAMPLE = {
@@ -382,11 +384,21 @@ def test_human_cadd_is_untouched_by_the_species_table():
 
 
 def test_a_phred_only_species_still_expects_both_cadd_columns():
-    """Pig and chicken emit both columns; RAW is simply never scored. So the
-    expected-column contract is unchanged and the RAW display row drops itself
-    on a null — no per-species parse or display variant is needed."""
+    """Pig and chicken emit both columns; RAW is simply never scored, arriving
+    as the VCF null '.'. So the expected-column contract is unchanged and the
+    RAW display row drops itself — no per-species parse or display variant is
+    needed."""
     spec = resolve_merged_spec("Sscrofa11.1")
     assert {"CADD_PHRED", "CADD_RAW"} <= spec.expected_csq_columns({"cadd": True})
+
+    # '.' is not one of the parser's nullish literals ('', 'NA'); it reads as
+    # null only because a float coercion of it fails. Pinned because that is
+    # incidental, and a stray '.' reaching the panel would render as a score.
+    index_map = get_prediction_index_map("Format: CADD_PHRED|CADD_RAW")
+    parsed = apply_plugin_spec(
+        ["12.34", "."], index_map, load_merged_spec("human_grch38").parsing.plugin("cadd")
+    )
+    assert parsed == {"phred": 12.34, "raw": None}
     raw_row = [
         row
         for option in spec.display.options if option.option_id == "cadd"

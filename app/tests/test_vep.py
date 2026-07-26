@@ -87,7 +87,10 @@ chr19	82829	id_20	T	A	50	PASS	CSQ={CSQ_2}
 chr19	82829	id_21	T	A	50	PASS	CSQ={CSQ_2}
 """
 
-VCF_PATH = FilePath("tests/test_vep.vcf")
+# Relative to this file, not the working directory: a cwd-relative path only
+# resolved when pytest was invoked from app/, which is why this whole module
+# ended up excluded from every test run rather than fixed.
+VCF_PATH = FilePath(os.path.join(os.path.dirname(__file__), "test_vep.vcf"))
 
 def test_get_prediction_index_map():
 

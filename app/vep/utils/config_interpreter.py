@@ -1,11 +1,14 @@
 """Turn selected options + a ConfigSpec into VEP config.ini lines.
 
-The declarative counterpart to
-`pipeline_model.ConfigIniParams.create_config_ini_file`: given the options a
-submission selected, this emits the same `plugin …`, `custom …` and flag lines
-the hardcoded builder does. Additive for now — built alongside the old path and
-proved equal by `tests/test_config_interpreter.py` (a differential test over
-option combinations) before it replaces it.
+Given the options a submission selected, this emits its `plugin …`, `custom …`
+and flag lines. It is the only thing that emits them:
+`pipeline_model.ConfigIniParams.create_config_ini_file` is now a thin runtime
+that adds the always-on base config around what this module produces.
+
+It was built alongside the hardcoded builder it replaced and proved equal
+against it by a differential test over option combinations. That test went with
+the builder once the cutover was done; `tests/test_config_ini.py` covers the
+emitted output now.
 
 NOT here: the always-on base config (`force_overwrite`, `numbers`, `symbol`, …
 and the assembly-gated `mane`/`assembly`). Those are VEP-invocation invariants

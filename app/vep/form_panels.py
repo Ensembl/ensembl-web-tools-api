@@ -11,6 +11,8 @@ carry a `category` label which the form uses to group them within a panel.
 
 import copy
 
+from vep.utils.spec_loader import species_annotation_entry
+
 # Always-visible panels/options.
 _ALWAYS_VISIBLE_PANELS: list[dict] = [
     {
@@ -882,6 +884,41 @@ def _add_human_grch37_options(panels: list[dict]) -> None:
     })
 
 
+def _add_species_annotation_options(panels: list[dict], assembly_name: str | None) -> None:
+    """GO / Phenotypes for a species that carries those data files.
+
+    Driven by the same table the spec loader uses (`species_annotations.json`),
+    so the options offered here and the config entries a submission gets cannot
+    drift apart. A species with neither dataset gets nothing and keeps the base
+    panels — it still submits, just with fewer options.
+    """
+    row = species_annotation_entry(assembly_name)
+    if row is None:
+        return
+    datasets = set(row["datasets"])
+    by_id = {panel["id"]: panel for panel in panels}
+
+    if "go" in datasets:
+        by_id["genes_and_transcripts"]["options"].append(
+            {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False}
+        )
+
+    if "phenotypes" in datasets:
+        # The associations panel exists only for human today, so a species with
+        # phenotype data but none of the human-only sources needs it created.
+        panel = by_id.get("variant_associations")
+        if panel is None:
+            panel = {
+                "id": "variant_associations",
+                "label": "Phenotype & disease associations",
+                "options": [],
+            }
+            panels.append(panel)
+        panel["options"].append(
+            {"id": "phenotypes", "label": "Phenotypes", "type": "boolean", "default": False}
+        )
+
+
 def get_visible_panels(
     attributes: dict | None = None,
     *,
@@ -908,5 +945,8 @@ def get_visible_panels(
         _add_human_grch38_options(panels)
     elif is_human_grch37(species_taxonomy_id, assembly_name):
         _add_human_grch37_options(panels)
+    else:
+        # Every other species: whichever of GO / Phenotypes it has data for.
+        _add_species_annotation_options(panels, assembly_name)
 
     return panels

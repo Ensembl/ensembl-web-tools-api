@@ -98,10 +98,28 @@ _DEV_PLUGIN_SUBDIRS = {
 }
 
 
+# Everything that is not one of the human assemblies: the GO / Phenotypes files
+# for the other species share one tree, under the same per-dataset subdirs.
+_DEV_OTHER_SPECIES_ROOT = (
+    "/nfs/production/flicek/ensembl/variation/enseweb-data_tools/beta_plugins/other_species"
+)
+
+
 def _dev_plugin_path(assembly: str) -> "Callable[[str], str]":
     """A per-entry `{path}` resolver for dev: the assembly's base dir, plus a
-    named subdir for the datasets that live in one."""
-    base = _DEV_PLUGIN_ROOT.get(assembly, _DEV_PLUGIN_ROOT["GRCh38"])
+    named subdir for the datasets that live in one.
+
+    An assembly with no root of its own is another species, not a broken
+    lookup — it resolves under the shared other-species tree. Falling back to
+    the GRCh38 root, as this once did, would have pointed a cattle job at human
+    data files.
+    """
+    for prefix, root in _DEV_PLUGIN_ROOT.items():
+        if (assembly or "").startswith(prefix):
+            base = root
+            break
+    else:
+        base = _DEV_OTHER_SPECIES_ROOT
 
     def resolve(entry_id: str) -> str:
         subdir = _DEV_PLUGIN_SUBDIRS.get(entry_id)
@@ -477,7 +495,10 @@ class ConfigIniParams(BaseModel):
         # Dev jobs (DUMP_INI) resolve `{path}` to the real beta data layout so
         # the dumped ini runs directly on the HPC; production still emits the
         # placeholder until real per-genome resolution lands (see PLUGIN_PATH).
-        plugin_path = _dev_plugin_path(assembly) if DUMP_INI else PLUGIN_PATH
+        # The real assembly name, not the GRCh37/38 bucket above: that bucket
+        # calls every other species GRCh38, which would point a cattle job at
+        # human plugin data.
+        plugin_path = _dev_plugin_path(assembly_name) if DUMP_INI else PLUGIN_PATH
         lines += emit_config_lines(
             config_spec,
             self.model_dump(),

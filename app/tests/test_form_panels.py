@@ -138,15 +138,55 @@ def test_human_grch37_has_37_38_options_but_not_38_only():
 # --- 3. non-human / non-GRCh37-38 -------------------------------------------
 
 
-def test_mouse_shows_only_always_visible_panels():
+def test_mouse_gets_the_base_panels_plus_its_own_data_options():
+    """Mouse carries GO and Phenotypes data files, so it is offered those two on
+    top of the always-visible panels — and none of the human-only options."""
     panels = get_visible_panels(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
-    assert panel_ids(panels) == ALWAYS_VISIBLE_PANEL_IDS
+    assert panel_ids(panels) == ALWAYS_VISIBLE_PANEL_IDS | {"variant_associations"}
 
     genes_opts = option_ids(
         [p for p in panels if p["id"] == "genes_and_transcripts"]
     )
+    assert "go" in genes_opts
     assert "utrannotator" not in genes_opts
     assert "riboseqorfs" not in genes_opts
+
+    associations = option_ids([p for p in panels if p["id"] == "variant_associations"])
+    assert associations == {"phenotypes"}  # not geno2mp / clinvar / opentargets
+
+
+def test_a_species_with_no_data_files_shows_only_the_always_visible_panels():
+    panels = get_visible_panels(species_taxonomy_id="1", assembly_name="Wibble_v1")
+    assert panel_ids(panels) == ALWAYS_VISIBLE_PANEL_IDS
+    assert "go" not in option_ids(panels)
+    assert "phenotypes" not in option_ids(panels)
+
+
+def test_a_go_only_species_is_not_offered_phenotypes():
+    # platypus has a GO file but no phenotypes file
+    panels = get_visible_panels(species_taxonomy_id="9258", assembly_name="mOrnAna1.p.v1")
+    ids = option_ids(panels)
+    assert "go" in ids and "phenotypes" not in ids
+    assert "variant_associations" not in panel_ids(panels)
+
+
+def test_form_options_match_the_spec_a_submission_would_get():
+    """The form and the spec loader read the same table, so what a species is
+    offered and what its submission actually configures cannot drift."""
+    from app.vep.utils.spec_loader import _species_annotations, resolve_merged_spec
+
+    for row in _species_annotations()["species"]:
+        panels = get_visible_panels(
+            species_taxonomy_id=row["species_taxonomy_id"],
+            assembly_name=row["assembly"],
+        )
+        offered = {i for i in option_ids(panels) if i in ("go", "phenotypes")}
+        configured = {
+            e.id
+            for e in resolve_merged_spec(row["assembly"]).config.entries
+            if e.id in ("go", "phenotypes")
+        }
+        assert offered == configured == set(row["datasets"]), row["assembly"]
 
 
 def test_updownstream_distance_available_for_all_species():

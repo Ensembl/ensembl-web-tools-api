@@ -236,6 +236,16 @@ class CellSpec(BaseModel):
             yield from self.link.template_fields()
 
 
+# House style for the results display: a block that repeats — a list, or a table
+# in list mode — shows three rows and puts the rest behind a show-more toggle.
+# An annotation panel is a summary, and a variant can carry a hundred phenotype
+# rows or a dozen interactions; without a cap one option pushes every other
+# option off the screen. Applied as the *default* rather than asked of each
+# block, so a new one inherits it and only has to say something when it wants a
+# different number.
+DEFAULT_TRUNCATE_VISIBLE_COUNT = 3
+
+
 class TruncateSpec(BaseModel):
     """Show the first `visible_count` items with the rest behind a show-more
     toggle (the frontend's `TruncatedList`)."""
@@ -243,6 +253,10 @@ class TruncateSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     visible_count: int = Field(gt=0)
+
+
+def _default_truncate() -> TruncateSpec:
+    return TruncateSpec(visible_count=DEFAULT_TRUNCATE_VISIBLE_COUNT)
 
 
 class DisplayItemLabel(BaseModel):
@@ -405,7 +419,9 @@ class DisplayListBlock(BaseModel):
     when: WhenSpec | None = None
     view: BlockView | None = None
     source: str = Field(alias="from")
-    truncate: TruncateSpec | None = None
+    # Defaults to the house style (see DEFAULT_TRUNCATE_VISIBLE_COUNT); set an
+    # explicit `visible_count` to show a different number.
+    truncate: TruncateSpec = Field(default_factory=_default_truncate)
     item: DisplayItemSpec
 
     def list_ref(self) -> tuple[str, str]:
@@ -504,7 +520,9 @@ class DisplayTableBlock(BaseModel):
     # list mode: split the rows into a headed table per distinct value.
     group_by: GroupBy | None = None
     # list mode: show this many rows, the rest behind a show-more toggle (per
-    # section when grouped). A variant can carry ~100 gene phenotype rows.
+    # section when grouped). Defaults to the house style — see
+    # DEFAULT_TRUNCATE_VISIBLE_COUNT — and is left unset for a fixed matrix,
+    # whose height is known and small.
     truncate: TruncateSpec | None = None
     # fixed mode: explicit rows.
     rows: list[TableMatrixRow] | None = None
@@ -513,6 +531,10 @@ class DisplayTableBlock(BaseModel):
     def _from_xor_rows(self) -> "DisplayTableBlock":
         if bool(self.source) == bool(self.rows):
             raise ValueError("table needs exactly one of `from` or `rows`")
+        # List mode repeats, so it takes the house-style cap unless the spec
+        # named its own. A fixed matrix does not repeat and is left alone.
+        if self.source is not None and self.truncate is None:
+            self.truncate = _default_truncate()
         if self.rows is not None:
             # Fixed matrix: columns are headers, the first is the row-label
             # column and the rest are value columns filled from each row.

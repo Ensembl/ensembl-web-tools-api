@@ -1,0 +1,50 @@
+# Runs the test suite on every push to main and every pull request.
+#
+# The real pipeline lives in .gitlab-ci.yml and runs on the GitLab mirror
+# (gitlab.ebi.ac.uk), which never sees work pushed to a GitHub fork — so
+# without this, nothing runs on a PR here. The steps deliberately mirror that
+# pipeline's Test stage so the two cannot drift into disagreeing.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # GitLab uses 3.10. 3.11 is what the suite is developed against locally,
+      # and 3.12 cannot build the pinned vcfpy fork.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      # tests/test_blast.py reads /data/blast_config.json by absolute path, so
+      # the config has to be staged there. Same step the GitLab pipeline runs.
+      - name: Stage the blast config
+        run: sudo cp -r ./data /data
+
+      # test_vep.py is excluded because it resolves its fixture through a
+      # cwd-relative path, exactly as the GitLab pipeline excludes it. Fixing
+      # that path would let both drop the ignore and recover 11 tests.
+      - name: Run tests
+        working-directory: app
+        run: |
+          cp .env.sample .env
+          python -m pytest --ignore=tests/test_vep.py -q

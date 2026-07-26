@@ -235,105 +235,105 @@ def _membership_prefilter(tokens: set[str]) -> Callable[[str], bool] | None:
     return lambda line: any(token in line for token in values)
 
 
+def _membership_filter(
+    f: ResultsFilter,
+    index_map: dict[str, int],
+    *,
+    field: str,
+    column: str,
+    normalise: Callable[[str], str] | None = None,
+    amp_joined: bool = False,
+    prefilter: bool = True,
+) -> CompiledFilter | None:
+    """A filter that keeps a CSQ entry when one column of it is in a chosen set.
+
+    Four of the six filters are this and nothing else, differing only in how the
+    value is normalised before comparison (verbatim / version-stripped /
+    upper-cased) and whether the column holds one value or VEP's '&'-joined list.
+    Writing it once means a new one cannot quietly arrive without a line
+    prefilter, which is what happened to gene_symbol.
+
+    `prefilter=False` for a normalisation the raw line cannot be tested against:
+    a case-insensitive match would need the line lower-cased first, which costs
+    more than the split it saves.
+    """
+    _require_operator(f, OPERATOR_IN)
+    apply = normalise or (lambda value: value)
+    selected = {apply(value) for value in f.values if value}
+    if not selected:
+        return None
+    index = index_map.get(column)
+    if index is None:
+        raise FilterError(f"{column} column missing from CSQ header")
+
+    if amp_joined:
+
+        def keep_entry(entry: list[str]) -> bool:
+            if index >= len(entry):
+                return False
+            return bool(selected.intersection(apply(v) for v in entry[index].split("&")))
+
+    else:
+
+        def keep_entry(entry: list[str]) -> bool:
+            if index >= len(entry):
+                return False
+            value = entry[index]
+            return bool(value) and apply(value) in selected
+
+    return CompiledFilter(
+        field=field,
+        keep_entry=keep_entry,
+        line_prefilter=_membership_prefilter(selected) if prefilter else None,
+        max_csq_index=index,
+    )
+
+
 def _compile_consequence(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFilter | None:
     """A CSQ entry matches if its Consequence carries one of the selected terms.
     VEP '&'-joins co-occurring terms within an entry."""
-    _require_operator(f, OPERATOR_IN)
-    if not f.values:
-        return None
-    consequence_index = index_map.get("Consequence")
-    if consequence_index is None:
-        raise FilterError("Consequence column missing from CSQ header")
-    selected = set(f.values)
-
-    def keep_entry(entry: list[str]) -> bool:
-        if consequence_index >= len(entry):
-            return False
-        return bool(selected.intersection(entry[consequence_index].split("&")))
-
-    return CompiledFilter(
-        field=CONSEQUENCE_FIELD,
-        keep_entry=keep_entry,
-        line_prefilter=_membership_prefilter(selected),
-        max_csq_index=consequence_index,
+    return _membership_filter(
+        f, index_map, field=CONSEQUENCE_FIELD, column="Consequence", amp_joined=True
     )
 
 
 def _compile_transcript(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFilter | None:
     """A CSQ entry matches if its Feature (transcript) stable id is one of the
     selected ids. Match is version-insensitive: the '.version' suffix is ignored
-    on both sides, so 'ENST0000012345' and 'ENST0000012345.7' are equivalent."""
-    _require_operator(f, OPERATOR_IN)
-    selected = {_strip_version(value) for value in f.values if value}
-    if not selected:
-        return None
-    feature_index = index_map.get("Feature")
-    if feature_index is None:
-        raise FilterError("Feature column missing from CSQ header")
+    on both sides, so 'ENST0000012345' and 'ENST0000012345.7' are equivalent.
 
-    def keep_entry(entry: list[str]) -> bool:
-        if feature_index >= len(entry):
-            return False
-        feature = entry[feature_index]
-        if not feature:
-            return False
-        return _strip_version(feature) in selected
-
-    # The stripped id is a substring of the versioned id as it appears in the line
-    # (e.g. "ENST00000012345" within "ENST00000012345.7"), so it is a valid
-    # necessary-condition token.
-    return CompiledFilter(
+    The stripped id is a substring of the versioned id as it appears in the line,
+    so it is still a valid necessary-condition token for the prefilter."""
+    return _membership_filter(
+        f,
+        index_map,
         field=TRANSCRIPT_FIELD,
-        keep_entry=keep_entry,
-        line_prefilter=_membership_prefilter(selected),
-        max_csq_index=feature_index,
+        column="Feature",
+        normalise=_strip_version,
     )
 
 
 def _compile_gene_symbol(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFilter | None:
     """A CSQ entry matches if its SYMBOL (gene name) is one of the selected names.
-    Match is case-insensitive (human symbols are conventionally upper-case)."""
-    _require_operator(f, OPERATOR_IN)
-    selected = {value.upper() for value in f.values if value}
-    if not selected:
-        return None
-    symbol_index = index_map.get("SYMBOL")
-    if symbol_index is None:
-        raise FilterError("SYMBOL column missing from CSQ header")
-
-    def keep_entry(entry: list[str]) -> bool:
-        if symbol_index >= len(entry):
-            return False
-        symbol = entry[symbol_index]
-        return bool(symbol) and symbol.upper() in selected
-
-    return CompiledFilter(
-        field=GENE_SYMBOL_FIELD, keep_entry=keep_entry, max_csq_index=symbol_index
+    Match is case-insensitive (human symbols are conventionally upper-case), which
+    is why this is the one membership filter with no line prefilter: testing the
+    raw line case-insensitively would mean lower-casing every line, costing more
+    than the CSQ split it would save."""
+    return _membership_filter(
+        f,
+        index_map,
+        field=GENE_SYMBOL_FIELD,
+        column="SYMBOL",
+        normalise=str.upper,
+        prefilter=False,
     )
 
 
 def _compile_gene_id(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFilter | None:
     """A CSQ entry matches if its Gene (Ensembl gene stable id) is one of the
     selected ids. Version-insensitive, like the transcript filter."""
-    _require_operator(f, OPERATOR_IN)
-    selected = {_strip_version(value) for value in f.values if value}
-    if not selected:
-        return None
-    gene_index = index_map.get("Gene")
-    if gene_index is None:
-        raise FilterError("Gene column missing from CSQ header")
-
-    def keep_entry(entry: list[str]) -> bool:
-        if gene_index >= len(entry):
-            return False
-        gene = entry[gene_index]
-        return bool(gene) and _strip_version(gene) in selected
-
-    return CompiledFilter(
-        field=GENE_ID_FIELD,
-        keep_entry=keep_entry,
-        max_csq_index=gene_index,
-        line_prefilter=_membership_prefilter(selected),
+    return _membership_filter(
+        f, index_map, field=GENE_ID_FIELD, column="Gene", normalise=_strip_version
     )
 
 

@@ -819,3 +819,42 @@ def test_a_fixed_matrix_table_is_not_capped():
     ]
     assert matrices, "expected SpliceAI to carry a fixed matrix table"
     assert all(b.truncate is None for b in matrices)
+
+
+def test_every_block_kind_carries_the_shared_gates():
+    """The point of the shared base: a block kind cannot arrive missing a gate.
+
+    Each of the four used to redeclare `heading`/`requires_selected`/`when`/
+    `view` for itself, and `group_by` had already been added to two of them
+    independently. This fails if a fifth kind is written without inheriting."""
+    from app.vep.models.display_spec_model import (
+        DisplayGroupBlock,
+        DisplayListBlock,
+        DisplayRowsBlock,
+        DisplayTableBlock,
+        _GatedBlock,
+    )
+
+    gates = {"heading", "requires_selected", "when", "view"}
+    for block in (
+        DisplayRowsBlock,
+        DisplayListBlock,
+        DisplayTableBlock,
+        DisplayGroupBlock,
+    ):
+        assert issubclass(block, _GatedBlock), block.__name__
+        assert gates <= set(block.model_fields), block.__name__
+
+
+def test_the_shared_gates_still_reject_an_unknown_field():
+    """Inheriting must not loosen `extra=forbid` — a typo'd gate has to fail at
+    load rather than being silently ignored."""
+    import pytest
+    from pydantic import ValidationError
+
+    from app.vep.models.display_spec_model import DisplayRowsBlock
+
+    with pytest.raises(ValidationError):
+        DisplayRowsBlock.model_validate(
+            {"kind": "rows", "rows": [], "whn": {"present": "x.y"}}
+        )

@@ -3036,7 +3036,7 @@
             "view": "default",
             "rows": [
               {
-                "label": "Stability",
+                "label": "Protein Structure Stability",
                 "from": "protvar.structure_stability_score",
                 "format": "num",
                 "link": {
@@ -3049,6 +3049,7 @@
           {
             "kind": "list",
             "view": "default",
+            "heading": "Protein Pockets",
             "from": "protvar.pockets",
             "item": {
               "label": {
@@ -3069,6 +3070,7 @@
           {
             "kind": "list",
             "view": "default",
+            "heading": "Protein-Protein Interaction Interface",
             "from": "protvar.interaction_interfaces",
             "item": {
               "label": {

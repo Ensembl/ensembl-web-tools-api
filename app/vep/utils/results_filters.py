@@ -91,11 +91,18 @@ class CompiledFilter:
     it is dropped without splitting the (large, many-column) CSQ. It must never
     reject a record that would match — false positives are fine (they fall
     through to the exact `keep_entry` check), false negatives are not. Only
-    literal-substring membership filters can supply one (see `_membership_prefilter`)."""
+    literal-substring membership filters can supply one (see `_membership_prefilter`).
+
+    `max_csq_index` is the highest CSQ subfield index `keep_entry` reads. Entries
+    are split only that far (see `_find_csq`), which matters: a CSQ entry here has
+    135 subfields and a filter typically reads one. None means "reads unknown
+    columns" and forces a full split — correctness first.
+    """
 
     field: str
     keep_entry: Callable[[list[str]], bool]
     line_prefilter: Callable[[str], bool] | None = None
+    max_csq_index: int | None = None
 
 
 @dataclass
@@ -145,20 +152,44 @@ def _split_line(line: str) -> tuple[list[str], bool]:
     return (line[:-1] if has_newline else line).split("\t"), has_newline
 
 
-def _find_csq(columns: list[str]) -> tuple[int, int, list[list[str]]] | None:
+def _find_csq(
+    columns: list[str], max_index: int | None = None
+) -> tuple[int, int, list[list[str]]] | None:
     """Locate the CSQ annotation in a record's columns.
 
     Returns (info_part_index, info_field_count_marker, entries) where entries is a
     list of CSQ entries each split into its '|' subfields; or None if the record
-    has no CSQ (or too few columns to have an INFO field)."""
+    has no CSQ (or too few columns to have an INFO field).
+
+    `max_index` is the highest subfield the caller will read. Splitting only that
+    far is the single biggest cost in a filtered scan: an entry here carries 135
+    subfields, and a filter reads one or two, so a full split allocates ~130
+    strings per entry that nobody looks at. Passing None splits everything.
+
+    Bounded entries still rebuild exactly: `split(sep, maxsplit)` leaves the
+    remainder whole as the last element, so `"|".join(...)` reproduces the
+    original byte for byte (pinned by test_bounded_split_round_trips)."""
     if len(columns) < 8:
         return None
     info_parts = columns[7].split(";")
     for part_index, part in enumerate(info_parts):
         if part.startswith("CSQ="):
-            entries = [entry.split("|") for entry in part[4:].split(",")]
+            raw_entries = part[4:].split(",")
+            if max_index is None:
+                entries = [entry.split("|") for entry in raw_entries]
+            else:
+                entries = [entry.split("|", max_index + 1) for entry in raw_entries]
             return part_index, len(info_parts), entries
     return None
+
+
+def csq_split_bound(compiled: list[CompiledFilter]) -> int | None:
+    """How far into a CSQ entry this whole pipeline reads — None if any filter
+    reads unknown columns, in which case everything is split."""
+    bounds = [cf.max_csq_index for cf in compiled]
+    if any(bound is None for bound in bounds):
+        return None
+    return max(bounds) if bounds else 0
 
 
 def extract_csq_entries(line: str) -> list[list[str]]:
@@ -224,6 +255,7 @@ def _compile_consequence(f: ResultsFilter, index_map: dict[str, int]) -> Compile
         field=CONSEQUENCE_FIELD,
         keep_entry=keep_entry,
         line_prefilter=_membership_prefilter(selected),
+        max_csq_index=consequence_index,
     )
 
 
@@ -254,6 +286,7 @@ def _compile_transcript(f: ResultsFilter, index_map: dict[str, int]) -> Compiled
         field=TRANSCRIPT_FIELD,
         keep_entry=keep_entry,
         line_prefilter=_membership_prefilter(selected),
+        max_csq_index=feature_index,
     )
 
 
@@ -274,7 +307,9 @@ def _compile_gene_symbol(f: ResultsFilter, index_map: dict[str, int]) -> Compile
         symbol = entry[symbol_index]
         return bool(symbol) and symbol.upper() in selected
 
-    return CompiledFilter(field=GENE_SYMBOL_FIELD, keep_entry=keep_entry)
+    return CompiledFilter(
+        field=GENE_SYMBOL_FIELD, keep_entry=keep_entry, max_csq_index=symbol_index
+    )
 
 
 def _compile_gene_id(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFilter | None:
@@ -297,6 +332,7 @@ def _compile_gene_id(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFil
     return CompiledFilter(
         field=GENE_ID_FIELD,
         keep_entry=keep_entry,
+        max_csq_index=gene_index,
         line_prefilter=_membership_prefilter(selected),
     )
 
@@ -330,6 +366,24 @@ _TRANSCRIPT_GROUP_TESTS: dict[str, Callable[[list[str], dict[str, int]], bool]] 
 }
 
 
+# The columns the transcript-group tests above read. Kept beside them so the
+# bounded split below stays correct if a group is added.
+_TRANSCRIPT_GROUP_COLUMNS = (
+    "CANONICAL",
+    "MANE_SELECT",
+    "MANE",
+    "MANE_PLUS_CLINICAL",
+    "GENCODE_PRIMARY",
+)
+
+
+def _max_index_of(columns, index_map: dict[str, int]) -> int | None:
+    """The highest index of `columns` present in the header, or None if none are
+    (in which case the filter reads nothing and the bound does not matter)."""
+    indices = [index_map[name] for name in columns if name in index_map]
+    return max(indices) if indices else None
+
+
 def _compile_transcript_group(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFilter | None:
     """A CSQ entry matches if it belongs to any of the selected transcript groups
     (canonical / MANE Select / MANE Plus Clinical / GENCODE primary). Which groups
@@ -348,7 +402,11 @@ def _compile_transcript_group(f: ResultsFilter, index_map: dict[str, int]) -> Co
     def keep_entry(entry: list[str]) -> bool:
         return any(test(entry, index_map) for test in tests)
 
-    return CompiledFilter(field=TRANSCRIPT_GROUP_FIELD, keep_entry=keep_entry)
+    return CompiledFilter(
+        field=TRANSCRIPT_GROUP_FIELD,
+        keep_entry=keep_entry,
+        max_csq_index=_max_index_of(_TRANSCRIPT_GROUP_COLUMNS, index_map),
+    )
 
 
 def af_columns(index_map: dict[str, int], spec: ParsingSpec | None = None) -> list[str]:
@@ -494,6 +552,7 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> Co
     indices = [index_map[c] for c in columns if c in index_map]
     if not indices:
         return None  # no AF columns to test (e.g. AF not run) -> no-op
+    highest_af_index = max(indices)
 
     if f.operator == OPERATOR_LE:
         compare = lambda value: value <= threshold
@@ -515,7 +574,11 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> Co
             return False
         return all(map(compare, values)) if match_all else any(map(compare, values))
 
-    return CompiledFilter(field=ALLELE_FREQUENCY_FIELD, keep_entry=keep_entry)
+    return CompiledFilter(
+        field=ALLELE_FREQUENCY_FIELD,
+        keep_entry=keep_entry,
+        max_csq_index=highest_af_index,
+    )
 
 
 # Field id -> builder that compiles a ResultsFilter into a CompiledFilter (or None
@@ -557,7 +620,10 @@ _Survivor = tuple[list[str], int, list[list[str]], bool]
 
 
 def _evaluate_record(
-    line: str, compiled: list[CompiledFilter], removed: list[int]
+    line: str,
+    compiled: list[CompiledFilter],
+    removed: list[int],
+    max_index: int | None = None,
 ) -> _Survivor | None:
     """Run the ordered pipeline over one record. Returns what's needed to rebuild
     the kept line (its CSQ narrowed to surviving entries), or None if a filter
@@ -573,7 +639,7 @@ def _evaluate_record(
             return None
 
     columns, has_newline = _split_line(line)
-    found = _find_csq(columns)
+    found = _find_csq(columns, max_index)
     if found is None:
         # No CSQ to match against — a consequence-style filter can't keep it.
         if compiled:
@@ -591,12 +657,57 @@ def _evaluate_record(
     return columns, csq_part_index, entries, has_newline
 
 
+def replay_matches(
+    data_lines: Iterable[str],
+    compiled: list[CompiledFilter],
+    matches: list[int],
+    *,
+    start: int = 0,
+    count: int | None = None,
+) -> list[str]:
+    """Rebuild one page of an already-known match set, without re-filtering.
+
+    A filtered page needs the match total, so the first request has to scan the
+    whole file. Later pages of the *same* filter set do not: their answer is
+    already determined. Given the record ordinals that matched, this walks the
+    line stream and re-runs the filters on only the handful of records the page
+    actually needs — turning a second page from a full evaluation pass into a
+    read plus `count` rebuilds.
+
+    Still a read of the file: the ordinals say which records, not where they are.
+    Decompression is ~15% of a scan, so this is the bulk of the saving, and it
+    stays honest about memory (nothing but the page is held).
+    """
+    if count is not None and count <= 0:
+        return []
+    wanted = matches[start:] if count is None else matches[start : start + count]
+    if not wanted:
+        return []
+    max_index = csq_split_bound(compiled)
+    remaining = set(wanted)
+    highest = wanted[-1]
+    page: dict[int, str] = {}
+    for ordinal, line in enumerate(data_lines):
+        if ordinal not in remaining:
+            if ordinal >= highest:
+                break
+            continue
+        survivor = _evaluate_record(line, compiled, [0] * len(compiled), max_index)
+        if survivor is not None:
+            page[ordinal] = _rebuild_line(*survivor)
+        remaining.discard(ordinal)
+        if not remaining:
+            break
+    return [page[ordinal] for ordinal in wanted if ordinal in page]
+
+
 def filter_records(
     data_lines: Iterable[str],
     compiled: list[CompiledFilter],
     *,
     start: int = 0,
     count: int | None = None,
+    record_matches: list[int] | None = None,
 ) -> FilterOutcome:
     """Stream the ordered filter pipeline over raw VCF data lines in a single pass.
 
@@ -611,17 +722,26 @@ def filter_records(
     since pagination needs the total regardless of which page is asked for.
 
     `data_lines` may be a lazy iterator (e.g. a gzip line stream), so the whole
-    file need never be materialised."""
+    file need never be materialised.
+
+    `record_matches` collects the ordinal of every matching record. Pagination
+    needs the totals, so every page re-runs this whole pass; handing those
+    ordinals back lets the caller serve later pages without re-evaluating a
+    single filter (see `replay_matches`)."""
     removed = [0] * len(compiled)
+    # Computed once for the whole pass, not per record.
+    max_index = csq_split_bound(compiled)
     scanned = 0
     matched = 0
     page: list[str] = []
     stop = None if count is None else start + count
     for line in data_lines:
         scanned += 1
-        survivor = _evaluate_record(line, compiled, removed)
+        survivor = _evaluate_record(line, compiled, removed, max_index)
         if survivor is None:
             continue
+        if record_matches is not None:
+            record_matches.append(scanned - 1)
         # Rebuild only the survivors that fall in the requested window; the rest
         # are counted but never reassembled.
         if matched >= start and (stop is None or matched < stop):

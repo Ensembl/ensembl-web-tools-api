@@ -1932,7 +1932,7 @@
         "option_id": "go",
         "blocks": [
           {
-            "kind": "table",
+            "kind": "list",
             "heading": "Gene Ontology",
             "from": "go.go_terms",
             "group_by": {
@@ -1943,16 +1943,17 @@
                 "molecular_function": "Molecular function"
               }
             },
-            "columns": [
-              {
-                "label": "Term",
-                "from": "name",
-                "link": {
-                  "kind": "external",
-                  "template": "https://amigo.geneontology.org/amigo/term/{id}"
+            "item": {
+              "cells": [
+                {
+                  "from": "name",
+                  "link": {
+                    "kind": "external",
+                    "template": "https://amigo.geneontology.org/amigo/term/{id}"
+                  }
                 }
-              }
-            ]
+              ]
+            }
           }
         ]
       },

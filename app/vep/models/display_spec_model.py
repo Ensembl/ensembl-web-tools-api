@@ -446,6 +446,10 @@ class DisplayListBlock(BaseModel):
     when: WhenSpec | None = None
     view: BlockView | None = None
     source: str = Field(alias="from")
+    # Split the items into a headed sub-section per distinct value of an item
+    # field — GO terms by aspect. Same semantics as a table's: headings come from
+    # the data, `labels` renames them, and `truncate` then applies per section.
+    group_by: GroupBy | None = None
     # Defaults to the house style (see DEFAULT_TRUNCATE_VISIBLE_COUNT); set an
     # explicit `visible_count` to show a different number.
     truncate: TruncateSpec = Field(default_factory=_default_truncate)
@@ -507,14 +511,6 @@ class TableColumn(BaseModel):
     def item_field_refs(self) -> Iterator[str]:
         if self.source:
             yield self.source
-        if self.link:
-            # A column may link on a field it does not display: GO shows the term
-            # name and links by its accession. Those `{field}` placeholders are
-            # item fields and must be checked like any other. `{value}` is not —
-            # it is the cell's own text, which no item carries.
-            yield from (
-                field for field in self.link.template_fields() if field != "value"
-            )
 
 
 class TableMatrixRow(BaseModel):

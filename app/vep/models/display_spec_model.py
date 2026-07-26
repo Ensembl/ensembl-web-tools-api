@@ -507,6 +507,14 @@ class TableColumn(BaseModel):
     def item_field_refs(self) -> Iterator[str]:
         if self.source:
             yield self.source
+        if self.link:
+            # A column may link on a field it does not display: GO shows the term
+            # name and links by its accession. Those `{field}` placeholders are
+            # item fields and must be checked like any other. `{value}` is not —
+            # it is the cell's own text, which no item carries.
+            yield from (
+                field for field in self.link.template_fields() if field != "value"
+            )
 
 
 class TableMatrixRow(BaseModel):

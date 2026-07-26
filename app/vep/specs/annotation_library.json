@@ -1946,15 +1946,11 @@
             "columns": [
               {
                 "label": "Term",
-                "from": "id",
+                "from": "name",
                 "link": {
                   "kind": "external",
-                  "template": "https://amigo.geneontology.org/amigo/term/{value}"
+                  "template": "https://amigo.geneontology.org/amigo/term/{id}"
                 }
-              },
-              {
-                "label": "Name",
-                "from": "name"
               }
             ]
           }

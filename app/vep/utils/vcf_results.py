@@ -1,7 +1,7 @@
 """ Module for loading a VCF and parsing it into a VepResultsResponse
 object as defined in APISpecification"""
 
-from collections import OrderedDict
+from collections import deque, OrderedDict
 from dataclasses import dataclass
 from io import StringIO
 from typing import Iterable, Iterator
@@ -950,6 +950,36 @@ def _label_af_max_subpopulation(
                 )
 
 
+def _read_row_slice(vcf_path: FilePath, row_offset: int, page_size: int) -> str:
+    """The `page_size` lines ending at `row_offset` of `bcftools view` output.
+
+    Replaces a `bcftools view … | head -nX | tail -nY` shell pipeline. That
+    interpolated the VCF path into a shell string, and the path derives from the
+    uploaded file's name — so a filename like `a$(…).vcf` ran whatever it liked.
+
+    The pipeline's one virtue is kept: `head` stopped bcftools early rather than
+    reading the whole file, so this stops reading at `row_offset` and closes the
+    pipe, which SIGPIPEs bcftools exactly as before.
+    """
+    if page_size <= 0:
+        return ""
+    keep: deque[str] = deque(maxlen=page_size)
+    process = subprocess.Popen(
+        ["bcftools", "view", str(vcf_path)],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        for line_number, line in enumerate(process.stdout, start=1):
+            keep.append(line)
+            if line_number >= row_offset:
+                break
+    finally:
+        process.stdout.close()
+        process.wait()
+    return "".join(keep)
+
+
 def get_results_from_path(
     page_size: int,
     page: int,
@@ -1026,13 +1056,10 @@ def get_results_from_path(
     page = max(page, 1) # normalize values
     page_size = min(max(page_size, 0), total)
     row_offset = min(page * page_size, total) + vcf_info.header_count
-    vcf_headers = subprocess.check_output( # fetch all header rows
-        f"bcftools view -h {vcf_path}", shell=True, text=True
+    vcf_headers = subprocess.check_output(  # fetch all header rows
+        ["bcftools", "view", "-h", str(vcf_path)], text=True
     )
-    vcf_slice = subprocess.check_output( # fetch subset of variant rows
-        f"bcftools view {vcf_path} | head -n{row_offset} | tail -n{page_size}",
-        shell=True, text=True
-    )
+    vcf_slice = _read_row_slice(vcf_path, row_offset, page_size)
     vcf_stream = StringIO(vcf_headers + vcf_slice)
 
     return _with_display_panels(

@@ -35,14 +35,21 @@ def _get_vcf_meta(vcf_path: FilePath) -> model.VcfMetadata:
 
     meta_path = vcf_path.with_name(META_FILE)
     if not meta_path.exists() or _is_meta_cache_stale(meta_path, vcf_path):
-        variant_count_str = subprocess.check_output(
-            f"bcftools stats {vcf_path} | grep 'number of records:'",
-            shell=True, text=True
+        # Argument lists, not a shell string: the path derives from the
+        # uploaded file's name, so interpolating it into a shell command let a
+        # filename like `a$(...).vcf` run whatever it liked. The `grep` and
+        # `wc -l` the pipeline used are done here instead.
+        stats_output = subprocess.check_output(
+            ["bcftools", "stats", str(vcf_path)], text=True
         )
-        header_count_str = subprocess.check_output(
-            f"bcftools view -h {vcf_path} | wc -l",
-            shell=True, text=True
+        variant_count_str = next(
+            (line for line in stats_output.splitlines() if "number of records:" in line),
+            "",
         )
+        header_output = subprocess.check_output(
+            ["bcftools", "view", "-h", str(vcf_path)], text=True
+        )
+        header_count_str = str(len(header_output.splitlines()))
         try:
             vcf_info = model.VcfMetadata(
                 variant_count=int(variant_count_str.split(":")[-1]),

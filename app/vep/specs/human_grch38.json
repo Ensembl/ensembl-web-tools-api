@@ -175,7 +175,6 @@
             "mapping_file": "{path}/mutation_gc_map.txt.gz"
           },
           "flags": {
-            "all_shortcut": "all",
             "options": [
               {
                 "option": "intact_feature_ac",
@@ -184,10 +183,6 @@
               {
                 "option": "intact_feature_short_label",
                 "keyword": "feature_short_label"
-              },
-              {
-                "option": "intact_feature_annotation",
-                "keyword": "feature_annotation"
               },
               {
                 "option": "intact_ap_ac",

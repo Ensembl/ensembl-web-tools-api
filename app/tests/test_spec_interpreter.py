@@ -781,22 +781,100 @@ def test_dosage_sensitivity_zero_is_kept():
     }
 
 
-def test_intact_unselected_sub_options_are_null():
-    """This run emits only three of IntAct's columns; the unselected
-    sub-options are absent and come back null."""
-    index_map = index_map_for(
-        "IntAct_feature_type", "IntAct_interaction_ac", "IntAct_feature_ac"
-    )
-    assert run("intact", ["mutation", "EBI-123", "EBI-ac"], index_map) == {
+# IntAct's real maximal output: seven parallel `&`-joined columns, one entry per
+# interaction. Values are a real run for P37840 p.Ala53Thr.
+INTACT_AP_AC = "&".join(["uniprotkb:P37840"] * 10)
+INTACT_FEATURE_AC = (
+    "EBI-27104121&EBI-8841557&EBI-27092285&EBI-27092289&EBI-36480383&"
+    "EBI-27101618&EBI-27104129&EBI-7778039&EBI-9214100&EBI-27092688"
+)
+INTACT_SHORT_LABEL = "&".join(["P37840:p.Ala53Thr"] * 10)
+INTACT_FEATURE_TYPE = (
+    "mutation&mutation&mutation_decreasing&mutation_decreasing&"
+    "mutation_decreasing&mutation_decreasing_strength&"
+    "mutation_decreasing_strength&mutation_disrupting&mutation_increasing&"
+    "mutation_increasing_strength"
+)
+INTACT_INTERACTION_AC = (
+    "EBI-27104114&EBI-8841537&EBI-27091991&EBI-27092138&EBI-36480377&"
+    "EBI-27101607&EBI-27104123&EBI-7778024&EBI-9214092&EBI-27092683"
+)
+INTACT_PARTICIPANTS = (
+    "uniprotkb:P00520_and_uniprotkb:P37840&uniprotkb:P00414_and_uniprotkb:P37840&"
+    "uniprotkb:P37840_and_uniprotkb:P00441&uniprotkb:P37840_and_uniprotkb:P00441&"
+    "uniprotkb:P37840_and_uniprotkb:P00441&uniprotkb:P00519_and_uniprotkb:P37840&"
+    "uniprotkb:P00520_and_uniprotkb:P37840&uniprotkb:P68510_and_uniprotkb:P37840&"
+    "uniprotkb:P37840_and_uniprotkb:Q9Y6H5&"
+    "uniprotkb:P37840_and_uniprotkb:P00441_and_uniprotkb:P00441"
+)
+INTACT_PMID = (
+    "27348587&12059041&26643113&26643113&26643113&27348587&27348587&"
+    "16096643&10319874&26643113"
+)
+
+INTACT_COLUMNS = (
+    "IntAct_interaction_ac", "IntAct_feature_type",
+    "IntAct_interaction_participants", "IntAct_feature_short_label",
+    "IntAct_ap_ac", "IntAct_pmid", "IntAct_feature_ac",
+)
+INTACT_MAXIMAL = [
+    INTACT_INTERACTION_AC, INTACT_FEATURE_TYPE, INTACT_PARTICIPANTS,
+    INTACT_SHORT_LABEL, INTACT_AP_AC, INTACT_PMID, INTACT_FEATURE_AC,
+]
+
+
+def test_intact_zips_the_parallel_columns_into_one_row_per_interaction():
+    """The columns are positional: entry i of every column describes the same
+    interaction. Reporting them as seven separate lists (as this used to) loses
+    that correspondence entirely."""
+    result = run("intact", INTACT_MAXIMAL, index_map_for(*INTACT_COLUMNS))
+    interactions = result["interactions"]
+
+    assert len(interactions) == 10
+    assert interactions[0] == {
+        "interaction_ac": "EBI-27104114",
         "feature_type": "mutation",
-        "interaction_ac": "EBI-123",
-        "feature_ac": "EBI-ac",
-        "feature_short_label": None,
-        "feature_annotation": None,
-        "ap_ac": None,
-        "interaction_participants": None,
-        "pmid": None,
+        "interaction_participants": "uniprotkb:P00520_and_uniprotkb:P37840",
+        "feature_short_label": "P37840:p.Ala53Thr",
+        "ap_ac": "uniprotkb:P37840",
+        "pmid": "27348587",
+        "feature_ac": "EBI-27104121",
     }
+    # The last entry has three participants, not two — the display splits them.
+    assert interactions[-1]["interaction_ac"] == "EBI-27092683"
+    assert interactions[-1]["feature_type"] == "mutation_increasing_strength"
+    assert interactions[-1]["interaction_participants"].count("_and_") == 2
+    assert interactions[-1]["pmid"] == "26643113"
+
+
+def test_intact_unselected_sub_options_come_back_null_per_interaction():
+    """A run with only the always-on columns still yields one row per
+    interaction; the unselected sub-options are null inside each row rather
+    than collapsing the rows together."""
+    result = run(
+        "intact",
+        [INTACT_INTERACTION_AC, INTACT_FEATURE_TYPE],
+        index_map_for("IntAct_interaction_ac", "IntAct_feature_type"),
+    )
+    interactions = result["interactions"]
+
+    assert len(interactions) == 10
+    assert interactions[0] == {
+        "interaction_ac": "EBI-27104114",
+        "feature_type": "mutation",
+        "interaction_participants": None,
+        "feature_short_label": None,
+        "ap_ac": None,
+        "pmid": None,
+        "feature_ac": None,
+    }
+
+
+def test_intact_feature_annotation_is_no_longer_parsed():
+    """Dropped: sparse, of little use, and returned in a form that resisted
+    parsing."""
+    result = run("intact", INTACT_MAXIMAL, index_map_for(*INTACT_COLUMNS))
+    assert all("feature_annotation" not in i for i in result["interactions"])
 
 
 def test_popeve_scores():

@@ -203,7 +203,6 @@ _PROTVAR_SUBOPTIONS = [
 _INTACT_SUBOPTIONS = [
     {"id": "intact_feature_ac", "label": "Feature AC", "type": "boolean", "default": False},
     {"id": "intact_feature_short_label", "label": "Feature short label", "type": "boolean", "default": False},
-    {"id": "intact_feature_annotation", "label": "Feature annotation", "type": "boolean", "default": False},
     {"id": "intact_ap_ac", "label": "Affected protein AC", "type": "boolean", "default": False},
     {"id": "intact_interaction_participants", "label": "Interaction participants", "type": "boolean", "default": False},
     {"id": "intact_pmid", "label": "PubMed ID", "type": "boolean", "default": False},

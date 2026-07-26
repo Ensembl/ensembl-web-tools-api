@@ -994,67 +994,73 @@
         "output": "intact",
         "csq_fields": [
           "IntAct_feature_type",
-          "IntAct_interaction_ac",
-          "IntAct_feature_ac"
+          "IntAct_interaction_ac"
         ],
         "require_any_input": [
-          "IntAct_feature_type",
           "IntAct_interaction_ac",
-          "IntAct_feature_ac",
-          "IntAct_feature_short_label",
-          "IntAct_feature_annotation",
-          "IntAct_ap_ac",
+          "IntAct_feature_type",
           "IntAct_interaction_participants",
-          "IntAct_pmid"
+          "IntAct_feature_short_label",
+          "IntAct_ap_ac",
+          "IntAct_pmid",
+          "IntAct_feature_ac"
         ],
         "targets": [
           {
-            "field": "feature_type",
-            "from": "IntAct_feature_type",
-            "transform": "scalar",
-            "type": "string"
-          },
-          {
-            "field": "interaction_ac",
-            "from": "IntAct_interaction_ac",
-            "transform": "scalar",
-            "type": "string"
-          },
-          {
-            "field": "feature_ac",
-            "from": "IntAct_feature_ac",
-            "transform": "scalar",
-            "type": "string"
-          },
-          {
-            "field": "feature_short_label",
-            "from": "IntAct_feature_short_label",
-            "transform": "scalar",
-            "type": "string"
-          },
-          {
-            "field": "feature_annotation",
-            "from": "IntAct_feature_annotation",
-            "transform": "scalar",
-            "type": "string"
-          },
-          {
-            "field": "ap_ac",
-            "from": "IntAct_ap_ac",
-            "transform": "scalar",
-            "type": "string"
-          },
-          {
-            "field": "interaction_participants",
-            "from": "IntAct_interaction_participants",
-            "transform": "scalar",
-            "type": "string"
-          },
-          {
-            "field": "pmid",
-            "from": "IntAct_pmid",
-            "transform": "scalar",
-            "type": "string"
+            "field": "interactions",
+            "from": [
+              "IntAct_interaction_ac",
+              "IntAct_feature_type",
+              "IntAct_interaction_participants",
+              "IntAct_feature_short_label",
+              "IntAct_ap_ac",
+              "IntAct_pmid",
+              "IntAct_feature_ac"
+            ],
+            "transform": "zip",
+            "align": "max",
+            "as": [
+              {
+                "field": "interaction_ac",
+                "type": "string"
+              },
+              {
+                "field": "feature_type",
+                "type": "string"
+              },
+              {
+                "field": "interaction_participants",
+                "type": "string"
+              },
+              {
+                "field": "feature_short_label",
+                "type": "string"
+              },
+              {
+                "field": "ap_ac",
+                "type": "string"
+              },
+              {
+                "field": "pmid",
+                "type": "string"
+              },
+              {
+                "field": "feature_ac",
+                "type": "string"
+              }
+            ],
+            "drop_when": {
+              "all_null": true
+            },
+            "item_fields": [
+              "interaction_ac",
+              "feature_type",
+              "interaction_participants",
+              "feature_short_label",
+              "ap_ac",
+              "pmid",
+              "feature_ac"
+            ]
           }
         ]
       },
@@ -1640,11 +1646,11 @@
                     "label": "Splicing event"
                   },
                   {
-                    "label": "ΔS",
+                    "label": "\u0394S",
                     "format": "num"
                   },
                   {
-                    "label": "ΔP",
+                    "label": "\u0394P",
                     "format": "num"
                   }
                 ],
@@ -2348,93 +2354,78 @@
           {
             "kind": "rows",
             "view": "default",
-            "when": {
-              "present": "intact.interaction_ac"
-            },
             "rows": [
               {
                 "label": "IntAct",
-                "from": "intact.interaction_ac",
-                "format": "count"
+                "from": "intact.interactions",
+                "format": "count",
+                "placeholder": "\u2014"
               }
             ]
           },
           {
-            "kind": "rows",
-            "view": "default",
-            "when": {
-              "empty": "intact.interaction_ac"
-            },
-            "rows": [
-              {
-                "label": "IntAct",
-                "from": "intact.feature_type"
-              }
-            ]
-          },
-          {
-            "kind": "rows",
+            "kind": "table",
             "view": "show_all",
             "heading": "IntAct",
-            "rows": [
+            "from": "intact.interactions",
+            "columns": [
               {
-                "label": "Interactions",
-                "from": "intact.interaction_ac",
-                "format": "count",
-                "placeholder": "—"
-              },
-              {
-                "label": "Feature AC",
-                "from": "intact.feature_ac",
-                "format": "count",
-                "sub_option": {
-                  "id": "intact_feature_ac",
-                  "default": false
+                "label": "Interaction AC",
+                "from": "interaction_ac",
+                "link": {
+                  "kind": "external",
+                  "template": "https://www.ebi.ac.uk/intact/details/interaction/{value}"
                 }
               },
               {
+                "label": "Feature Type",
+                "from": "feature_type"
+              },
+              {
+                "label": "Interaction Participants",
+                "from": "interaction_participants",
+                "sub_option": {
+                  "id": "intact_interaction_participants",
+                  "default": false
+                },
+                "link": {
+                  "kind": "external",
+                  "template": "https://www.uniprot.org/uniprotkb/{value}/entry"
+                },
+                "split": "_and_",
+                "link_prefix": "uniprotkb:"
+              },
+              {
                 "label": "Feature short label",
-                "from": "intact.feature_short_label",
-                "format": "count",
+                "from": "feature_short_label",
                 "sub_option": {
                   "id": "intact_feature_short_label",
                   "default": false
                 }
               },
               {
-                "label": "Feature annotation",
-                "from": "intact.feature_annotation",
-                "format": "count",
-                "sub_option": {
-                  "id": "intact_feature_annotation",
-                  "default": false
-                }
-              },
-              {
-                "label": "Affected protein AC",
-                "from": "intact.ap_ac",
-                "format": "count",
+                "label": "Affected Protein",
+                "from": "ap_ac",
                 "sub_option": {
                   "id": "intact_ap_ac",
                   "default": false
-                }
+                },
+                "link": {
+                  "kind": "external",
+                  "template": "https://www.uniprot.org/uniprotkb/{value}/entry"
+                },
+                "link_prefix": "uniprotkb:"
               },
               {
-                "label": "Interaction participants",
-                "from": "intact.interaction_participants",
-                "format": "count",
-                "sub_option": {
-                  "id": "intact_interaction_participants",
-                  "default": false
-                }
-              },
-              {
-                "label": "PubMed ID",
-                "from": "intact.pmid",
-                "format": "count",
+                "label": "PubMed Links",
+                "from": "pmid",
                 "sub_option": {
                   "id": "intact_pmid",
                   "default": false
+                },
+                "link": {
+                  "kind": "external",
+                  "template": "http://europepmc.org/abstract/MED/{value}"
                 }
               }
             ]

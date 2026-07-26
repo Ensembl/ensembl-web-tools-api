@@ -20,6 +20,7 @@ import pytest
 from pydantic import FilePath, ValidationError
 
 from app.vep.models.display_spec_model import (
+    DEFAULT_TRUNCATE_VISIBLE_COUNT,
     DisplayGroupBlock,
     DisplayListBlock,
     DisplayRowsBlock,
@@ -716,3 +717,60 @@ def test_split_or_prefix_without_a_link_is_rejected_at_load():
             "from": "intact.interactions",
             "columns": [{"label": "Participants", "from": "x", "split": "_and_"}],
         })
+
+
+# --- house style: repeating blocks are capped ------------------------------
+
+
+def _repeating_blocks(spec):
+    """Every block that renders one row per data element, with its option id."""
+    found = []
+
+    def walk(blocks, option_id):
+        for block in blocks:
+            if block.kind == "group":
+                walk(block.blocks, option_id)
+            elif block.kind == "list" or (
+                block.kind == "table" and block.source is not None
+            ):
+                found.append((option_id, block))
+
+    for option in spec.display.options:
+        walk(option.blocks, option.option_id)
+    return found
+
+
+def test_every_repeating_block_is_capped():
+    """House style: a block that repeats shows three rows and hides the rest
+    behind a show-more toggle. Applied as a model default, so a new block gets
+    it without having to remember — this asserts none has slipped through."""
+    spec = load_merged_spec("human_grch38")
+    uncapped = [
+        f"{option_id}: {block.heading or block.kind}"
+        for option_id, block in _repeating_blocks(spec)
+        if block.truncate is None
+    ]
+    assert not uncapped, "repeating blocks with no cap:\n  " + "\n  ".join(uncapped)
+
+
+def test_the_default_cap_is_three():
+    spec = load_merged_spec("human_grch38")
+    counts = {
+        block.truncate.visible_count for _, block in _repeating_blocks(spec)
+    }
+    assert counts == {DEFAULT_TRUNCATE_VISIBLE_COUNT} == {3}
+
+
+def test_a_fixed_matrix_table_is_not_capped():
+    """A fixed table states its own rows, so its height is known and small —
+    SpliceAI's four splicing events should not gain a show-more toggle."""
+    spec = load_merged_spec("human_grch38")
+    spliceai = next(o for o in spec.display.options if o.option_id == "spliceai")
+    matrices = [
+        b
+        for group in spliceai.blocks
+        for b in (group.blocks if group.kind == "group" else [group])
+        if b.kind == "table" and b.rows is not None
+    ]
+    assert matrices, "expected SpliceAI to carry a fixed matrix table"
+    assert all(b.truncate is None for b in matrices)

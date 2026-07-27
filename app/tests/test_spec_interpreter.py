@@ -1126,3 +1126,24 @@ def test_tss_distance_keeps_the_sign():
 def test_tss_distance_absent_is_no_annotation():
     index_map = index_map_for("Allele", "TSSDistance")
     assert apply_plugin_spec(["A", ""], index_map, SPEC.plugin("tss_distance")) is None
+
+
+def test_phenotype_rows_identical_in_every_field_are_collapsed():
+    """The source repeats an association verbatim — rs699 carries "Systolic
+    blood pressure / NHGRI-EBI GWAS catalog" twice — and the table showed it
+    twice. `dedup` compares whole rows, so an association differing in any
+    field (a different source, say) is still its own row."""
+    index_map = index_map_for("Allele", "PHENOTYPES")
+    # PHENOTYPES packs `+`-separated fields into `&`-separated entries.
+    row = "Variation+{source}+Systolic_blood_pressure+rs699+G+"
+    entry = "&".join(
+        [
+            row.format(source="NHGRI-EBI_GWAS_catalog"),
+            row.format(source="NHGRI-EBI_GWAS_catalog"),  # the source's own repeat
+            row.format(source="OtherSource"),
+        ]
+    )
+    parsed = apply_plugin_spec(["G", entry], index_map, SPEC.plugin("phenotype_data"))
+    rows = parsed["phenotypes"]
+    assert len(rows) == 2, rows
+    assert {r["source"] for r in rows} == {"NHGRI-EBI_GWAS_catalog", "OtherSource"}

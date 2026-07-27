@@ -539,9 +539,14 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> Co
     keeps/drops whole alleles. Tests either the specified AF columns (`values`) or,
     when none are given, all AF columns present. `match` = any/all across them.
 
-    NO-DATA: missing/empty AF values are ignored (not tested). If an allele has no
-    AF data at all for the tested columns it is currently dropped. The no-data
-    semantics need revisiting (see results-filtering-notes.md)."""
+    NO-DATA: missing/empty AF values are ignored rather than treated as zero, so
+    `all` means "all the columns that have data" and an absent one neither fails
+    nor passes the test.
+
+    An allele with no data in *any* tested column is KEPT. Absence of a frequency
+    is not evidence of a high one: a variant gnomAD has never seen is unknown,
+    not common, and dropping it hid exactly the novel variants a rare-variant
+    filter is usually looking for."""
     _require_operator(f, OPERATOR_LE, OPERATOR_EQ, OPERATOR_GE)
     if f.threshold is None:
         return None  # nothing to compare against -> no-op
@@ -570,8 +575,10 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> Co
                     values.append(float(entry[i]))
                 except ValueError:
                     pass  # non-numeric -> treat as no-data
-        if not values:  # all no-data -> excluded for now (revisit)
-            return False
+        if not values:
+            # Nothing to compare against. Keep it: unknown is not the same as
+            # common, and the alternative silently hides novel variants.
+            return True
         return all(map(compare, values)) if match_all else any(map(compare, values))
 
     return CompiledFilter(

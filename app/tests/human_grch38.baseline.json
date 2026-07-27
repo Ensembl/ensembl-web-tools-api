@@ -3185,7 +3185,7 @@
                     "from": "clinvar.conflicting_breakdown",
                     "columns": [
                       {
-                        "label": "Classifier",
+                        "label": "Classification",
                         "from": "significance",
                         "format": "humanize"
                       },

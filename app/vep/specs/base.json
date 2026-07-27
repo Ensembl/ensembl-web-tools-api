@@ -62,10 +62,15 @@
       {
         "id": "tss_distance",
         "order": 50,
-        "parsed_as": [],
+        "parsed_as": [
+            "tss_distance"
+          ],
         "config": {
           "emit": "plugin",
-          "name": "TSSDistance"
+          "name": "TSSDistance",
+              "params": {
+                "both_direction": "1"
+              }
         }
       },
       {

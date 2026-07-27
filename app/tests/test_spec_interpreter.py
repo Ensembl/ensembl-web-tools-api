@@ -72,6 +72,7 @@ def test_bundled_spec_validates():
         "gencode_promoter",
         "gnomad_sv",
         "gnomad_cnv",
+        "tss_distance",
     }
 
 
@@ -1108,3 +1109,20 @@ def test_lookup_needs_all_three_of_by_into_and_table():
         PostOp.model_validate({"op": "lookup", "by": "id", "into": "namespace"})
     with pytest.raises(ValidationError, match="belong to lookup"):
         PostOp.model_validate({"op": "dedup", "table": "go_namespaces"})
+
+
+def test_tss_distance_keeps_the_sign():
+    """`both_direction=1` makes the plugin measure downstream variants too, as a
+    negative distance — so the value is a signed int, not a magnitude."""
+    index_map = index_map_for("Allele", "TSSDistance")
+    assert apply_plugin_spec(["A", "-13864"], index_map, SPEC.plugin("tss_distance")) == {
+        "distance": -13864
+    }
+    assert apply_plugin_spec(["A", "988"], index_map, SPEC.plugin("tss_distance")) == {
+        "distance": 988
+    }
+
+
+def test_tss_distance_absent_is_no_annotation():
+    index_map = index_map_for("Allele", "TSSDistance")
+    assert apply_plugin_spec(["A", ""], index_map, SPEC.plugin("tss_distance")) is None

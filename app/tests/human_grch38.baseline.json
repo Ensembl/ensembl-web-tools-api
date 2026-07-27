@@ -3190,7 +3190,7 @@
                         "format": "humanize"
                       },
                       {
-                        "label": "Studies reporting",
+                        "label": "Submitters reporting",
                         "from": "count"
                       }
                     ]

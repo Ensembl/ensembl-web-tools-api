@@ -1879,48 +1879,79 @@
             "heading": "Phenotypes",
             "blocks": [
               {
-                "kind": "table",
-                "from": "phenotype_data.phenotypes",
-                "group_by": {
-                  "field": "type",
-                  "labels": {
-                    "Gene": "Gene associated",
-                    "Variation": "Variant associated"
-                  }
-                },
-                "truncate": {
-                  "visible_count": 3
-                },
-                "columns": [
+                "kind": "group",
+                "heading": "Gene associated",
+                "blocks": [
                   {
-                    "label": "Phenotype",
-                    "from": "phenotype",
-                    "format": "phenotype"
-                  },
-                  {
-                    "label": "Source",
-                    "from": "source",
-                    "format": "humanize"
+                    "kind": "table",
+                    "from": "phenotype_data.phenotypes",
+                    "where": {
+                      "field": "type",
+                      "equals": "Gene"
+                    },
+                    "truncate": {
+                      "visible_count": 3
+                    },
+                    "columns": [
+                      {
+                        "label": "Phenotype",
+                        "from": "phenotype",
+                        "format": "phenotype"
+                      },
+                      {
+                        "label": "Source",
+                        "from": "source",
+                        "format": "humanize"
+                      }
+                    ]
                   }
                 ]
               },
               {
-                "kind": "table",
-                "from": "phenotype_data.clinvar_phenotypes",
-                "indent": true,
-                "truncate": {
-                  "visible_count": 3
-                },
-                "columns": [
+                "kind": "group",
+                "heading": "Variant associated",
+                "blocks": [
                   {
-                    "label": "Phenotype (ClinVar)",
-                    "from": "phenotype",
-                    "format": "phenotype"
+                    "kind": "table",
+                    "from": "phenotype_data.phenotypes",
+                    "where": {
+                      "field": "type",
+                      "not_equals": "Gene"
+                    },
+                    "truncate": {
+                      "visible_count": 3
+                    },
+                    "columns": [
+                      {
+                        "label": "Phenotype",
+                        "from": "phenotype",
+                        "format": "phenotype"
+                      },
+                      {
+                        "label": "Source",
+                        "from": "source",
+                        "format": "humanize"
+                      }
+                    ]
                   },
                   {
-                    "label": "Classifier",
-                    "from": "clinvar_clin_sig",
-                    "format": "humanize"
+                    "kind": "table",
+                    "from": "phenotype_data.clinvar_phenotypes",
+                    "truncate": {
+                      "visible_count": 3
+                    },
+                    "columns": [
+                      {
+                        "label": "Phenotype (ClinVar)",
+                        "from": "phenotype",
+                        "format": "phenotype"
+                      },
+                      {
+                        "label": "Classifier",
+                        "from": "clinvar_clin_sig",
+                        "format": "humanize"
+                      }
+                    ]
                   }
                 ]
               }

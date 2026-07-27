@@ -421,6 +421,36 @@ class DisplayRowsBlock(_GatedBlock):
     rows: list[DisplayRow]
 
 
+class RowFilter(BaseModel):
+    """Keep only the list elements whose `field` equals `value`.
+
+    Lets two tables split one list between them so both can sit under a single
+    heading — the phenotypes option shows variant-associated rows and ClinVar's
+    own rows as two tables under one "Variant associated" group. `group_by`
+    cannot do that: it builds a heading per table, so a second table repeats the
+    heading rather than joining it.
+
+    Equality only. Anything richer belongs in the parsing spec, which already
+    has `drop_when` and can express it once rather than per display block.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    equals: str | None = None
+    # The complement, so a pair of tables can divide a list exhaustively. Without
+    # it the second table names the values it wants, and a value the pipeline
+    # starts emitting matches neither and vanishes -- worse than the missing
+    # heading this was built to fix.
+    not_equals: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> "RowFilter":
+        if bool(self.equals) == bool(self.not_equals):
+            raise ValueError("where needs exactly one of `equals` or `not_equals`")
+        return self
+
+
 class GroupBy(BaseModel):
     """Split the rows into one sub-section per distinct value of an item field.
 
@@ -564,6 +594,9 @@ class DisplayTableBlock(_GatedBlock):
     columns: list[TableColumn] = Field(min_length=1)
     # list mode: split the rows into a headed table per distinct value.
     group_by: GroupBy | None = None
+    # list mode: keep only the rows matching this, so two tables can divide one
+    # list between them under a shared heading (see RowFilter).
+    where: RowFilter | None = None
     # list mode: show this many rows, the rest behind a show-more toggle (per
     # section when grouped). Defaults to the house style — see
     # DEFAULT_TRUNCATE_VISIBLE_COUNT — and is left unset for a fixed matrix,
@@ -601,12 +634,16 @@ class DisplayTableBlock(_GatedBlock):
         return plugin, field
 
     def column_field_refs(self) -> Iterator[str]:
-        """The item fields the columns read, plus the field the rows group on
-        (list mode)."""
+        """The item fields the columns read, plus the fields the rows group on
+        or are filtered by (list mode)."""
         for column in self.columns:
             yield from column.item_field_refs()
         if self.group_by:
             yield self.group_by.field
+        if self.where:
+            # Checked like any other item ref: a typo would silently keep no
+            # rows, and the block would just vanish.
+            yield self.where.field
 
     def matrix_value_refs(self) -> Iterator[str]:
         """Every `<plugin>.<field>` a fixed table's rows read."""

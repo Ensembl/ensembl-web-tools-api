@@ -2261,7 +2261,7 @@
                     "kind": "rows",
                     "rows": [
                       {
-                        "label": "Classification",
+                        "label": "",
                         "from": "clinvar.significance",
                         "format": "humanize_join"
                       }

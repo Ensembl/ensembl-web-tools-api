@@ -458,13 +458,14 @@ def test_intact_partial_sub_options_lists_selected_in_order(monkeypatch, tmp_pat
 # --- 9. gff3-based Genes & transcripts plugins -------------------------------
 
 
-def test_tss_distance_is_a_plain_on_off_plugin(monkeypatch, tmp_path):
-    # Simplified to a bare on/off: `plugin TSSDistance`, no params (always upstream).
+def test_tss_distance_reports_both_directions(monkeypatch, tmp_path):
+    """`both_direction=1` makes the plugin report downstream variants too, as a
+    negative distance — without it only upstream ones are measured."""
     assert find_line(build_lines(monkeypatch, tmp_path), "plugin TSSDistance") is None
     line = find_line(
         build_lines(monkeypatch, tmp_path, tss_distance=True), "plugin TSSDistance"
     )
-    assert line == "plugin TSSDistance"
+    assert line == "plugin TSSDistance,both_direction=1"
 
 
 def test_nearest_gene_base_line(monkeypatch, tmp_path):

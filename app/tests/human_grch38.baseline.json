@@ -455,10 +455,15 @@
       {
         "id": "tss_distance",
         "order": 50,
-        "parsed_as": [],
+        "parsed_as": [
+            "tss_distance"
+          ],
         "config": {
           "emit": "plugin",
-          "name": "TSSDistance"
+          "name": "TSSDistance",
+              "params": {
+                "both_direction": "1"
+              }
         }
       },
       {
@@ -2327,6 +2332,25 @@
             "type": "string"
           }
         ]
+      },
+      {
+        "plugin": "tss_distance",
+        "scope": "transcript",
+        "output": "tss_distance",
+        "csq_fields": [
+          "TSSDistance"
+        ],
+        "require_any_output": [
+          "distance"
+        ],
+        "targets": [
+          {
+            "field": "distance",
+            "from": "TSSDistance",
+            "transform": "scalar",
+            "type": "int"
+          }
+        ]
       }
     ]
   },
@@ -3290,6 +3314,22 @@
                 "label": "Feature ID",
                 "from": "gencode_promoter.feature_id",
                 "mono": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "option_id": "tss_distance",
+        "blocks": [
+          {
+            "kind": "rows",
+            "rows": [
+              {
+                "key": "tss_distance",
+                "label": "Distance to TSS",
+                "from": "tss_distance.distance",
+                "format": "num"
               }
             ]
           }

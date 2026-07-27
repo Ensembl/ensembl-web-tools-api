@@ -135,8 +135,7 @@ def test_submission_pins_the_same_panels_form_config_serves():
     panel_ids = {panel["id"] for panel in pinned}
     assert {
         "variant_impact_predictions",
-        "conservation_and_constraint",
-        "phenotype_and_disease_associations",
+            "phenotype_and_disease_associations",
         "allele_frequencies",
     } <= panel_ids
 

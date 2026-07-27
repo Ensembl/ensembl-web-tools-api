@@ -21,7 +21,6 @@ ALWAYS_VISIBLE_PANEL_IDS = {
 }
 HUMAN_37_38_PANEL_IDS = {
     "variant_impact_predictions",
-    "conservation_and_constraint",
     "phenotype_and_disease_associations",
 }
 GRCH38_ONLY_OPTION_IDS = {
@@ -702,7 +701,6 @@ def test_panels_come_back_in_the_agreed_order():
         "Allele frequencies",
         "Genes & transcripts",
         "Protein & functional",
-        "Conservation & constraint",
         "Regulatory",
         "Phenotype & disease associations",
     ]
@@ -742,3 +740,33 @@ def test_opentargets_follows_phenotypes_where_both_exist():
     )
     ids_37 = [option["id"] for option in associations_37["options"]]
     assert "phenotypes" in ids_37 and "opentargets" not in ids_37
+
+
+def test_conservation_is_a_sub_section_of_genes_and_transcripts():
+    """It used to be a panel of its own. Now it is a category within Genes &
+    transcripts, grouped the way Variant impact predictions groups Missense /
+    Splicing / Genome wide."""
+    panels = get_visible_panels(
+        species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
+    )
+    assert "conservation_and_constraint" not in {panel["id"] for panel in panels}
+
+    genes = next(panel for panel in panels if panel["id"] == "genes_and_transcripts")
+    categorised = {
+        option["id"]: option.get("category") for option in genes["options"]
+    }
+    assert categorised["loeuf"] == "Conservation & constraint"
+    assert categorised["dosage_sensitivity"] == "Conservation & constraint"
+    # the options that were already there stay uncategorised, so they render in
+    # an unlabelled group ahead of the new sub-heading
+    assert categorised["nearest_gene"] is None
+
+
+def test_a_non_human_species_gets_neither_the_panel_nor_the_options():
+    """Conservation data is human-only, and moving it inside another panel must
+    not leak it to species that have none."""
+    panels = get_visible_panels(assembly_name="GRCg6a")  # chicken
+    genes = next(panel for panel in panels if panel["id"] == "genes_and_transcripts")
+    option_ids = {option["id"] for option in genes["options"]}
+    assert "loeuf" not in option_ids and "dosage_sensitivity" not in option_ids
+    assert "conservation_and_constraint" not in {panel["id"] for panel in panels}

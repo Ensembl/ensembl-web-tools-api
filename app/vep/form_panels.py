@@ -113,6 +113,23 @@ _ALWAYS_VISIBLE_PANELS: list[dict] = [
 _HUMAN_37_38_GENES_OPTIONS: list[dict] = [
     {"id": "utrannotator", "label": "UTRAnnotator", "type": "boolean", "default": False},
     {"id": "nmd", "label": "NMD", "type": "boolean", "default": False},
+    # Conservation & constraint was a panel of its own; it is now a sub-section
+    # of Genes & transcripts, grouped by `category` the way Variant impact
+    # predictions groups Missense / Splicing / Genome wide. These are the first
+    # categorised options in this panel, so the uncategorised ones above stay in
+    # an unlabelled group ahead of them.
+    {"id": "loeuf", "label": "LOEUF", "type": "boolean", "default": False,
+     "category": "Conservation & constraint"},
+    {
+        "id": "dosage_sensitivity",
+        "label": "Dosage sensitivity",
+        "type": "boolean",
+        "default": False,
+        "category": "Conservation & constraint",
+        "sub_options": [
+            {"id": "dosage_sensitivity_cover", "label": "Require full transcript overlap", "type": "boolean", "default": False},
+        ],
+    },
 ]
 
 # Extra panels shown only for human GRCh37/38. Variant-impact-prediction options
@@ -127,22 +144,6 @@ _HUMAN_37_38_PANELS: list[dict] = [
             {"id": "clinpred", "label": "ClinPred", "type": "boolean", "default": False, "category": "Missense"},
             {"id": "spliceai", "label": "SpliceAI", "type": "boolean", "default": False, "category": "Splicing"},
             {"id": "cadd", "label": "CADD", "type": "boolean", "default": False, "category": "Genome wide"},
-        ],
-    },
-    {
-        "id": "conservation_and_constraint",
-        "label": "Conservation & constraint",
-        "options": [
-            {"id": "loeuf", "label": "LOEUF", "type": "boolean", "default": False},
-            {
-                "id": "dosage_sensitivity",
-                "label": "Dosage sensitivity",
-                "type": "boolean",
-                "default": False,
-                "sub_options": [
-                    {"id": "dosage_sensitivity_cover", "label": "Require full transcript overlap", "type": "boolean", "default": False},
-                ],
-            },
         ],
     },
     {
@@ -957,7 +958,6 @@ _PANEL_ORDER = (
     "allele_frequencies",
     "genes_and_transcripts",
     "protein_and_functional",
-    "conservation_and_constraint",
     "regulatory",
     "phenotype_and_disease_associations",
 )
@@ -982,7 +982,7 @@ def get_visible_panels(
         for panel in panels:
             if panel["id"] == "genes_and_transcripts":
                 panel["options"].extend(copy.deepcopy(_HUMAN_37_38_GENES_OPTIONS))
-        # Variant-impact / conservation / associations panels are human-only.
+        # Variant-impact / associations panels are human-only.
         panels.extend(copy.deepcopy(_HUMAN_37_38_PANELS))
 
     if is_human_grch38(species_taxonomy_id, assembly_name):

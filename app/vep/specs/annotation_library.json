@@ -1972,7 +1972,7 @@
                         "format": "phenotype"
                       },
                       {
-                        "label": "Classifier",
+                        "label": "Classification",
                         "from": "clinvar_clin_sig",
                         "format": "humanize"
                       }
@@ -2261,7 +2261,7 @@
                     "kind": "rows",
                     "rows": [
                       {
-                        "label": "Classification",
+                        "label": "",
                         "from": "clinvar.significance",
                         "format": "humanize_join"
                       }
@@ -2272,7 +2272,7 @@
                     "from": "clinvar.conflicting_breakdown",
                     "columns": [
                       {
-                        "label": "Classifier",
+                        "label": "Classification",
                         "from": "significance",
                         "format": "humanize"
                       },

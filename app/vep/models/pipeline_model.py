@@ -253,12 +253,16 @@ class ConfigIniParams(BaseModel):
     intact_ap_ac: bool = False
     intact_interaction_participants: bool = False
     intact_pmid: bool = False
-    # mutfunc (human GRCh38). Sub-flags default off.
+    # mutfunc (human GRCh38). The sub-flags default ON, and the config names
+    # only the ones switched *off*: the plugin does everything when told
+    # nothing, so an empty flag list already means all (VariadicFlags
+    # .implicit_all). That is also why none-selected is not a state -- the form
+    # switches the master off instead.
     mutfunc: bool = False
-    mutfunc_motif: bool = False
-    mutfunc_int: bool = False
-    mutfunc_mod: bool = False
-    mutfunc_exp: bool = False
+    mutfunc_motif: bool = True
+    mutfunc_int: bool = True
+    mutfunc_mod: bool = True
+    mutfunc_exp: bool = True
     # gnomAD exomes v4.1 frequencies (human GRCh38). Rendered as a VEP `custom`
     # line whose `fields` list is built from the selected genetic-ancestry groups
     # x sexes (and whether UK Biobank samples are included). Field grammar:

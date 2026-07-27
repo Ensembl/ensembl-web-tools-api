@@ -2061,7 +2061,8 @@
                 "from": "mutfunc.linear_motifs",
                 "format": "num",
                 "sub_option": {
-                  "id": "mutfunc_motif"
+                  "id": "mutfunc_motif",
+                  "default": true
                 }
               },
               {
@@ -2070,7 +2071,8 @@
                 "from": "mutfunc.protein_interactions",
                 "format": "num",
                 "sub_option": {
-                  "id": "mutfunc_int"
+                  "id": "mutfunc_int",
+                  "default": true
                 }
               },
               {
@@ -2079,7 +2081,8 @@
                 "from": "mutfunc.protein_structure",
                 "format": "num",
                 "sub_option": {
-                  "id": "mutfunc_mod"
+                  "id": "mutfunc_mod",
+                  "default": true
                 }
               },
               {
@@ -2088,7 +2091,8 @@
                 "from": "mutfunc.protein_structure_experimental",
                 "format": "num",
                 "sub_option": {
-                  "id": "mutfunc_exp"
+                  "id": "mutfunc_exp",
+                  "default": true
                 }
               }
             ]

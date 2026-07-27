@@ -210,10 +210,10 @@ _INTACT_SUBOPTIONS = [
     {"id": "intact_pmid", "label": "PubMed ID", "type": "boolean", "default": False},
 ]
 _MUTFUNC_SUBOPTIONS = [
-    {"id": "mutfunc_motif", "label": "Linear motifs", "type": "boolean", "default": False},
-    {"id": "mutfunc_int", "label": "Protein interactions", "type": "boolean", "default": False},
-    {"id": "mutfunc_mod", "label": "Protein structure", "type": "boolean", "default": False},
-    {"id": "mutfunc_exp", "label": "Protein structure (exp.)", "type": "boolean", "default": False},
+    {"id": "mutfunc_motif", "label": "Linear motifs", "type": "boolean", "default": True},
+    {"id": "mutfunc_int", "label": "Protein interactions", "type": "boolean", "default": True},
+    {"id": "mutfunc_mod", "label": "Protein structure", "type": "boolean", "default": True},
+    {"id": "mutfunc_exp", "label": "Protein structure (exp.)", "type": "boolean", "default": True},
 ]
 
 
@@ -634,8 +634,13 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
         {"id": "mavedb", "label": "MaveDB", "type": "boolean", "default": False, "category": "Functional"},
         {"id": "intact", "label": "IntAct", "type": "boolean", "default": False,
          "category": "Functional", "sub_options": copy.deepcopy(_INTACT_SUBOPTIONS)},
+        # `requires_any_sub_option`: mutfunc does everything when told nothing,
+        # so a config line naming no sub-flag already means all of them. "None
+        # selected" is therefore not a state the plugin can be asked for — the
+        # form switches the option itself off instead of allowing it.
         {"id": "mutfunc", "label": "mutfunc", "type": "boolean", "default": False,
-         "category": "Functional", "sub_options": copy.deepcopy(_MUTFUNC_SUBOPTIONS)},
+         "category": "Functional", "requires_any_sub_option": True,
+         "sub_options": copy.deepcopy(_MUTFUNC_SUBOPTIONS)},
     ])
 
     # Variant Impact Predictions panel: EVE (Missense).

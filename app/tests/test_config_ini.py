@@ -329,7 +329,9 @@ def test_protvar_forces_hgvsg_computed(monkeypatch, tmp_path):
     assert "hgvsg 0" in off_lines
 
 
-def test_mutfunc_sub_flags_and_extended(monkeypatch, tmp_path):
+def test_mutfunc_names_only_the_sub_flags_that_are_on(monkeypatch, tmp_path):
+    """mutfunc does everything when told nothing, so the config names the subset
+    that is wanted rather than every flag with a 0/1."""
     line = find_line(
         build_lines(
             monkeypatch,
@@ -342,8 +344,48 @@ def test_mutfunc_sub_flags_and_extended(monkeypatch, tmp_path):
         ),
         "plugin mutfunc",
     )
-    assert "motif=1,int=0,mod=1,exp=0" in line
+    assert "motif=1" in line and "mod=1" in line
+    assert "int=" not in line and "exp=" not in line  # unwanted ones are absent
     assert "extended=1" in line  # always on
+
+
+def test_mutfunc_with_every_sub_flag_on_names_none_of_them(monkeypatch, tmp_path):
+    """An empty flag list is how the plugin is asked for everything, so the
+    all-on case must not spell the flags out."""
+    line = find_line(build_lines(monkeypatch, tmp_path, mutfunc=True), "plugin mutfunc")
+    assert line is not None
+    for keyword in ("motif=", "int=", "mod=", "exp="):
+        assert keyword not in line, line
+    assert "db=" in line and "extended=1" in line
+
+
+def test_mutfunc_defaults_to_every_sub_flag_on(monkeypatch, tmp_path):
+    """Enabling the option alone means all four, not none — the counterpart of
+    the line above being flagless."""
+    from app.vep.models.pipeline_model import ConfigIniParams
+
+    params = ConfigIniParams(genome_id="g", assembly_name="GRCh38", mutfunc=True)
+    assert (params.mutfunc_motif, params.mutfunc_int, params.mutfunc_mod,
+            params.mutfunc_exp) == (True, True, True, True)
+
+
+def test_mutfunc_with_no_sub_flag_emits_nothing(monkeypatch, tmp_path):
+    """The state that cannot be expressed: a flagless line already means all, so
+    'none' must not emit one. The form switches the master off instead; this is
+    the backstop for a submission that arrives in that state anyway."""
+    line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            mutfunc=True,
+            mutfunc_motif=False,
+            mutfunc_int=False,
+            mutfunc_mod=False,
+            mutfunc_exp=False,
+        ),
+        "plugin mutfunc",
+    )
+    assert line is None
 
 
 @pytest.mark.parametrize("cover,expected", [(False, "cover=0"), (True, "cover=1")])

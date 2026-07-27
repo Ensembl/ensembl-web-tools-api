@@ -290,7 +290,7 @@ class DisplayItemLabel(BaseModel):
     to a `from` value (e.g. humanize).
 
     `wrap` surrounds the *formatted* `from` value with fixed text via a single
-    `{}` slot — ClinVar's conflicting counts read `Studies reporting
+    `{}` slot — ClinVar's conflicting counts read `Submitters reporting
     "Pathogenic"` from the humanised class. It only combines with `from` (there
     is a value to wrap), never `template` (already free text).
     """
@@ -571,7 +571,7 @@ class DisplayTableBlock(_GatedBlock):
 
     * list mode (`from`): one body row per element of a `<plugin>.<listField>`,
       each column reading that element's `from` item field — ClinVar's
-      conflicting classifications (Classifier | Studies reporting).
+      conflicting classifications (Classification | Submitters reporting).
     * fixed / matrix mode (`rows`): explicit rows of `{label, values}`, the label
       filling the first column and each value a `<plugin>.<field>` scalar under a
       value column — SpliceAI's splicing events (Splicing event | ΔS | ΔP).

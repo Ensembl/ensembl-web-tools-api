@@ -20,9 +20,9 @@ ALWAYS_VISIBLE_PANEL_IDS = {
     "protein_and_functional",
 }
 HUMAN_37_38_PANEL_IDS = {
-    "pathogenicity_predictions",
+    "variant_impact_predictions",
     "conservation_and_constraint",
-    "variant_associations",
+    "phenotype_and_disease_associations",
 }
 GRCH38_ONLY_OPTION_IDS = {
     "eve",
@@ -90,7 +90,7 @@ def test_human_grch38_category_labels():
     panels = get_visible_panels(
         species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
     )
-    assert categories(panels, "pathogenicity_predictions") == {
+    assert categories(panels, "variant_impact_predictions") == {
         "Missense",
         "Splicing",
         "Genome wide",
@@ -142,7 +142,7 @@ def test_mouse_gets_the_base_panels_plus_its_own_data_options():
     """Mouse carries GO and Phenotypes data files, so it is offered those two on
     top of the always-visible panels — and none of the human-only options."""
     panels = get_visible_panels(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
-    assert panel_ids(panels) == ALWAYS_VISIBLE_PANEL_IDS | {"variant_associations"}
+    assert panel_ids(panels) == ALWAYS_VISIBLE_PANEL_IDS | {"phenotype_and_disease_associations"}
 
     genes_opts = option_ids(
         [p for p in panels if p["id"] == "genes_and_transcripts"]
@@ -151,7 +151,7 @@ def test_mouse_gets_the_base_panels_plus_its_own_data_options():
     assert "utrannotator" not in genes_opts
     assert "riboseqorfs" not in genes_opts
 
-    associations = option_ids([p for p in panels if p["id"] == "variant_associations"])
+    associations = option_ids([p for p in panels if p["id"] == "phenotype_and_disease_associations"])
     assert associations == {"phenotypes"}  # not geno2mp / clinvar / opentargets
 
 
@@ -167,7 +167,7 @@ def test_a_go_only_species_is_not_offered_phenotypes():
     panels = get_visible_panels(species_taxonomy_id="9258", assembly_name="mOrnAna1.p.v1")
     ids = option_ids(panels)
     assert "go" in ids and "phenotypes" not in ids
-    assert "variant_associations" not in panel_ids(panels)
+    assert "phenotype_and_disease_associations" not in panel_ids(panels)
 
 
 # Every dataset a species row can name; the option id is the dataset name.
@@ -483,11 +483,11 @@ def test_allofus_absent_below_grch38():
 
 def _clinvar_option(assembly):
     panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name=assembly)
-    va = next(p for p in panels if p["id"] == "variant_associations")
+    va = next(p for p in panels if p["id"] == "phenotype_and_disease_associations")
     return next(o for o in va["options"] if o["id"] == "clinvar")
 
 
-def test_clinvar_in_variant_associations_for_grch37_and_grch38():
+def test_clinvar_in_phenotype_and_disease_associations_for_grch37_and_grch38():
     for assembly in ("GRCh37.p13", "GRCh38.p14"):
         clinvar = _clinvar_option(assembly)
         assert clinvar["label"] == "Clinical Significance (ClinVar)"

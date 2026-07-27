@@ -119,8 +119,8 @@ _HUMAN_37_38_GENES_OPTIONS: list[dict] = [
 # carry a `category` label used to group them within the panel.
 _HUMAN_37_38_PANELS: list[dict] = [
     {
-        "id": "pathogenicity_predictions",
-        "label": "Variant Impact Predictions",
+        "id": "variant_impact_predictions",
+        "label": "Variant impact predictions",
         "options": [
             {"id": "alphamissense", "label": "AlphaMissense", "type": "boolean", "default": False, "category": "Missense"},
             {"id": "revel", "label": "REVEL", "type": "boolean", "default": False, "category": "Missense"},
@@ -146,7 +146,7 @@ _HUMAN_37_38_PANELS: list[dict] = [
         ],
     },
     {
-        "id": "variant_associations",
+        "id": "phenotype_and_disease_associations",
         "label": "Phenotype & disease associations",
         "options": [
             {"id": "geno2mp", "label": "Geno2MP", "type": "boolean", "default": False},
@@ -643,15 +643,15 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
          "sub_options": copy.deepcopy(_MUTFUNC_SUBOPTIONS)},
     ])
 
-    # Variant Impact Predictions panel: EVE (Missense).
-    if "pathogenicity_predictions" in by_id:
-        by_id["pathogenicity_predictions"]["options"].append(
+    # Variant impact predictions panel: EVE (Missense).
+    if "variant_impact_predictions" in by_id:
+        by_id["variant_impact_predictions"]["options"].append(
             {"id": "eve", "label": "EVE & popEVE", "type": "boolean", "default": False, "category": "Missense"}
         )
 
     # Phenotype & disease associations: OpenTargets + Phenotypes.
-    if "variant_associations" in by_id:
-        by_id["variant_associations"]["options"].extend([
+    if "phenotype_and_disease_associations" in by_id:
+        by_id["phenotype_and_disease_associations"]["options"].extend([
             {"id": "opentargets", "label": "OpenTargets", "type": "boolean", "default": False},
             # Phenotypes plugin (human GRCh38 for now; other species to follow).
             {"id": "phenotypes", "label": "Phenotypes", "type": "boolean", "default": False},
@@ -659,7 +659,7 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
         # ClinVar's "Structural variants" sub-option (the ClinVar_SV custom) —
         # GRCh38-only, so it joins the master's sub-options only here.
         clinvar = next(
-            (o for o in by_id["variant_associations"]["options"] if o["id"] == "clinvar"),
+            (o for o in by_id["phenotype_and_disease_associations"]["options"] if o["id"] == "clinvar"),
             None,
         )
         if clinvar is not None:
@@ -864,12 +864,12 @@ def _add_human_grch37_options(panels: list[dict]) -> None:
          "category": "Functional", "sub_options": copy.deepcopy(_INTACT_SUBOPTIONS)}
     )
 
-    if "variant_associations" in by_id:
-        by_id["variant_associations"]["options"].append(
+    if "phenotype_and_disease_associations" in by_id:
+        by_id["phenotype_and_disease_associations"]["options"].append(
             {"id": "phenotypes", "label": "Phenotypes", "type": "boolean", "default": False}
         )
         clinvar = next(
-            (o for o in by_id["variant_associations"]["options"] if o["id"] == "clinvar"),
+            (o for o in by_id["phenotype_and_disease_associations"]["options"] if o["id"] == "clinvar"),
             None,
         )
         if clinvar is not None:
@@ -909,13 +909,13 @@ def _add_species_annotation_options(panels: list[dict], assembly_name: str | Non
         )
 
     if "cadd" in datasets:
-        # The Variant Impact Predictions panel is human-only today, so a species
+        # The Variant impact predictions panel is human-only today, so a species
         # with CADD but none of the human-only predictors needs it created.
-        panel = by_id.get("pathogenicity_predictions")
+        panel = by_id.get("variant_impact_predictions")
         if panel is None:
             panel = {
-                "id": "pathogenicity_predictions",
-                "label": "Variant Impact Predictions",
+                "id": "variant_impact_predictions",
+                "label": "Variant impact predictions",
                 "options": [],
             }
             panels.append(panel)
@@ -927,10 +927,10 @@ def _add_species_annotation_options(panels: list[dict], assembly_name: str | Non
     if "phenotypes" in datasets:
         # The associations panel exists only for human today, so a species with
         # phenotype data but none of the human-only sources needs it created.
-        panel = by_id.get("variant_associations")
+        panel = by_id.get("phenotype_and_disease_associations")
         if panel is None:
             panel = {
-                "id": "variant_associations",
+                "id": "phenotype_and_disease_associations",
                 "label": "Phenotype & disease associations",
                 "options": [],
             }

@@ -210,24 +210,29 @@
           "emit": "plugin",
           "name": "mutfunc",
           "params": {
-            "motif": {
-              "from_option": "mutfunc_motif",
-              "as": "int"
-            },
-            "int": {
-              "from_option": "mutfunc_int",
-              "as": "int"
-            },
-            "mod": {
-              "from_option": "mutfunc_mod",
-              "as": "int"
-            },
-            "exp": {
-              "from_option": "mutfunc_exp",
-              "as": "int"
-            },
             "extended": "1",
             "db": "{path}/mutfunc_data.db"
+          },
+          "flags": {
+            "implicit_all": true,
+            "options": [
+              {
+                "option": "mutfunc_motif",
+                "keyword": "motif"
+              },
+              {
+                "option": "mutfunc_int",
+                "keyword": "int"
+              },
+              {
+                "option": "mutfunc_mod",
+                "keyword": "mod"
+              },
+              {
+                "option": "mutfunc_exp",
+                "keyword": "exp"
+              }
+            ]
           }
         }
       },

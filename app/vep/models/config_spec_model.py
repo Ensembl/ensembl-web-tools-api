@@ -81,12 +81,31 @@ class VariadicFlags(BaseModel):
     """IntAct-style: append `,<keyword>=1` for each selected sub-option, or a
     single `,<all_shortcut>=1` when *all* of them are selected. None selected
     leaves the base line untouched.
+
+    `implicit_all` is for a plugin that already does everything when told
+    nothing — mutfunc. There, naming every flag is not how you ask for all of
+    them; saying nothing is. So all-selected emits no flags at all, and a subset
+    emits just that subset.
+
+    It follows that such a plugin cannot be asked for *nothing*: an empty flag
+    list is how you ask for everything. So with `implicit_all`, no sub-option
+    selected emits no line at all, rather than a bare line meaning the opposite.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     options: list[VariadicFlag]
     all_shortcut: str | None = None
+    implicit_all: bool = False
+
+    @model_validator(mode="after")
+    def _shortcut_xor_implicit(self) -> "VariadicFlags":
+        if self.all_shortcut and self.implicit_all:
+            raise ValueError(
+                "`all_shortcut` names a flag meaning all; `implicit_all` means "
+                "all needs no flag — a plugin cannot want both"
+            )
+        return self
 
 
 class GenomeGate(BaseModel):

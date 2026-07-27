@@ -78,10 +78,17 @@ def _params_str(params: dict, options, assembly, context) -> list[str]:
 
 def _variadic_suffix(flags, options: dict) -> str:
     """IntAct's selected sub-flags: `,all=1` when every one is on, else
-    `,<kw>=1` for each selected, else nothing."""
+    `,<kw>=1` for each selected, else nothing.
+
+    Under `implicit_all` (mutfunc) the all case emits nothing instead: the plugin
+    does everything when told nothing, so naming every flag is not how you ask
+    for all of them."""
     selected = [f for f in flags.options if options.get(f.option)]
-    if flags.all_shortcut and len(selected) == len(flags.options):
-        return f",{flags.all_shortcut}=1"
+    if len(selected) == len(flags.options):
+        if flags.implicit_all:
+            return ""
+        if flags.all_shortcut:
+            return f",{flags.all_shortcut}=1"
     if selected:
         return "".join(f",{f.keyword}=1" for f in selected)
     return ""
@@ -173,6 +180,13 @@ def _emit_entry(entry, options, assembly, context) -> str | None:
 
     if not entry.requirements_met(options):
         return None  # ...and only when its parent master is on too (ClinVar)
+
+    flags = getattr(emitter, "flags", None)
+    if flags is not None and flags.implicit_all:
+        # An empty flag list means "everything" here, so there is no way to write
+        # "nothing" — a bare line would ask for the opposite. Emit no line.
+        if not any(options.get(f.option) for f in flags.options):
+            return None
 
     if isinstance(emitter, SettingEmitter):
         value = _param_value(emitter.value, options, assembly, context)

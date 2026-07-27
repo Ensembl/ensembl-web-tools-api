@@ -719,3 +719,26 @@ def test_a_species_with_fewer_panels_keeps_the_same_relative_order():
         "Protein & functional",
         "Phenotype & disease associations",
     ]
+
+
+def test_opentargets_follows_phenotypes_where_both_exist():
+    """Phenotypes leads because every genome that has associations has it;
+    OpenTargets is GRCh38-only and slots in after."""
+    grch38 = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14")
+    associations = next(
+        panel
+        for panel in grch38
+        if panel["id"] == "phenotype_and_disease_associations"
+    )
+    ids = [option["id"] for option in associations["options"]]
+    assert ids.index("phenotypes") < ids.index("opentargets")
+
+    # GRCh37 has Phenotypes and no OpenTargets, and is unaffected
+    grch37 = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh37.p13")
+    associations_37 = next(
+        panel
+        for panel in grch37
+        if panel["id"] == "phenotype_and_disease_associations"
+    )
+    ids_37 = [option["id"] for option in associations_37["options"]]
+    assert "phenotypes" in ids_37 and "opentargets" not in ids_37

@@ -649,12 +649,15 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
             {"id": "eve", "label": "EVE & popEVE", "type": "boolean", "default": False, "category": "Missense"}
         )
 
-    # Phenotype & disease associations: OpenTargets + Phenotypes.
+    # Phenotype & disease associations: Phenotypes, then OpenTargets. That order
+    # is deliberate — GRCh37 and the other species have Phenotypes without
+    # OpenTargets, so leading with Phenotypes is the order every genome shares,
+    # and OpenTargets slots in after it where it exists rather than displacing it.
     if "phenotype_and_disease_associations" in by_id:
         by_id["phenotype_and_disease_associations"]["options"].extend([
-            {"id": "opentargets", "label": "OpenTargets", "type": "boolean", "default": False},
             # Phenotypes plugin (human GRCh38 for now; other species to follow).
             {"id": "phenotypes", "label": "Phenotypes", "type": "boolean", "default": False},
+            {"id": "opentargets", "label": "OpenTargets", "type": "boolean", "default": False},
         ])
         # ClinVar's "Structural variants" sub-option (the ClinVar_SV custom) —
         # GRCh38-only, so it joins the master's sub-options only here.

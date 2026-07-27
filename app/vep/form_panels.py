@@ -940,6 +940,26 @@ def _add_species_annotation_options(panels: list[dict], assembly_name: str | Non
         )
 
 
+# The order panels appear in, on the input form and in the results annotation
+# panel alike — both render the list this returns, so stating it once here is
+# what keeps the two surfaces agreeing.
+#
+# Sorted at the end rather than built in this order, because panels arrive from
+# three places (the always-visible base, the human-only additions, and the
+# per-species ones created on demand) and the order a panel happens to be
+# appended in is not a decision anyone should have to trace.
+_PANEL_ORDER = (
+    "variant_representations",
+    "variant_impact_predictions",
+    "allele_frequencies",
+    "genes_and_transcripts",
+    "protein_and_functional",
+    "conservation_and_constraint",
+    "regulatory",
+    "phenotype_and_disease_associations",
+)
+
+
 def get_visible_panels(
     attributes: dict | None = None,
     *,
@@ -970,4 +990,9 @@ def get_visible_panels(
         # Every other species: whichever of GO / Phenotypes it has data for.
         _add_species_annotation_options(panels, assembly_name)
 
+    # A panel not named above keeps its relative position at the end rather than
+    # disappearing or landing arbitrarily — a new panel shows up, and is then
+    # given a place here deliberately.
+    order = {panel_id: index for index, panel_id in enumerate(_PANEL_ORDER)}
+    panels.sort(key=lambda panel: order.get(panel["id"], len(order)))
     return panels

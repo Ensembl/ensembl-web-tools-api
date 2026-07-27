@@ -2885,7 +2885,7 @@
                         "format": "phenotype"
                       },
                       {
-                        "label": "Classifier",
+                        "label": "Classification",
                         "from": "clinvar_clin_sig",
                         "format": "humanize"
                       }

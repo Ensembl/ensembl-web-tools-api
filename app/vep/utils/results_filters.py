@@ -543,10 +543,11 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> Co
     `all` means "all the columns that have data" and an absent one neither fails
     nor passes the test.
 
-    An allele with no data in *any* tested column is KEPT. Absence of a frequency
-    is not evidence of a high one: a variant gnomAD has never seen is unknown,
-    not common, and dropping it hid exactly the novel variants a rare-variant
-    filter is usually looking for."""
+    An allele with no data in *any* tested column is KEPT. A missing AF generally
+    indicates rarity, and this filter is overwhelmingly used to exclude *common*
+    variants — so keeping the unknowns is what the user is actually asking for.
+    Dropping them did the opposite, hiding the novel variants such a search is
+    usually hunting."""
     _require_operator(f, OPERATOR_LE, OPERATOR_EQ, OPERATOR_GE)
     if f.threshold is None:
         return None  # nothing to compare against -> no-op

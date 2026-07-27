@@ -131,6 +131,34 @@ def _select_library(library: dict, config_entries: list[dict]) -> dict:
     }
 
 
+BASE_ENTRY_SPEC = "base"
+
+
+def _with_base_entries(name: str, entries: list[dict]) -> list[dict]:
+    """`entries` layered on the ubiquitous ones every genome gets.
+
+    The options in `base.json` need no data file beyond the genome itself, so
+    every genome offers them. They used to be copied into each per-genome
+    document — all eight byte-identical in both human specs — which meant a
+    change to any of them had to land in three files or the genomes silently
+    disagreed. Now each document states only what is *its own*.
+
+    A genome may still override one by declaring an entry with the same id: its
+    version wins. Nothing does today, but a genome needing a different file path
+    or parameter for a base option should be able to say so where the difference
+    lives, rather than forcing the option out of the base tier for everyone.
+    """
+    if name == BASE_ENTRY_SPEC:
+        return entries
+    own = {entry["id"] for entry in entries}
+    base = json.loads((SPEC_DIR / f"{BASE_ENTRY_SPEC}.json").read_text())
+    inherited = [e for e in base["config"]["entries"] if e["id"] not in own]
+    # `order` is a single numbering space across both tiers, so the merged list
+    # sorts into the sequence the config.ini expects regardless of which
+    # document an entry came from.
+    return sorted(inherited + entries, key=lambda entry: entry["order"])
+
+
 def _assemble_payload(name: str, extra_entries: list[dict] | None = None) -> dict:
     """The full merged-spec payload for a bundled genome, assembled from the
     shared library it references.
@@ -147,6 +175,7 @@ def _assemble_payload(name: str, extra_entries: list[dict] | None = None) -> dic
     sidecar loaded via `load_merged_spec_file`) is returned unchanged.
     """
     doc = json.loads((SPEC_DIR / f"{name}.json").read_text())
+    doc["config"]["entries"] = _with_base_entries(name, doc["config"]["entries"])
     if extra_entries:
         # Added before the library is selected: the selection is driven by the
         # config entries, so an entry appended afterwards would name a plugin

@@ -92,17 +92,6 @@
         }
       },
       {
-        "id": "nmd",
-        "order": 48,
-        "parsed_as": [
-          "nmd"
-        ],
-        "config": {
-          "emit": "plugin",
-          "name": "NMD"
-        }
-      },
-      {
         "id": "opentargets",
         "order": 22,
         "parsed_as": [
@@ -347,25 +336,6 @@
         }
       },
       {
-        "id": "clinpred",
-        "order": 45,
-        "parsed_as": [
-          "clinpred"
-        ],
-        "config": {
-          "emit": "plugin",
-          "name": "ClinPred",
-          "params": {
-            "file": {
-              "by_assembly": {
-                "GRCh38": "{path}/ClinPred_hg38_sorted_tabbed.tsv.gz",
-                "GRCh37": "{path}/ClinPred_hg37_sorted_tabbed.tsv.gz"
-              }
-            }
-          }
-        }
-      },
-      {
         "id": "loeuf",
         "order": 43,
         "parsed_as": [
@@ -397,6 +367,25 @@
               "by_assembly": {
                 "GRCh38": "{path}/Geno2MP.variants_GRCh38.vcf.gz",
                 "GRCh37": "{path}/Geno2MP.variants_GRCh37.vcf.gz"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "clinpred",
+        "order": 45,
+        "parsed_as": [
+          "clinpred"
+        ],
+        "config": {
+          "emit": "plugin",
+          "name": "ClinPred",
+          "params": {
+            "file": {
+              "by_assembly": {
+                "GRCh38": "{path}/ClinPred_hg38_sorted_tabbed.tsv.gz",
+                "GRCh37": "{path}/ClinPred_hg37_sorted_tabbed.tsv.gz"
               }
             }
           }
@@ -453,17 +442,28 @@
         }
       },
       {
+        "id": "nmd",
+        "order": 48,
+        "parsed_as": [
+          "nmd"
+        ],
+        "config": {
+          "emit": "plugin",
+          "name": "NMD"
+        }
+      },
+      {
         "id": "tss_distance",
         "order": 50,
         "parsed_as": [
-            "tss_distance"
-          ],
+          "tss_distance"
+        ],
         "config": {
           "emit": "plugin",
           "name": "TSSDistance",
-              "params": {
-                "both_direction": "1"
-              }
+          "params": {
+            "both_direction": "1"
+          }
         }
       },
       {
@@ -768,18 +768,78 @@
             "builder": "gnomad_structural",
             "join": "%",
             "populations": [
-              { "option": "gnomad_sv", "codes": ["SVTYPE"] },
-              { "option": "gnomad_sv_af", "codes": ["AF"] },
-              { "option": "gnomad_sv_af_afr", "codes": ["AF_afr"] },
-              { "option": "gnomad_sv_af_ami", "codes": ["AF_ami"] },
-              { "option": "gnomad_sv_af_amr", "codes": ["AF_amr"] },
-              { "option": "gnomad_sv_af_asj", "codes": ["AF_asj"] },
-              { "option": "gnomad_sv_af_eas", "codes": ["AF_eas"] },
-              { "option": "gnomad_sv_af_fin", "codes": ["AF_fin"] },
-              { "option": "gnomad_sv_af_mid", "codes": ["AF_mid"] },
-              { "option": "gnomad_sv_af_nfe", "codes": ["AF_nfe"] },
-              { "option": "gnomad_sv_af_rmi", "codes": ["AF_rmi"] },
-              { "option": "gnomad_sv_af_sas", "codes": ["AF_sas"] }
+              {
+                "option": "gnomad_sv",
+                "codes": [
+                  "SVTYPE"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af",
+                "codes": [
+                  "AF"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_afr",
+                "codes": [
+                  "AF_afr"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_ami",
+                "codes": [
+                  "AF_ami"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_amr",
+                "codes": [
+                  "AF_amr"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_asj",
+                "codes": [
+                  "AF_asj"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_eas",
+                "codes": [
+                  "AF_eas"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_fin",
+                "codes": [
+                  "AF_fin"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_mid",
+                "codes": [
+                  "AF_mid"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_nfe",
+                "codes": [
+                  "AF_nfe"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_rmi",
+                "codes": [
+                  "AF_rmi"
+                ]
+              },
+              {
+                "option": "gnomad_sv_af_sas",
+                "codes": [
+                  "AF_sas"
+                ]
+              }
             ]
           },
           "fields_after": "format"
@@ -807,17 +867,72 @@
             "builder": "gnomad_structural",
             "join": "%",
             "populations": [
-              { "option": "gnomad_cnv", "codes": ["SVTYPE"] },
-              { "option": "gnomad_cnv_sf", "codes": ["SF"] },
-              { "option": "gnomad_cnv_sf_afr", "codes": ["SF_afr"] },
-              { "option": "gnomad_cnv_sf_amr", "codes": ["SF_amr"] },
-              { "option": "gnomad_cnv_sf_asj", "codes": ["SF_asj"] },
-              { "option": "gnomad_cnv_sf_eas", "codes": ["SF_eas"] },
-              { "option": "gnomad_cnv_sf_fin", "codes": ["SF_fin"] },
-              { "option": "gnomad_cnv_sf_mid", "codes": ["SF_mid"] },
-              { "option": "gnomad_cnv_sf_nfe", "codes": ["SF_nfe"] },
-              { "option": "gnomad_cnv_sf_sas", "codes": ["SF_sas"] },
-              { "option": "gnomad_cnv_sf_remaining", "codes": ["SF_remaining"] }
+              {
+                "option": "gnomad_cnv",
+                "codes": [
+                  "SVTYPE"
+                ]
+              },
+              {
+                "option": "gnomad_cnv_sf",
+                "codes": [
+                  "SF"
+                ]
+              },
+              {
+                "option": "gnomad_cnv_sf_afr",
+                "codes": [
+                  "SF_afr"
+                ]
+              },
+              {
+                "option": "gnomad_cnv_sf_amr",
+                "codes": [
+                  "SF_amr"
+                ]
+              },
+              {
+                "option": "gnomad_cnv_sf_asj",
+                "codes": [
+                  "SF_asj"
+                ]
+              },
+              {
+                "option": "gnomad_cnv_sf_eas",
+                "codes": [
+                  "SF_eas"
+                ]
+              },
+              {
+                "option": "gnomad_cnv_sf_fin",
+                "codes": [
+                  "SF_fin"
+                ]
+              },
+              {
+                "option": "gnomad_cnv_sf_mid",
+                "codes": [
+                  "SF_mid"
+                ]
+              },
+              {
+                "option": "gnomad_cnv_sf_nfe",
+                "codes": [
+                  "SF_nfe"
+                ]
+              },
+              {
+                "option": "gnomad_cnv_sf_sas",
+                "codes": [
+                  "SF_sas"
+                ]
+              },
+              {
+                "option": "gnomad_cnv_sf_remaining",
+                "codes": [
+                  "SF_remaining"
+                ]
+              }
             ]
           },
           "fields_after": "format"
@@ -1764,131 +1879,131 @@
         "csq_fields": [
           "PHENOTYPES"
         ],
-          "require_any_output": [
-            "phenotypes",
-            "clinvar_phenotypes"
-          ],
-          "targets": [
-            {
-              "field": "phenotypes",
-              "from": "PHENOTYPES",
-              "transform": "regex",
-              "each": true,
-              "pattern": "^(?P<type>[^+]+)\\+(?!ClinVar\\+)(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)\\+[^+]*$",
-              "as": [
-                {
-                  "field": "type",
-                  "type": "string"
-                },
-                {
-                  "field": "source",
-                  "type": "string"
-                },
-                {
-                  "field": "phenotype",
-                  "type": "string"
-                },
-                {
-                  "field": "id",
-                  "type": "string"
-                },
-                {
-                  "field": "risk_allele",
-                  "type": "string"
-                }
-              ],
-              "drop_when": {
-                "unless_matches": {
-                  "field": "risk_allele",
-                  "column": "Allele"
-                },
-                "only_if": {
-                  "field": "type",
-                  "equals": "Variation"
-                }
+        "require_any_output": [
+          "phenotypes",
+          "clinvar_phenotypes"
+        ],
+        "targets": [
+          {
+            "field": "phenotypes",
+            "from": "PHENOTYPES",
+            "transform": "regex",
+            "each": true,
+            "pattern": "^(?P<type>[^+]+)\\+(?!ClinVar\\+)(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)\\+[^+]*$",
+            "as": [
+              {
+                "field": "type",
+                "type": "string"
               },
-              "item_fields": [
-                "type",
-                "source",
-                "phenotype",
-                "id",
-                "risk_allele"
-              ],
-              "post": [
-                {
-                  "op": "exclude",
-                  "by": "phenotype",
-                  "values": [
-                    "ClinVar:_phenotype_not_specified",
-                    "not_specified",
-                    "not_provided"
-                  ]
-                }
-              ]
+              {
+                "field": "source",
+                "type": "string"
+              },
+              {
+                "field": "phenotype",
+                "type": "string"
+              },
+              {
+                "field": "id",
+                "type": "string"
+              },
+              {
+                "field": "risk_allele",
+                "type": "string"
+              }
+            ],
+            "drop_when": {
+              "unless_matches": {
+                "field": "risk_allele",
+                "column": "Allele"
+              },
+              "only_if": {
+                "field": "type",
+                "equals": "Variation"
+              }
             },
-            {
-              "field": "clinvar_phenotypes",
-              "from": "PHENOTYPES",
-              "transform": "regex",
-              "each": true,
-              "pattern": "^(?P<type>[^+]+)\\+(?P<source>ClinVar)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)\\+(?P<clinvar_clin_sig>[^+]*)$",
-              "as": [
-                {
-                  "field": "type",
-                  "type": "string"
-                },
-                {
-                  "field": "source",
-                  "type": "string"
-                },
-                {
-                  "field": "phenotype",
-                  "type": "string"
-                },
-                {
-                  "field": "id",
-                  "type": "string"
-                },
-                {
-                  "field": "risk_allele",
-                  "type": "string"
-                },
-                {
-                  "field": "clinvar_clin_sig",
-                  "type": "string"
-                }
-              ],
-              "drop_when": {
-                "unless_matches": {
-                  "field": "risk_allele",
-                  "column": "Allele"
-                },
-                "only_if": {
-                  "field": "type",
-                  "equals": "Variation"
-                }
+            "item_fields": [
+              "type",
+              "source",
+              "phenotype",
+              "id",
+              "risk_allele"
+            ],
+            "post": [
+              {
+                "op": "exclude",
+                "by": "phenotype",
+                "values": [
+                  "ClinVar:_phenotype_not_specified",
+                  "not_specified",
+                  "not_provided"
+                ]
+              }
+            ]
+          },
+          {
+            "field": "clinvar_phenotypes",
+            "from": "PHENOTYPES",
+            "transform": "regex",
+            "each": true,
+            "pattern": "^(?P<type>[^+]+)\\+(?P<source>ClinVar)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)\\+(?P<clinvar_clin_sig>[^+]*)$",
+            "as": [
+              {
+                "field": "type",
+                "type": "string"
               },
-              "item_fields": [
-                "type",
-                "source",
-                "phenotype",
-                "id",
-                "risk_allele",
-                "clinvar_clin_sig"
-              ],
-              "post": [
-                {
-                  "op": "exclude",
-                  "by": "phenotype",
-                  "values": [
-                    "ClinVar:_phenotype_not_specified",
-                    "not_specified",
-                    "not_provided"
-                  ]
-                }
-              ]
-            }
-          ]
+              {
+                "field": "source",
+                "type": "string"
+              },
+              {
+                "field": "phenotype",
+                "type": "string"
+              },
+              {
+                "field": "id",
+                "type": "string"
+              },
+              {
+                "field": "risk_allele",
+                "type": "string"
+              },
+              {
+                "field": "clinvar_clin_sig",
+                "type": "string"
+              }
+            ],
+            "drop_when": {
+              "unless_matches": {
+                "field": "risk_allele",
+                "column": "Allele"
+              },
+              "only_if": {
+                "field": "type",
+                "equals": "Variation"
+              }
+            },
+            "item_fields": [
+              "type",
+              "source",
+              "phenotype",
+              "id",
+              "risk_allele",
+              "clinvar_clin_sig"
+            ],
+            "post": [
+              {
+                "op": "exclude",
+                "by": "phenotype",
+                "values": [
+                  "ClinVar:_phenotype_not_specified",
+                  "not_specified",
+                  "not_provided"
+                ]
+              }
+            ]
+          }
+        ]
       },
       {
         "plugin": "dosage_sensitivity",
@@ -2690,91 +2805,91 @@
       },
       {
         "option_id": "phenotypes",
-          "blocks": [
-            {
-              "kind": "group",
-              "heading": "Phenotypes",
-              "blocks": [
-                {
-                  "kind": "group",
-                  "heading": "Gene associated",
-                  "blocks": [
-                    {
-                      "kind": "table",
-                      "from": "phenotype_data.phenotypes",
-                      "where": {
-                        "field": "type",
-                        "equals": "Gene"
-                      },
-                      "truncate": {
-                        "visible_count": 3
-                      },
-                      "columns": [
-                        {
-                          "label": "Phenotype",
-                          "from": "phenotype",
-                          "format": "phenotype"
-                        },
-                        {
-                          "label": "Source",
-                          "from": "source",
-                          "format": "humanize"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "kind": "group",
-                  "heading": "Variant associated",
-                  "blocks": [
-                    {
-                      "kind": "table",
-                      "from": "phenotype_data.phenotypes",
-                      "where": {
-                        "field": "type",
-                        "not_equals": "Gene"
-                      },
-                      "truncate": {
-                        "visible_count": 3
-                      },
-                      "columns": [
-                        {
-                          "label": "Phenotype",
-                          "from": "phenotype",
-                          "format": "phenotype"
-                        },
-                        {
-                          "label": "Source",
-                          "from": "source",
-                          "format": "humanize"
-                        }
-                      ]
+        "blocks": [
+          {
+            "kind": "group",
+            "heading": "Phenotypes",
+            "blocks": [
+              {
+                "kind": "group",
+                "heading": "Gene associated",
+                "blocks": [
+                  {
+                    "kind": "table",
+                    "from": "phenotype_data.phenotypes",
+                    "where": {
+                      "field": "type",
+                      "equals": "Gene"
                     },
-                    {
-                      "kind": "table",
-                      "from": "phenotype_data.clinvar_phenotypes",
-                      "truncate": {
-                        "visible_count": 3
+                    "truncate": {
+                      "visible_count": 3
+                    },
+                    "columns": [
+                      {
+                        "label": "Phenotype",
+                        "from": "phenotype",
+                        "format": "phenotype"
                       },
-                      "columns": [
-                        {
-                          "label": "Phenotype (ClinVar)",
-                          "from": "phenotype",
-                          "format": "phenotype"
-                        },
-                        {
-                          "label": "Classifier",
-                          "from": "clinvar_clin_sig",
-                          "format": "humanize"
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
+                      {
+                        "label": "Source",
+                        "from": "source",
+                        "format": "humanize"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "group",
+                "heading": "Variant associated",
+                "blocks": [
+                  {
+                    "kind": "table",
+                    "from": "phenotype_data.phenotypes",
+                    "where": {
+                      "field": "type",
+                      "not_equals": "Gene"
+                    },
+                    "truncate": {
+                      "visible_count": 3
+                    },
+                    "columns": [
+                      {
+                        "label": "Phenotype",
+                        "from": "phenotype",
+                        "format": "phenotype"
+                      },
+                      {
+                        "label": "Source",
+                        "from": "source",
+                        "format": "humanize"
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "table",
+                    "from": "phenotype_data.clinvar_phenotypes",
+                    "truncate": {
+                      "visible_count": 3
+                    },
+                    "columns": [
+                      {
+                        "label": "Phenotype (ClinVar)",
+                        "from": "phenotype",
+                        "format": "phenotype"
+                      },
+                      {
+                        "label": "Classifier",
+                        "from": "clinvar_clin_sig",
+                        "format": "humanize"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       {
         "option_id": "go",

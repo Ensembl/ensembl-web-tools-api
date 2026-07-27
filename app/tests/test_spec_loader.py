@@ -439,3 +439,50 @@ def test_a_phred_only_species_still_expects_both_cadd_columns():
         if row.source == "cadd.raw"
     ]
     assert raw_row and raw_row[0].placeholder is None  # absent -> dropped
+
+
+# --- base config entries are composed, not copied ---------------------------
+
+
+def test_a_genome_inherits_the_base_entries_without_restating_them():
+    """The eight ubiquitous options used to be copied into every per-genome
+    document. Each document now states only what is its own, and the loader
+    layers base underneath."""
+    base_ids = {e.id for e in load_merged_spec("base").config.entries}
+    assert base_ids
+
+    for genome in ("human_grch37", "human_grch38"):
+        # the assembled spec still offers all of them...
+        assembled = {e.id for e in load_merged_spec(genome).config.entries}
+        assert base_ids <= assembled, genome
+        # ...but the document on disk does not name any of them
+        from app.vep.utils.spec_loader import SPEC_DIR
+        document = json.loads((SPEC_DIR / f"{genome}.json").read_text())
+        restated = base_ids & {e["id"] for e in document["config"]["entries"]}
+        assert not restated, f"{genome} restates base entries: {restated}"
+
+
+def test_a_genome_can_override_a_base_entry():
+    """Inheritance is layering, not merging: a genome declaring the same id wins,
+    so a base option needing a different file path somewhere can say so where the
+    difference lives rather than leaving the base tier for everyone."""
+    from app.vep.utils.spec_loader import _with_base_entries
+
+    own = [{"id": "hgvs", "order": 10, "parsed_as": [],
+            "config": {"emit": "flag", "keyword": "hgvs_custom"}}]
+    merged = _with_base_entries("human_grch38", own)
+    hgvs = [e for e in merged if e["id"] == "hgvs"]
+    assert len(hgvs) == 1, "the base entry should be replaced, not duplicated"
+    assert hgvs[0]["config"]["keyword"] == "hgvs_custom"
+
+
+def test_the_base_spec_does_not_inherit_from_itself():
+    base = load_merged_spec("base").config.entries
+    assert len({e.id for e in base}) == len(base)
+
+
+def test_composed_entries_are_ordered_for_emission():
+    """`order` is one numbering space across both tiers, so an inherited entry
+    lands in the right place in the config.ini rather than at either end."""
+    entries = load_merged_spec("human_grch38").config.entries
+    assert [e.order for e in entries] == sorted(e.order for e in entries)

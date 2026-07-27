@@ -688,3 +688,34 @@ def test_form_defaults_match_the_config_parameter_defaults():
     assert not mismatched, "form and config defaults disagree:\n  " + "\n  ".join(
         mismatched
     )
+
+
+def test_panels_come_back_in_the_agreed_order():
+    """One order, stated once, for both surfaces: the input form and the results
+    annotation panel each render the list this returns."""
+    panels = get_visible_panels(
+        species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
+    )
+    assert [panel["label"] for panel in panels] == [
+        "Variant representations",
+        "Variant impact predictions",
+        "Allele frequencies",
+        "Genes & transcripts",
+        "Protein & functional",
+        "Conservation & constraint",
+        "Regulatory",
+        "Phenotype & disease associations",
+    ]
+
+
+def test_a_species_with_fewer_panels_keeps_the_same_relative_order():
+    """Ordering is applied to whatever a species actually has, so a genome
+    missing several panels is not silently reshuffled."""
+    panels = get_visible_panels(assembly_name="GRCg6a")  # chicken: no AF panel
+    assert [panel["label"] for panel in panels] == [
+        "Variant representations",
+        "Variant impact predictions",
+        "Genes & transcripts",
+        "Protein & functional",
+        "Phenotype & disease associations",
+    ]

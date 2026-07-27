@@ -666,9 +666,31 @@ def test_af_specific_columns_only():
     assert kept == []
 
 
-def test_af_no_data_excluded_for_now():
-    # all AF columns empty -> no data -> currently dropped (revisit)
+def test_af_no_data_is_kept():
+    """No data in any tested column keeps the allele. Absence of a frequency is
+    not evidence of a high one -- a variant gnomAD has never seen is unknown, not
+    common -- and dropping it hid exactly the novel variants a rare-variant
+    filter is usually hunting for."""
     lines = [_af_record(1, [_af_entry("", "", "")])]
+    compiled = rf.compile_filters([_af_filter("le", 0.05, "any")], AF_INDEX_MAP)
+    kept, _ = rf.apply_filter_pipeline(lines, compiled)
+    assert len(kept) == 1
+
+
+def test_af_no_data_is_kept_whatever_the_comparison():
+    """Keeping is about having nothing to compare, not about which way the
+    comparison points -- a `ge` filter must not start dropping them again."""
+    lines = [_af_record(1, [_af_entry(".", "", "")])]
+    for operator in ("le", "ge", "eq"):
+        compiled = rf.compile_filters([_af_filter(operator, 0.05, "any")], AF_INDEX_MAP)
+        kept, _ = rf.apply_filter_pipeline(lines, compiled)
+        assert len(kept) == 1, operator
+
+
+def test_af_present_data_still_decides_even_with_no_data_alongside():
+    """The change is only about having nothing at all: a column with data still
+    excludes the allele when it fails."""
+    lines = [_af_record(1, [_af_entry("0.9", "", "")])]
     compiled = rf.compile_filters([_af_filter("le", 0.05, "any")], AF_INDEX_MAP)
     kept, _ = rf.apply_filter_pipeline(lines, compiled)
     assert kept == []

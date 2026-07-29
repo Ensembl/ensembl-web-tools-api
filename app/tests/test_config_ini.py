@@ -777,7 +777,7 @@ def test_gnomad_genomes_default_line(monkeypatch, tmp_path):
     )
     assert "short_name=gnomAD_genomes" in line
     assert line.endswith("format=vcf,type=exact")
-    assert "fields=AF," in line  # default: All + Both
+    assert "fields=AF%AF_grpmax," in line  # default: All + Both, plus grpmax
 
 
 def test_gnomad_genomes_has_no_ukb_param(monkeypatch, tmp_path):
@@ -793,6 +793,7 @@ def test_gnomad_genomes_ancestry_and_sex(monkeypatch, tmp_path):
             tmp_path,
             gnomad_genomes=True,
             gnomad_genomes_all=False,
+            gnomad_genomes_grpmax=False,  # on by default; off here to isolate ancestry+sex
             gnomad_genomes_ami=True,
             gnomad_genomes_remaining=True,
             gnomad_genomes_remaining_both=False,
@@ -817,7 +818,9 @@ def test_gnomad_genomes_grpmax_has_no_sex_split(monkeypatch, tmp_path):
 
 
 def test_gnomad_genomes_all_plus_grpmax(monkeypatch, tmp_path):
-    # default All (both) plus grpmax -> AF%AF_grpmax
+    # default All (both) plus grpmax -> AF%AF_grpmax. Both are on by default, so
+    # this is the default line; passing grpmax explicitly keeps the pairing
+    # pinned if that default is ever flipped back.
     fields = gnomad_genomes_fields(
         build_lines(monkeypatch, tmp_path, gnomad_genomes=True, gnomad_genomes_grpmax=True)
     )

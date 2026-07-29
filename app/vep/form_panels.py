@@ -297,12 +297,16 @@ def _gnomad_genomes_option() -> dict:
         }
         for anc, label in _GNOMAD_GENOMES_ANCESTRIES
     ]
-    # grpmax (max across groups) has no XX/XY split -> a plain toggle.
+    # grpmax (max across groups) has no XX/XY split -> a plain toggle. On by
+    # default alongside "All", the same pairing All of Us makes with its maximum
+    # subpopulation: the overall frequency plus the highest any group reaches are
+    # the two that are useful without knowing which population matters for a
+    # given variant.
     ancestry_options.append({
         "id": "gnomad_genomes_grpmax",
         "label": "Maximum across all groups",
         "type": "boolean",
-        "default": False,
+        "default": True,
     })
     return {
         "id": "gnomad_genomes",

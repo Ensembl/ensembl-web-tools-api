@@ -346,7 +346,7 @@ class ConfigIniParams(BaseModel):
     gnomad_genomes_nfe: bool = False
     gnomad_genomes_ami: bool = False
     gnomad_genomes_remaining: bool = False
-    gnomad_genomes_grpmax: bool = False  # no sex sub-options (no XX/XY)
+    gnomad_genomes_grpmax: bool = True  # no sex sub-options (no XX/XY)
     # Per-ancestry sex sub-options (Both on = base combined-sex field). grpmax has
     # none.
     gnomad_genomes_all_both: bool = True

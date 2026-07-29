@@ -338,11 +338,13 @@ def test_gnomad_genomes_structure_grch38():
     # no UK Biobank toggle for genomes; only the ancestry group
     assert all(s.get("type") == "group" for s in genomes["sub_options"])
     group = genomes["sub_options"][0]
+    # grpmax sits directly under "All": the two summary figures together, ahead
+    # of the individual ancestries.
     assert [o["id"] for o in group["options"]] == [
         f"gnomad_genomes_{a}"
         for a in [
-            "all", "afr", "amr", "asj", "eas", "fin", "mid", "nfe",
-            "ami", "remaining", "grpmax",
+            "all", "grpmax", "afr", "amr", "asj", "eas", "fin", "mid", "nfe",
+            "ami", "remaining",
         ]
     ]
 

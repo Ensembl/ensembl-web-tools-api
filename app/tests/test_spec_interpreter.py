@@ -483,13 +483,45 @@ def test_protvar_interaction_na_partner_is_nulled():
 OT_COLS = [
     "OpenTargets_gwasDiseases", "OpenTargets_gwasGeneId",
     "OpenTargets_gwasLocusToGeneScore", "OpenTargets_qtlGeneId",
-    "OpenTargets_qtlBiosampleName",
+    "OpenTargets_qtlBiosampleName", "OpenTargets_pValueMantissa",
+    "OpenTargets_pValueExponent", "OpenTargets_beta",
 ]
 OT_INDEX = index_map_for(*OT_COLS)
 
 
-def ot_row(diseases="", genes="", l2g="", qtl_genes="", qtl_biosamples=""):
-    return [diseases, genes, l2g, qtl_genes, qtl_biosamples]
+def ot_row(
+    diseases="",
+    genes="",
+    l2g="",
+    qtl_genes="",
+    qtl_biosamples="",
+    mantissa=None,
+    exponent=None,
+    beta=None,
+):
+    """A CSQ row for the OpenTargets columns.
+
+    The p-value and beta columns default to `NA` repeated to the width of the
+    other columns, because that is what the source emits: all eight arrays are
+    one table and always the same length, and `align: min` would otherwise
+    truncate every association away when a test does not care about them.
+    """
+    width = max(
+        (len(column.split("&")) for column in (diseases, genes, l2g, qtl_genes,
+                                               qtl_biosamples) if column),
+        default=0,
+    )
+    filler = "&".join(["NA"] * width)
+    return [
+        diseases,
+        genes,
+        l2g,
+        qtl_genes,
+        qtl_biosamples,
+        filler if mantissa is None else mantissa,
+        filler if exponent is None else exponent,
+        filler if beta is None else beta,
+    ]
 
 
 def run_ot(**kwargs):
@@ -514,7 +546,16 @@ def test_opentargets_dedups_repeated_rows():
     """The plugin emits duplicate rows -- dedup fires on 93% of real records."""
     result = run_ot(diseases="EFO_1&EFO_1", genes="ENSG1&ENSG1", l2g="0.5&0.5")
     assert result["gwas_associations"] == [
-        {"disease": "EFO_1", "gene_id": "ENSG1", "l2g_score": 0.5}
+        {
+            "disease": "EFO_1",
+            "gene_id": "ENSG1",
+            "l2g_score": 0.5,
+            "p_mantissa": None,
+            "p_exponent": None,
+            "beta": None,
+            "p_value": None,
+            "disease_label": None,
+        }
     ]
 
 
@@ -535,8 +576,22 @@ def test_opentargets_misaligned_columns_truncate():
 def test_opentargets_qtl_dedups_and_nulls_na_biosample():
     result = run_ot(qtl_genes="ENSG1&ENSG1&ENSG2", qtl_biosamples="liver&liver&NA")
     assert result["qtl_associations"] == [
-        {"gene_id": "ENSG1", "biosample": "liver"},
-        {"gene_id": "ENSG2", "biosample": None},
+        {
+            "gene_id": "ENSG1",
+            "biosample": "liver",
+            "p_mantissa": None,
+            "p_exponent": None,
+            "beta": None,
+            "p_value": None,
+        },
+        {
+            "gene_id": "ENSG2",
+            "biosample": None,
+            "p_mantissa": None,
+            "p_exponent": None,
+            "beta": None,
+            "p_value": None,
+        },
     ]
 
 
@@ -1107,8 +1162,12 @@ def test_lookup_needs_all_three_of_by_into_and_table():
 
     with pytest.raises(ValidationError, match="lookup requires"):
         PostOp.model_validate({"op": "lookup", "by": "id", "into": "namespace"})
-    with pytest.raises(ValidationError, match="belong to lookup"):
+    with pytest.raises(ValidationError, match="`table` belongs to lookup"):
         PostOp.model_validate({"op": "dedup", "table": "go_namespaces"})
+    # `into` is shared with concat now, so it is rejected only for the ops that
+    # write no field at all.
+    with pytest.raises(ValidationError, match="belongs to lookup or concat"):
+        PostOp.model_validate({"op": "dedup", "into": "namespace"})
 
 
 def test_tss_distance_keeps_the_sign():

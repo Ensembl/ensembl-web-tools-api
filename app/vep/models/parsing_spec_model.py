@@ -126,6 +126,14 @@ class PostOp(BaseModel):
             annotation files move independently, so an unknown term is a normal
             state, not a broken spec.
 
+    concat  join two or more fields into a new one — OpenTargets publishes a
+            p-value as a mantissa and an exponent in separate columns, and
+            `3.32` + `e` + `-28` is the number a reader wants. `fields` names
+            the parts in order, `sep` goes between them, `into` is the field to
+            write. Any part being null makes the result null rather than a
+            malformed string: a row with no p-value must show nothing, not
+            "e" on its own.
+
     `exclude` is a post-op rather than a `drop_when` mode because `drop_when`
     takes exactly one mode and the phenotype targets already spend theirs on the
     per-allele rule.
@@ -133,14 +141,18 @@ class PostOp(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    op: Literal["dedup", "sort", "exclude", "lookup"]
+    op: Literal["dedup", "sort", "exclude", "lookup", "concat"]
     by: str | None = None
     desc: bool = False
     nulls: Literal["first", "last"] = "last"
     values: list[str] | None = None
-    # `lookup` only.
+    # `lookup` and `concat`.
     into: str | None = None
+    # `lookup` only.
     table: str | None = None
+    # `concat` only.
+    fields: list[str] | None = None
+    sep: str = ""
 
     @model_validator(mode="after")
     def _check_op_shape(self) -> "PostOp":
@@ -154,8 +166,16 @@ class PostOp(BaseModel):
             raise ValueError("`values` belongs to exclude")
         if self.op == "lookup" and not (self.by and self.into and self.table):
             raise ValueError("lookup requires `by`, `into` and `table`")
-        if self.op != "lookup" and (self.into or self.table):
-            raise ValueError("`into`/`table` belong to lookup")
+        if self.op != "lookup" and self.table:
+            raise ValueError("`table` belongs to lookup")
+        if self.op == "concat" and not (self.fields and self.into):
+            raise ValueError("concat requires `fields` and `into`")
+        if self.op == "concat" and len(self.fields) < 2:
+            raise ValueError("concat needs at least two `fields`")
+        if self.op != "concat" and self.fields is not None:
+            raise ValueError("`fields` belongs to concat")
+        if self.op not in ("lookup", "concat") and self.into:
+            raise ValueError("`into` belongs to lookup or concat")
         return self
 
 

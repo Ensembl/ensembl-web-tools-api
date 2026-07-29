@@ -3149,7 +3149,8 @@
                   "builder": "opentargets_variant"
                 }
               }
-            ]
+            ],
+            "requires": "opentargets"
           },
           {
             "kind": "table",

@@ -76,8 +76,27 @@ def clean_name(name: str) -> str:
     return name
 
 
+def release_version(data_version: str) -> str:
+    """`http://www.ebi.ac.uk/efo/releases/v3.92.0/efo.owl` -> `3.92.0`.
+
+    Anything that is not that shape is recorded verbatim rather than guessed at
+    — a wrong version is worse than an unfamiliar one.
+    """
+    for part in data_version.split("/"):
+        if part.startswith("v") and part[1:2].isdigit():
+            return part[1:]
+    return data_version
+
+
 def parse_obo(lines) -> dict:
-    """`{"terms": {accession: name}, "retired": [accession]}`.
+    """`{"version": str, "terms": {accession: name}, "retired": [accession]}`.
+
+    The version comes from the OBO's own `data-version` header. `OBO_URL` serves
+    whatever is current and is not itself versioned, so without recording this
+    there is no way to tell which release a committed table came from, and a
+    regeneration months later silently mixes two. To reproduce a specific one:
+
+        curl -sL https://github.com/EBISPOT/efo/releases/download/v3.92.0/efo.obo
 
     **Obsolete terms are kept.** Skipping them looks tidier and is wrong for the
     same reason as the GO table: annotation sources lag ontology releases, so
@@ -93,6 +112,7 @@ def parse_obo(lines) -> dict:
     """
     terms: dict[str, str] = {}
     retired: list[str] = []
+    version = ""
     term_id: str | None = None
     name: str | None = None
     obsolete = False
@@ -110,6 +130,9 @@ def parse_obo(lines) -> dict:
 
     for line in lines:
         line = line.rstrip("\n")
+        if not in_term and line.startswith("data-version: "):
+            version = release_version(line[len("data-version: ") :].strip())
+            continue
         if line.startswith("["):
             flush()
             in_term = line == "[Term]"
@@ -128,6 +151,7 @@ def parse_obo(lines) -> dict:
 
     # Sorted so a regeneration that changes nothing produces no diff.
     return {
+        "version": version,
         "terms": dict(sorted(terms.items())),
         "retired": sorted(retired),
     }
@@ -146,8 +170,8 @@ def main() -> None:
         json.dumps(table, separators=(",", ":"), ensure_ascii=False) + "\n"
     )
     print(
-        f"wrote {OUT_PATH} — {len(table['terms'])} terms, "
-        f"{len(table['retired'])} retired"
+        f"wrote {OUT_PATH} — EFO {table['version'] or 'version unknown'}, "
+        f"{len(table['terms'])} terms, {len(table['retired'])} retired"
     )
 
 

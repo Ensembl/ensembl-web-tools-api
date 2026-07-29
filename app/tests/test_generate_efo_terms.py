@@ -164,6 +164,37 @@ def test_output_is_sorted_so_a_no_op_regeneration_has_no_diff():
     assert table["retired"] == ["EFO_0001", "EFO_0009"]
 
 
+def test_the_release_version_is_recorded_from_the_obo_header():
+    """`OBO_URL` serves whatever is current and is not itself versioned, so
+    without this there is no way to tell which release a committed table came
+    from."""
+    table = generator.parse_obo(
+        obo(
+            "format-version: 1.2",
+            "data-version: http://www.ebi.ac.uk/efo/releases/v3.92.0/efo.owl",
+            "",
+            "[Term]",
+            "id: efo:EFO_0004468",
+            "name: glucose measurement",
+        )
+    )
+    assert table["version"] == "3.92.0"
+    assert table["terms"] == {"EFO_0004468": "glucose measurement"}
+
+
+def test_an_unfamiliar_data_version_is_recorded_verbatim():
+    """A wrong version is worse than an unfamiliar one."""
+    table = generator.parse_obo(obo("data-version: 2026-07-29"))
+    assert table["version"] == "2026-07-29"
+
+
+def test_a_missing_data_version_is_empty_not_an_error():
+    table = generator.parse_obo(
+        obo("[Term]", "id: efo:EFO_0004468", "name: glucose measurement")
+    )
+    assert table["version"] == ""
+
+
 def test_the_committed_table_resolves_the_accessions_in_dev_data():
     """A guard on the shipped file rather than the parser: these eleven are what
     the dev-data VCF actually carries."""
@@ -189,3 +220,5 @@ def test_the_committed_table_resolves_the_accessions_in_dev_data():
     retired = set(table["retired"])
     assert {"EFO_0001645", "EFO_1000627"} <= retired
     assert retired <= set(table["terms"])
+    # the release it was generated from, so a later regeneration is traceable
+    assert table["version"] == "3.92.0"

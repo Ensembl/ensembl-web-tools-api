@@ -1485,7 +1485,10 @@
           "OpenTargets_gwasGeneId",
           "OpenTargets_gwasLocusToGeneScore",
           "OpenTargets_qtlGeneId",
-          "OpenTargets_qtlBiosampleName"
+          "OpenTargets_qtlBiosampleName",
+          "OpenTargets_pValueMantissa",
+          "OpenTargets_pValueExponent",
+          "OpenTargets_beta"
         ],
         "require_any_output": [
           "gwas_associations",
@@ -1497,7 +1500,10 @@
             "from": [
               "OpenTargets_gwasDiseases",
               "OpenTargets_gwasGeneId",
-              "OpenTargets_gwasLocusToGeneScore"
+              "OpenTargets_gwasLocusToGeneScore",
+              "OpenTargets_pValueMantissa",
+              "OpenTargets_pValueExponent",
+              "OpenTargets_beta"
             ],
             "transform": "zip",
             "align": "min",
@@ -1513,12 +1519,39 @@
               {
                 "field": "l2g_score",
                 "type": "float"
+              },
+              {
+                "field": "p_mantissa",
+                "type": "string"
+              },
+              {
+                "field": "p_exponent",
+                "type": "string"
+              },
+              {
+                "field": "beta",
+                "type": "float"
               }
             ],
             "drop_when": {
               "null": "disease"
             },
             "post": [
+              {
+                "op": "concat",
+                "fields": [
+                  "p_mantissa",
+                  "p_exponent"
+                ],
+                "sep": "e",
+                "into": "p_value"
+              },
+              {
+                "op": "lookup",
+                "by": "disease",
+                "into": "disease_label",
+                "table": "efo_terms"
+              },
               {
                 "op": "dedup"
               },
@@ -1532,14 +1565,22 @@
             "item_fields": [
               "disease",
               "gene_id",
-              "l2g_score"
+              "l2g_score",
+              "p_mantissa",
+              "p_exponent",
+              "beta",
+              "p_value",
+              "disease_label"
             ]
           },
           {
             "field": "qtl_associations",
             "from": [
               "OpenTargets_qtlGeneId",
-              "OpenTargets_qtlBiosampleName"
+              "OpenTargets_qtlBiosampleName",
+              "OpenTargets_pValueMantissa",
+              "OpenTargets_pValueExponent",
+              "OpenTargets_beta"
             ],
             "transform": "zip",
             "align": "min",
@@ -1551,6 +1592,18 @@
               {
                 "field": "biosample",
                 "type": "string"
+              },
+              {
+                "field": "p_mantissa",
+                "type": "string"
+              },
+              {
+                "field": "p_exponent",
+                "type": "string"
+              },
+              {
+                "field": "beta",
+                "type": "float"
               }
             ],
             "drop_when": {
@@ -1558,12 +1611,25 @@
             },
             "post": [
               {
+                "op": "concat",
+                "fields": [
+                  "p_mantissa",
+                  "p_exponent"
+                ],
+                "sep": "e",
+                "into": "p_value"
+              },
+              {
                 "op": "dedup"
               }
             ],
             "item_fields": [
               "gene_id",
-              "biosample"
+              "biosample",
+              "p_mantissa",
+              "p_exponent",
+              "beta",
+              "p_value"
             ]
           }
         ]
@@ -3073,57 +3139,78 @@
         "heading": "OpenTargets",
         "blocks": [
           {
-            "kind": "list",
+            "kind": "rows",
+            "heading": "Variant link",
+            "rows": [
+              {
+                "label": "",
+                "link": {
+                  "kind": "external",
+                  "builder": "opentargets_variant"
+                }
+              }
+            ]
+          },
+          {
+            "kind": "table",
             "heading": "GWAS gene associations",
             "from": "opentargets.gwas_associations",
             "truncate": {
               "visible_count": 3
             },
-            "item": {
-              "cells": [
-                {
-                  "from": "disease",
-                  "mono": true,
-                  "link": {
-                    "kind": "external",
-                    "template": "https://platform.opentargets.org/disease/{disease}"
-                  }
-                },
-                {
-                  "from": "gene_id",
-                  "mono": true,
-                  "link": {
-                    "kind": "external",
-                    "template": "https://platform.opentargets.org/target/{gene_id}"
-                  }
-                },
-                {
-                  "label": "L2G",
-                  "from": "l2g_score",
-                  "format": "num"
-                }
-              ]
-            }
+            "columns": [
+              {
+                "label": "Disease association",
+                "from": "disease_label"
+              },
+              {
+                "label": "Target Gene",
+                "from": "gene_id",
+                "mono": true
+              },
+              {
+                "label": "Lead variant p-value",
+                "from": "p_value"
+              },
+              {
+                "label": "beta",
+                "from": "beta",
+                "format": "num"
+              },
+              {
+                "label": "Locus2Gene score",
+                "from": "l2g_score",
+                "format": "num"
+              }
+            ]
           },
           {
-            "kind": "list",
+            "kind": "table",
             "heading": "QTL gene associations",
             "from": "opentargets.qtl_associations",
-            "item": {
-              "cells": [
-                {
-                  "from": "gene_id",
-                  "mono": true,
-                  "link": {
-                    "kind": "external",
-                    "template": "https://platform.opentargets.org/target/{gene_id}"
-                  }
-                },
-                {
-                  "from": "biosample"
-                }
-              ]
-            }
+            "truncate": {
+              "visible_count": 3
+            },
+            "columns": [
+              {
+                "label": "BioSample",
+                "from": "biosample"
+              },
+              {
+                "label": "Target Gene",
+                "from": "gene_id",
+                "mono": true
+              },
+              {
+                "label": "Lead variant p-value",
+                "from": "p_value"
+              },
+              {
+                "label": "beta",
+                "from": "beta",
+                "format": "num"
+              }
+            ]
           }
         ]
       },

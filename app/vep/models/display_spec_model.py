@@ -222,12 +222,25 @@ class DisplayRow(BaseModel):
 
     @model_validator(mode="after")
     def _exactly_one_source(self) -> "DisplayRow":
-        if bool(self.source) == bool(self.compose):
+        sources = int(bool(self.source)) + int(bool(self.compose))
+        if sources == 1:
+            return self
+        if sources > 1:
             raise ValueError("row needs exactly one of `from` or `compose`")
-        return self
+        # No source at all is allowed for one shape only: a builder link that
+        # *is* the value. The OpenTargets variant link is built from the
+        # variant's own coordinates, which are job context rather than anything
+        # a plugin parsed, so there is no `<plugin>.<field>` to name. (A row
+        # with a source may still carry a builder link — that is ProtVar's
+        # trailing icon, which decorates the value rather than being it.)
+        if self.link is not None and self.link.builder:
+            return self
+        raise ValueError("row needs exactly one of `from` or `compose`")
 
     def field_refs(self) -> list[str]:
-        return [self.source] if self.source else self.compose.field_refs()
+        if self.source:
+            return [self.source]
+        return self.compose.field_refs() if self.compose else []
 
 
 class CellSpec(BaseModel):

@@ -94,24 +94,41 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 @lru_cache(maxsize=None)
 def _lookup_table(name: str) -> dict[str, str]:
-    """A shipped reference table, as value -> label.
+    """A shipped reference table, as value -> label. Two on-disk shapes, because
+    which is smaller depends on how many distinct labels there are.
 
-    Stored grouped (`{label: [members]}`) because that is far smaller for the one
-    table there is — GO's 38k ids across three aspects — and inverted once here.
-    Members are compared as strings so a table may store them as numbers: GO ids
-    lose their `GO:` prefix and become ints on disk, which is most of the saving.
+    *Grouped* (`{label: [members]}`) suits a handful of labels over many members
+    — GO's 38k ids across three aspects — and is inverted once here. Members are
+    compared as strings so a table may store them as numbers: GO ids lose their
+    `GO:` prefix and become ints on disk, which is most of the saving.
+
+    *Flat* (`{"terms": {member: label}}`) suits near-unique labels, where
+    grouping would store 62k single-member lists and cost more than it saves —
+    EFO's ontology term names. Sibling keys (`version`, `retired`) are metadata
+    about the table, not entries in it.
     """
     path = DATA_DIR / f"{name}.json"
-    grouped = json.loads(path.read_text())
-    return {str(member): label for label, members in grouped.items() for member in members}
+    document = json.loads(path.read_text())
+    if "terms" in document:
+        return {str(key): label for key, label in document["terms"].items()}
+    return {
+        str(member): label for label, members in document.items() for member in members
+    }
 
 
 def _lookup_key(value) -> str | None:
-    """The table key for a parsed value. GO ids arrive as `GO:0000122`, and the
-    table stores `122` — the prefix is on every id and carries nothing."""
+    """The table key for a parsed value.
+
+    GO ids arrive as `GO:0000122` and the aspect table stores `122` — the prefix
+    is on every id there and carries nothing. An accession with no colon
+    (`EFO_0006336`, from OpenTargets) is already the key: its prefix *is*
+    meaningful, since one table spans several ontologies.
+    """
     if not isinstance(value, str):
         return None
-    _, _, tail = value.partition(":")
+    head, sep, tail = value.partition(":")
+    if not sep:
+        return head or None
     if not tail:
         return None
     return str(int(tail)) if tail.isdigit() else tail
@@ -125,6 +142,18 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
             for row in rows:
                 key = _lookup_key(row.get(operation.by))
                 row[operation.into] = table.get(key) if key else None
+            continue
+        if operation.op == "concat":
+            for row in rows:
+                parts = [row.get(field) for field in operation.fields or []]
+                # A missing part makes the whole value absent: OpenTargets
+                # publishes a beta with no p-value for some associations, and
+                # "e-28" or "3.32e" would be worse than nothing.
+                row[operation.into] = (
+                    None
+                    if any(part is None or part == "" for part in parts)
+                    else operation.sep.join(str(part) for part in parts)
+                )
             continue
         if operation.op == "dedup":
             seen = set()

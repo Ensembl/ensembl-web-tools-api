@@ -745,24 +745,57 @@ def test_opentargets_follows_phenotypes_where_both_exist():
     assert "phenotypes" in ids_37 and "opentargets" not in ids_37
 
 
-def test_conservation_is_a_sub_section_of_genes_and_transcripts():
-    """It used to be a panel of its own. Now it is a category within Genes &
-    transcripts, grouped the way Variant impact predictions groups Missense /
-    Splicing / Genome wide."""
+def test_genes_and_transcripts_options_are_grouped_into_three_categories():
+    """Every option in the panel carries a category, so it renders as three
+    sub-headings rather than an unlabelled run followed by one heading.
+
+    Conservation & constraint used to be a panel of its own; it is now one of the
+    three, grouped the way Variant impact predictions groups Missense / Splicing
+    / Genome wide.
+    """
     panels = get_visible_panels(
         species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
     )
     assert "conservation_and_constraint" not in {panel["id"] for panel in panels}
 
     genes = next(panel for panel in panels if panel["id"] == "genes_and_transcripts")
-    categorised = {
-        option["id"]: option.get("category") for option in genes["options"]
-    }
-    assert categorised["loeuf"] == "Conservation & constraint"
-    assert categorised["dosage_sensitivity"] == "Conservation & constraint"
-    # the options that were already there stay uncategorised, so they render in
-    # an unlabelled group ahead of the new sub-heading
-    assert categorised["nearest_gene"] is None
+
+    # Grouped by category in first-seen order, which is what the frontend's
+    # `groupByCategory` does for both the form and the results panel.
+    grouped: dict[str, list[str]] = {}
+    for option in genes["options"]:
+        grouped.setdefault(option.get("category"), []).append(option["id"])
+
+    assert None not in grouped, "every option should be categorised"
+    assert list(grouped) == ["Locations", "Annotations", "Conservation & constraint"]
+    assert grouped["Locations"] == [
+        "tss_distance",
+        "nearest_gene",
+        "nearest_exon_jb",
+        "updownstream_distance",
+    ]
+    assert grouped["Annotations"] == ["utrannotator", "nmd", "riboseqorfs", "go"]
+    assert grouped["Conservation & constraint"] == [
+        "loeuf",
+        "dosage_sensitivity",
+        "gerp",
+    ]
+
+
+def test_a_species_with_fewer_options_keeps_the_same_category_names():
+    """The categories are declared across three tiers (base / human 37-38 /
+    GRCh38-only), so a species that gets only some of the options must still see
+    those it does get under the same headings — and no empty ones."""
+    panels = get_visible_panels(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
+    genes = next(panel for panel in panels if panel["id"] == "genes_and_transcripts")
+    grouped: dict[str, list[str]] = {}
+    for option in genes["options"]:
+        grouped.setdefault(option.get("category"), []).append(option["id"])
+
+    assert None not in grouped
+    # Mouse has GO but none of the human-only annotations or conservation data.
+    assert list(grouped) == ["Locations", "Annotations"]
+    assert grouped["Annotations"] == ["go"]
 
 
 def test_a_non_human_species_gets_neither_the_panel_nor_the_options():

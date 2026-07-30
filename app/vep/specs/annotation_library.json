@@ -2258,7 +2258,8 @@
               },
               {
                 "label": "Lead variant p-value",
-                "from": "p_value"
+                "from": "p_value",
+                "align": "right"
               },
               {
                 "label": "beta",
@@ -2291,7 +2292,8 @@
               },
               {
                 "label": "Lead variant p-value",
-                "from": "p_value"
+                "from": "p_value",
+                "align": "right"
               },
               {
                 "label": "beta",
@@ -2366,7 +2368,8 @@
                       },
                       {
                         "label": "Submitters reporting",
-                        "from": "count"
+                        "from": "count",
+                        "format": "num"
                       }
                     ]
                   }

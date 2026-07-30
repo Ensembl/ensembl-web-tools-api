@@ -547,6 +547,17 @@ class TableColumn(BaseModel):
     # accession. A value without the prefix is not a UniProt accession at all, so
     # it renders as plain text rather than becoming a broken link.
     link_prefix: str | None = None
+    # Which way the column's values (and its header) align.
+    #
+    # The house rule is by data type: text reads left, numbers read right, so a
+    # column of figures lines up on its digits. That is *derived* — a column
+    # whose `format` is numeric (`num`) is right-aligned without saying so — and
+    # this field is only for the case the format cannot express: a number the
+    # source publishes pre-formatted as a string, like OpenTargets' p-value
+    # (`2.033e-47`, joined from a mantissa and an exponent). Declaring
+    # `format: num` there would be a lie the load-time type check rightly
+    # rejects, so the alignment is stated instead.
+    align: Literal["left", "right"] | None = None
     # When every row of the table shares one value for this column, show it once
     # above the table instead of repeating it down a column. IntAct's affected
     # protein and feature short label are usually the same for every interaction

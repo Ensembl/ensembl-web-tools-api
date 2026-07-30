@@ -438,6 +438,31 @@ def test_valid_table_loads():
     assert [c.label for c in block.columns] == ["URN", "Score"]
 
 
+def test_a_column_may_state_its_alignment():
+    """The house rule derives alignment from the format — a numeric column reads
+    right without saying so. `align` exists for the case a format cannot
+    express: a number the source publishes pre-formatted as a string, like
+    OpenTargets' p-value, where `format: num` would be a lie the load-time type
+    check rightly rejects."""
+    spec = MergedSpec.model_validate(
+        _typed_table(
+            {"label": "URN", "from": "urn"},
+            {"label": "p-value", "from": "urn", "align": "right"},
+        )
+    )
+    columns = spec.display.options[0].blocks[0].columns
+    assert [c.align for c in columns] == [None, "right"]
+
+
+def test_alignment_is_restricted_to_left_or_right():
+    """Centre-aligned figures do not line up on their digits, which is the whole
+    point of the rule."""
+    with pytest.raises(ValidationError):
+        MergedSpec.model_validate(
+            _typed_table({"label": "x", "from": "urn", "align": "centre"})
+        )
+
+
 def test_table_column_ref_must_be_an_item_field():
     """A column reads a field of the list element, checked like a list cell."""
     with pytest.raises(

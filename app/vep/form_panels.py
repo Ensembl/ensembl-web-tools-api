@@ -38,17 +38,23 @@ _ALWAYS_VISIBLE_PANELS: list[dict] = [
         "id": "genes_and_transcripts",
         "label": "Genes & transcripts",
         "options": [
+            # Positional output: where the variant sits relative to nearby
+            # features. Categorised, like the rest of this panel — the options
+            # added for human 37/38 and GRCh38 carry "Annotations" and
+            # "Conservation & constraint".
             {
                 "id": "tss_distance",
                 "label": "Distance to TSS",
                 "type": "boolean",
                 "default": False,
+                "category": "Locations",
             },
             {
                 "id": "nearest_gene",
                 "label": "Nearest gene",
                 "type": "boolean",
                 "default": False,
+                "category": "Locations",
                 "sub_options": [
                     {
                         "id": "nearest_gene_both_directions",
@@ -63,6 +69,7 @@ _ALWAYS_VISIBLE_PANELS: list[dict] = [
                 "label": "Nearest exon junction boundary",
                 "type": "boolean",
                 "default": False,
+                "category": "Locations",
                 "sub_options": [
                     {
                         "id": "nearest_exon_jb_max_range",
@@ -86,6 +93,7 @@ _ALWAYS_VISIBLE_PANELS: list[dict] = [
                 "label": "Up/downstream distance",
                 "type": "boolean",
                 "default": False,
+                "category": "Locations",
                 "sub_options": [
                     {
                         "id": "updownstream_distance_bp",
@@ -111,13 +119,20 @@ _ALWAYS_VISIBLE_PANELS: list[dict] = [
 
 # Options added to the existing Genes & transcripts panel for human GRCh37/38.
 _HUMAN_37_38_GENES_OPTIONS: list[dict] = [
-    {"id": "utrannotator", "label": "UTRAnnotator", "type": "boolean", "default": False},
-    {"id": "nmd", "label": "NMD", "type": "boolean", "default": False},
+    {"id": "utrannotator", "label": "UTRAnnotator", "type": "boolean", "default": False,
+     "category": "Annotations"},
+    {"id": "nmd", "label": "NMD", "type": "boolean", "default": False,
+     "category": "Annotations"},
     # Conservation & constraint was a panel of its own; it is now a sub-section
     # of Genes & transcripts, grouped by `category` the way Variant impact
-    # predictions groups Missense / Splicing / Genome wide. These are the first
-    # categorised options in this panel, so the uncategorised ones above stay in
-    # an unlabelled group ahead of them.
+    # predictions groups Missense / Splicing / Genome wide.
+    #
+    # Every option in this panel is categorised, across all three tiers that
+    # contribute to it (base = Locations, here, and the GRCh38-only appends), so
+    # there is no unlabelled group. `groupByCategory` merges by name wherever an
+    # option is declared, so the GRCh38 additions join these groups rather than
+    # starting new ones; group order follows each category's first appearance,
+    # which gives Locations -> Annotations -> Conservation & constraint.
     {"id": "loeuf", "label": "LOEUF", "type": "boolean", "default": False,
      "category": "Conservation & constraint"},
     {
@@ -626,9 +641,11 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
 
     # Genes & transcripts: RiboSeqORFs + Gene Ontology + GERP.
     by_id["genes_and_transcripts"]["options"].extend([
-        {"id": "riboseqorfs", "label": "RiboSeqORFs", "type": "boolean", "default": False},
+        {"id": "riboseqorfs", "label": "RiboSeqORFs", "type": "boolean", "default": False,
+         "category": "Annotations"},
         # GO plugin (human GRCh38 for now; other species to follow).
-        {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False},
+        {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False,
+         "category": "Annotations"},
         # GERP conservation scores (human GRCh38 for now; other species to
         # follow — each needs its own per-species bigwig, so the config entry's
         # path becomes `by_assembly` when the next one lands).
@@ -869,7 +886,8 @@ def _add_human_grch37_options(panels: list[dict]) -> None:
     by_id = {panel["id"]: panel for panel in panels}
 
     by_id["genes_and_transcripts"]["options"].append(
-        {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False}
+        {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False,
+         "category": "Annotations"}
     )
 
     protein_panel = by_id["protein_and_functional"]
@@ -922,7 +940,8 @@ def _add_species_annotation_options(panels: list[dict], assembly_name: str | Non
 
     if "go" in datasets:
         by_id["genes_and_transcripts"]["options"].append(
-            {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False}
+            {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False,
+             "category": "Annotations"}
         )
 
     if "cadd" in datasets:

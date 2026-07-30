@@ -216,6 +216,8 @@ class ConfigIniParams(BaseModel):
     protvar_pocket: bool = True
     protvar_int: bool = True
     loeuf: bool = False
+    # GERP conservation score (Conservation plugin; human GRCh38 for now).
+    gerp: bool = False
     phenotypes: bool = False
     # Gene Ontology terms (GO plugin; human GRCh38 for now).
     go: bool = False

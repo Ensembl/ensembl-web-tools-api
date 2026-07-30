@@ -303,15 +303,21 @@ class SettingEmitter(BaseModel):
 
 
 class PluginEmitter(BaseModel):
-    """`plugin <name>,<k>=<v>,…` when the entry's option is on. Static params,
-    assembly-keyed files, and sub-flag interpolation are all `ParamValue`s;
-    IntAct's variadic sub-flags use `flags`.
+    """`plugin <name>[,<arg>…][,<k>=<v>…]` when the entry's option is on. Static
+    params, assembly-keyed files, and sub-flag interpolation are all
+    `ParamValue`s; IntAct's variadic sub-flags use `flags`.
+
+    `args` are positional, emitted bare and before any named `params` — for a
+    plugin that takes its argument by position rather than by name (Conservation
+    wants `plugin Conservation,<bigwig>`, not `file=<bigwig>`). Most plugins take
+    named params; prefer `params` unless the plugin really is positional.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     emit: Literal["plugin"]
     name: str
+    args: list[ParamValue] = []
     params: dict[str, ParamValue] = {}
     flags: VariadicFlags | None = None
     when: GenomeGate | None = None

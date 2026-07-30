@@ -624,11 +624,16 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
     """
     by_id = {panel["id"]: panel for panel in panels}
 
-    # Genes & transcripts: RiboSeqORFs + Gene Ontology.
+    # Genes & transcripts: RiboSeqORFs + Gene Ontology + GERP.
     by_id["genes_and_transcripts"]["options"].extend([
         {"id": "riboseqorfs", "label": "RiboSeqORFs", "type": "boolean", "default": False},
         # GO plugin (human GRCh38 for now; other species to follow).
         {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False},
+        # GERP conservation scores (human GRCh38 for now; other species to
+        # follow — each needs its own per-species bigwig, so the config entry's
+        # path becomes `by_assembly` when the next one lands).
+        {"id": "gerp", "label": "GERP conservation score", "type": "boolean", "default": False,
+         "category": "Conservation & constraint"},
     ])
 
     # Protein & functional: Protein (protein + ProtVar) / Functional (MaveDB,

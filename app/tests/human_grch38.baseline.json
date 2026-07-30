@@ -3242,9 +3242,6 @@
               },
               {
                 "kind": "rows",
-                "when": {
-                  "empty": "clinvar.conflicting_breakdown"
-                },
                 "rows": [
                   {
                     "label": "Clinical significance",
@@ -3254,37 +3251,22 @@
                 ]
               },
               {
-                "kind": "group",
-                "heading": "Clinical significance",
+                "kind": "table",
                 "when": {
                   "present": "clinvar.conflicting_breakdown"
                 },
-                "blocks": [
+                "from": "clinvar.conflicting_breakdown",
+                "indent": true,
+                "columns": [
                   {
-                    "kind": "rows",
-                    "rows": [
-                      {
-                        "label": "",
-                        "from": "clinvar.significance",
-                        "format": "humanize_join"
-                      }
-                    ]
+                    "label": "Classification",
+                    "from": "significance",
+                    "format": "humanize"
                   },
                   {
-                    "kind": "table",
-                    "from": "clinvar.conflicting_breakdown",
-                    "columns": [
-                      {
-                        "label": "Classification",
-                        "from": "significance",
-                        "format": "humanize"
-                      },
-                      {
-                        "label": "Submitters reporting",
-                        "from": "count",
-                        "format": "num"
-                      }
-                    ]
+                    "label": "Submitters reporting",
+                    "from": "count",
+                    "format": "num"
                   }
                 ]
               }

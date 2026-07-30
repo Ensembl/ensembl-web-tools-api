@@ -193,7 +193,17 @@ def _emit_entry(entry, options, assembly, context) -> str | None:
         return f"{emitter.keyword} {value}"
 
     if isinstance(emitter, PluginEmitter):
-        parts = _params_str(emitter.params, options, assembly, context)
+        # Positional args first, bare; then the named params. A plugin uses one
+        # style or the other in practice, but the order is defined so a mixed
+        # entry emits predictably.
+        parts = [
+            resolved
+            for resolved in (
+                _param_value(arg, options, assembly, context) for arg in emitter.args
+            )
+            if resolved is not _SKIP
+        ]
+        parts += _params_str(emitter.params, options, assembly, context)
         line = f"plugin {emitter.name}"
         if parts:
             line += "," + ",".join(parts)

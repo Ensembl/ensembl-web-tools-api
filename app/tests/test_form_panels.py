@@ -25,6 +25,7 @@ HUMAN_37_38_PANEL_IDS = {
 }
 GRCH38_ONLY_OPTION_IDS = {
     "eve",
+    "gerp",
     "mavedb",
     "opentargets",
     "protvar",

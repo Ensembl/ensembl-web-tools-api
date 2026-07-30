@@ -53,6 +53,7 @@ def test_bundled_spec_validates():
         "hgvsg",
         "spdi",
         "loeuf",
+        "gerp",
         "nmd",
         "nearest_gene",
         "nearest_exon_jb",

@@ -1413,6 +1413,25 @@
         ]
       },
       {
+        "plugin": "gerp",
+        "scope": "allele",
+        "output": "gerp",
+        "csq_fields": [
+          "Conservation"
+        ],
+        "require_any_output": [
+          "score"
+        ],
+        "targets": [
+          {
+            "field": "score",
+            "from": "Conservation",
+            "transform": "scalar",
+            "type": "float"
+          }
+        ]
+      },
+      {
         "plugin": "loeuf",
         "scope": "transcript",
         "output": "loeuf",
@@ -1846,6 +1865,21 @@
                   "href": "https://www.nature.com/articles/s41588-025-02400-1",
                   "label": "popEVE paper"
                 }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "option_id": "gerp",
+        "blocks": [
+          {
+            "kind": "rows",
+            "rows": [
+              {
+                "label": "GERP conservation score",
+                "from": "gerp.score",
+                "format": "num"
               }
             ]
           }

@@ -1023,3 +1023,20 @@ def test_gencode_promoters_custom_has_no_fields_clause(monkeypatch, tmp_path):
         "gff_type=gencode_promoter,format=gff,short_name=GENCODE_Promoter,type=overlap"
     )
     assert "fields=" not in line
+
+
+def test_gerp_plugin_takes_its_file_positionally(monkeypatch, tmp_path):
+    # The Conservation plugin wants its bigwig by position, not by name, so the
+    # entry uses `args` rather than `params` — the value is emitted bare, with no
+    # `key=` in front of it.
+    line = find_line(build_lines(monkeypatch, tmp_path, gerp=True), "plugin Conservation")
+    assert line == (
+        f"plugin Conservation,{PLUGIN_PATH}"
+        "/gerp_conservation_scores.homo_sapiens.GRCh38.bw"
+    )
+    assert "=" not in line.split(",", 1)[1]
+
+
+def test_gerp_off_emits_no_line(monkeypatch, tmp_path):
+    lines = build_lines(monkeypatch, tmp_path, gerp=False)
+    assert not [line for line in lines if "Conservation" in line]

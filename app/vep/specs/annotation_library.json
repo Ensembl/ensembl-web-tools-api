@@ -2266,7 +2266,7 @@
                 "format": "num"
               },
               {
-                "label": "Locus2Gene score",
+                "label": "Locus to Gene (L2G) Score",
                 "from": "l2g_score",
                 "format": "num"
               }

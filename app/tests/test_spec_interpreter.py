@@ -235,8 +235,8 @@ def test_clinvar_non_conflicting_ignores_breakdown():
                 "review_status": None,
                 "type": "Germline",
                 "rating_scale": "clinvar_aggregate",
-                "submissions": 0,
-                "supporting": 0,
+                "submissions": None,
+                "supporting": None,
             }
         ],
         "submissions": [],
@@ -263,8 +263,8 @@ def test_clinvar_when_matches_list_membership_not_substring():
                 "review_status": None,
                 "type": "Germline",
                 "rating_scale": "clinvar_aggregate",
-                "submissions": 0,
-                "supporting": 0,
+                "submissions": None,
+                "supporting": None,
             }
         ],
         "submissions": [],
@@ -1830,6 +1830,9 @@ def test_join_also_match_disambiguates_a_shared_key():
 
 
 def test_join_count_into_writes_the_number_of_matches():
+    """A row with no candidates at all counts as nothing, not as zero: "0 of 0
+    submissions contribute" is a sentence about nothing, while a real zero —
+    none of several qualifying — is worth saying."""
     result = _joined(
         [{"into": "conditions", "from": "records", "left_key": "name",
           "right_key": "condition", "count_into": "n"}],
@@ -1837,7 +1840,20 @@ def test_join_count_into_writes_the_number_of_matches():
         recs=("R1~Pathogenic~Disease_one&R2~Pathogenic~Disease_one"
               "&R3~Benign~Disease_one"),
     )
-    assert [c["n"] for c in result["conditions"]] == [3, 0]
+    assert [c["n"] for c in result["conditions"]] == [3, None]
+
+
+def test_join_where_counts_zero_when_candidates_all_fail_it():
+    """The distinction the null depends on: these conditions *have* records,
+    none of which qualify, so the count is a real 0."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "where": {"field": "verdict", "equals": "1"},
+          "count_into": "n"}],
+        names="Has_records+Has_none",
+        recs="R1~0~Has_records&R2~0~Has_records",
+    )
+    assert [c["n"] for c in result["conditions"]] == [0, None]
 
 
 def test_join_where_counts_only_the_rows_a_source_vouches_for():

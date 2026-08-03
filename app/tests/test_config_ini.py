@@ -929,6 +929,22 @@ def test_clinvar_line_is_assembly_specific(
     )
 
 
+def test_clinvar_is_emitted_for_grch37_too(monkeypatch, tmp_path):
+    """GRCh37 has its own config entries, and the test above only looks like it
+    covers them: it is parametrised over both assemblies but builds from the
+    GRCh38 spec either way, so only the `by_assembly` file path varies. This
+    builds from the GRCh37 spec, where the ClinVar custom went missing entirely
+    once the form's `clinvar_short` control was removed and only GRCh38 had a
+    `forces_on` to replace it."""
+    line = find_line(
+        build_lines_37(monkeypatch, tmp_path, phenotypes=True), "short_name=ClinVar,"
+    )
+    assert line is not None
+    # Its own, narrower field set: nothing has confirmed that the GRCh37 ClinVar
+    # VCF carries the enriched columns, and requesting one it lacks fails the job.
+    assert "fields=CLNSIG%CLNSIGCONF," in line
+
+
 def test_clinvar_short_requires_phenotypes(monkeypatch, tmp_path):
     # A stale `clinvar_short` from an edit/rerun must not emit its custom on its
     # own: the germline data is served under Phenotypes, and the

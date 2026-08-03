@@ -535,10 +535,6 @@ def _apply_joins(built: dict, joins) -> None:
             continue
         buckets: dict[str, list] = {}
         for row in right:
-            if join.where is not None and str(
-                row.get(join.where.field)
-            ) != join.where.equals:
-                continue
             raw_key = row.get(join.right_key)
             parts = (
                 str(raw_key).split(join.right_key_sep)
@@ -564,8 +560,21 @@ def _apply_joins(built: dict, joins) -> None:
                     )
                     == wanted
                 ]
+            # `where` narrows the matches rather than the buckets, so a count
+            # can still tell "none of them qualified" from "there were none" —
+            # and two joins differing only by `where` share one bucket map.
+            candidates = matches
+            if join.where is not None:
+                matches = [
+                    match
+                    for match in matches
+                    if str(match.get(join.where.field)) == join.where.equals
+                ]
             if join.count_into:
-                row[join.count_into] = len(matches)
+                # No candidates at all means there is nothing to report, not a
+                # count of zero: "0 of 0 submissions" is a sentence about
+                # nothing. A real zero — none of several qualifying — is kept.
+                row[join.count_into] = len(matches) if candidates else None
             elif join.count_by:
                 groups: dict[str, list] = {}
                 for match in matches:  # first-seen order

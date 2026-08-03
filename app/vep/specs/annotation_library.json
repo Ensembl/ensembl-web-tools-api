@@ -224,7 +224,9 @@
           "item_pattern": "^(?P<key>[^:]+)"
         },
         "require_any_input": [
-          "ClinVar_CLNSIG"
+          "ClinVar_CLNSIG",
+          "ClinVar_ONC",
+          "ClinVar_SCI"
         ],
         "targets": [
           {
@@ -2542,7 +2544,7 @@
             "kind": "group",
             "heading": "ClinVar",
             "when": {
-              "present": "clinvar.significance"
+              "present": "clinvar.classification_summary"
             },
             "blocks": [
               {

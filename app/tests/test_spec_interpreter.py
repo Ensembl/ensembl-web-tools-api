@@ -1393,3 +1393,125 @@ def test_decode_is_off_by_default():
     assert apply_plugin_spec(["A", "100%2C"], index_map, spec.plugin("probe")) == {
         "value": "100%2C"
     }
+
+
+def _joined(joins, **columns):
+    """A two-list plugin with `joins` applied, over the given raw columns."""
+    index_map = index_map_for("Allele", "Names", "Recs")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Names", "Recs"],
+                "require_any_output": ["conditions"],
+                "targets": [
+                    {
+                        "field": "conditions",
+                        "from": "Names",
+                        "transform": "records",
+                        "sep": "+",
+                        "item_sep": "~",
+                        "as": [{"field": "name", "type": "string"}],
+                    },
+                    {
+                        "field": "records",
+                        "from": "Recs",
+                        "transform": "records",
+                        "sep": "&",
+                        "item_sep": "~",
+                        "as": [
+                            {"field": "acc", "type": "string"},
+                            {"field": "verdict", "type": "string"},
+                            {"field": "condition", "type": "string"},
+                        ],
+                    },
+                ],
+                "joins": joins,
+            }
+        ]
+    )
+    return apply_plugin_spec(
+        ["A", columns["names"], columns["recs"]], index_map, spec.plugin("probe")
+    )
+
+
+def test_join_attaches_matching_rows_by_key():
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "records"}],
+        names="Disease_one+Disease_two",
+        recs="R1~Pathogenic~Disease_one&R2~Benign~Disease_two",
+    )
+    assert [c["name"] for c in result["conditions"]] == ["Disease_one", "Disease_two"]
+    assert [r["acc"] for r in result["conditions"][0]["records"]] == ["R1"]
+    assert [r["acc"] for r in result["conditions"][1]["records"]] == ["R2"]
+
+
+def test_join_matches_case_insensitively_when_asked():
+    """ClinVar submitters write the same condition in different cases; an exact
+    match would drop them from their own condition's counts."""
+    joins = [{"into": "conditions", "from": "records", "left_key": "name",
+              "right_key": "condition", "as": "records"}]
+    exact = _joined(joins, names="Disease_one", recs="R1~Pathogenic~DISEASE_ONE")
+    assert exact["conditions"][0]["records"] == []
+
+    joins[0]["case_insensitive"] = True
+    loose = _joined(joins, names="Disease_one", recs="R1~Pathogenic~DISEASE_ONE")
+    assert [r["acc"] for r in loose["conditions"][0]["records"]] == ["R1"]
+
+
+def test_join_key_pattern_extracts_the_comparable_part():
+    """The two lists key on the same condition, but one writes it decorated —
+    ClinVar's RCV condition is `MedGen:C4540192:<name>`."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "records",
+          "right_key_pattern": r"^(?:[^:]+:[^:]+:)?(?P<key>.*)$"}],
+        names="Disease_one",
+        recs="R1~Pathogenic~MedGen:C123:Disease_one",
+    )
+    assert [r["acc"] for r in result["conditions"][0]["records"]] == ["R1"]
+
+
+def test_join_places_a_row_under_every_condition_it_names():
+    """One ClinVar record can be filed against several conditions at once. It
+    belongs under each of them — without the split it matched none, because the
+    whole '+'-joined string was the key."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "records", "right_key_sep": "+",
+          "right_key_pattern": r"^(?:[^:]+:[^:]+:)?(?P<key>.*)$"}],
+        names="Disease_one+Disease_two",
+        recs="R1~Pathogenic~MedGen:C1:Disease_one+MedGen:C2:Disease_two",
+    )
+    assert [r["acc"] for r in result["conditions"][0]["records"]] == ["R1"]
+    assert [r["acc"] for r in result["conditions"][1]["records"]] == ["R1"]
+
+
+def test_join_count_by_summarises_the_matches():
+    """"How many submitters said what", grouped in first-seen order, so the
+    display renders counts rather than counting."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "classifications",
+          "count_by": "verdict"}],
+        names="Disease_one",
+        recs=("R1~Pathogenic~Disease_one&R2~Pathogenic~Disease_one"
+              "&R3~Benign~Disease_one"),
+    )
+    assert result["conditions"][0]["classifications"] == [
+        {"verdict": "Pathogenic", "count": 2},
+        {"verdict": "Benign", "count": 1},
+    ]
+
+
+def test_join_leaves_an_unmatched_left_row_empty():
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "records"}],
+        names="Disease_one+Orphan_disease",
+        recs="R1~Pathogenic~Disease_one",
+    )
+    assert result["conditions"][1]["records"] == []

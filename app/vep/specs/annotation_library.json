@@ -401,6 +401,37 @@
               "condition"
             ]
           }
+        ],
+        "joins": [
+          {
+            "into": "conditions",
+            "from": "submissions",
+            "left_key": "name",
+            "right_key": "condition",
+            "case_insensitive": true,
+            "as": "classifications",
+            "count_by": "classification",
+            "item_fields": [
+              "classification",
+              "count"
+            ],
+            "right_key_sep": "+"
+          },
+          {
+            "into": "conditions",
+            "from": "records",
+            "left_key": "name",
+            "right_key": "condition",
+            "right_key_pattern": "^(?:[^:]+:[^:]+:)?(?P<key>.*)$",
+            "case_insensitive": true,
+            "as": "records",
+            "item_fields": [
+              "rcv",
+              "classification",
+              "review_status"
+            ],
+            "right_key_sep": "+"
+          }
         ]
       },
       {

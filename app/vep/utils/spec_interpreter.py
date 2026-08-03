@@ -433,6 +433,56 @@ def _apply_target(csq_values, index_map, target: TargetSpec):
     return _decode_leaves(value) if target.decode else value
 
 
+def _join_key(value, pattern, case_insensitive: bool) -> str | None:
+    """The comparable form of a key: the `key` group of `pattern` if it matches,
+    else the value as it stands. A value the pattern rejects still keys on
+    itself rather than vanishing."""
+    if value is None:
+        return None
+    key = str(value)
+    if pattern:
+        match = re.search(pattern, key)
+        if match and match.groupdict().get("key") is not None:
+            key = match.group("key")
+    return key.casefold() if case_insensitive else key
+
+
+def _apply_joins(built: dict, joins) -> None:
+    """Stitch the plugin's lists together in place (see JoinSpec)."""
+    for join in joins or []:
+        left = built.get(join.into)
+        right = built.get(join.source)
+        if not isinstance(left, list) or not isinstance(right, list):
+            continue
+        buckets: dict[str, list] = {}
+        for row in right:
+            raw_key = row.get(join.right_key)
+            parts = (
+                str(raw_key).split(join.right_key_sep)
+                if join.right_key_sep and raw_key is not None
+                else [raw_key]
+            )
+            for part in parts:
+                key = _join_key(part, join.right_key_pattern, join.case_insensitive)
+                if key is not None:
+                    buckets.setdefault(key, []).append(row)
+        for row in left:
+            key = _join_key(row.get(join.left_key), None, join.case_insensitive)
+            matches = buckets.get(key, []) if key is not None else []
+            if join.count_by:
+                counts: dict[str, int] = {}
+                for match in matches:  # first-seen order
+                    value = match.get(join.count_by)
+                    if value is not None:
+                        counts[value] = counts.get(value, 0) + 1
+                row[join.as_field] = [
+                    {join.count_by: value, "count": count}
+                    for value, count in counts.items()
+                ]
+            else:
+                row[join.as_field] = matches
+
+
 def apply_plugin_spec(
     csq_values: list[str], index_map: dict[str, int], spec: PluginSpec
 ) -> dict | None:
@@ -456,6 +506,9 @@ def apply_plugin_spec(
         target.field: _apply_target(csq_values, index_map, target)
         for target in spec.targets
     }
+    # Every target reads one column, so a source spreading one logical table
+    # across several columns is only whole after they are stitched together.
+    _apply_joins(output, spec.joins)
 
     if spec.require_any_output and not any(
         _is_present(output.get(field)) for field in spec.require_any_output

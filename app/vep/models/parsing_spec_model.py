@@ -350,6 +350,57 @@ class TargetSpec(BaseModel):
         return self
 
 
+class JoinSpec(BaseModel):
+    """Merge one of a plugin's produced lists into another, matching on a key.
+
+    Every transform reads a single column, so a source that spreads one logical
+    table across several columns cannot be assembled by them alone — ClinVar
+    names a condition in one column, its per-submitter classifications in
+    another, and its RCV records in a third, all keyed by the condition's name.
+    This runs after the targets are built and stitches them together.
+
+    `right_key_pattern` is what makes it general rather than a ClinVar special
+    case: two lists routinely key on the same thing while one writes it
+    decorated (ClinVar's RCV condition is `MedGen:C4540192:<name>` where the
+    condition list has the bare `<name>`). A regex with a `key` group extracts
+    the comparable part; without one the value is used as it stands.
+
+    `count_by` summarises the matches instead of attaching them: grouped by that
+    field, in first-seen order, as `[{<count_by>, count}]`. That is the usual
+    shape for "how many submitters said what", and keeps the counting out of the
+    display layer.
+    """
+
+    # populate_by_name so a serialised spec round-trips: dumping writes the field
+    # names (`source`/`as_field`), the document uses the aliases (`from`/`as`),
+    # and a pinned sidecar has to load back either way.
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    # The list to enrich, and the list to draw from (both `field` names of this
+    # plugin's targets).
+    into: str
+    # `from` is a Python keyword.
+    source: str = Field(alias="from")
+    left_key: str
+    right_key: str
+    # Applied to the right-hand key before comparing; needs a `key` group.
+    right_key_pattern: str | None = None
+    # When one right-hand row belongs under several left-hand rows, the
+    # separator its key list uses. ClinVar files one submission (or one RCV
+    # record) against several conditions at once, '+'-joined; the row then
+    # appears under each of them. Without this it would match none of them.
+    right_key_sep: str | None = None
+    # ClinVar's submitters write the same condition in different cases.
+    case_insensitive: bool = False
+    # The field added to each left row.
+    as_field: str = Field(alias="as")
+    # Summarise rather than attach: group the matches by this field and count.
+    count_by: str | None = None
+    # Declared, not derived — the display checks its column refs against this,
+    # exactly as `item_fields` does for a target.
+    item_fields: list[str] | None = None
+
+
 class PluginSpec(BaseModel):
     """How to parse one plugin's contribution to a CSQ entry.
 
@@ -374,6 +425,8 @@ class PluginSpec(BaseModel):
     require_any_input: list[str] | None = None
     require_any_output: list[str] | None = None
     targets: list[TargetSpec]
+    # Applied after every target is built (see JoinSpec).
+    joins: list[JoinSpec] | None = None
 
 
 class ParsingSpec(BaseModel):

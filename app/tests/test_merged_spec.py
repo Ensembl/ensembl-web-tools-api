@@ -360,13 +360,31 @@ def test_simple_plugin_expects_its_csq_fields():
 
 CLINVAR_SHORT_COLUMNS = {
     "ClinVar",  # the bare match column a custom always emits
+    "ClinVar_CLNDN",
+    "ClinVar_CLNDNINCL",
+    "ClinVar_CLNDISDB",
+    "ClinVar_CLNDISDBINCL",
+    "ClinVar_CLNREVSTAT",
     "ClinVar_CLNSIG",
     "ClinVar_CLNSIGCONF",
-    "ClinVar_CLNDN",
-    "ClinVar_CLNDISDB",
-    "ClinVar_CLNREVSTAT",
+    "ClinVar_CLNSIGINCL",
+    "ClinVar_ONCDN",
+    "ClinVar_ONCDNINCL",
+    "ClinVar_ONCDISDB",
+    "ClinVar_ONCDISDBINCL",
+    "ClinVar_ONC",
+    "ClinVar_ONCINCL",
+    "ClinVar_ONCREVSTAT",
+    "ClinVar_ONCSCV",
+    "ClinVar_ONCCONF",
     "ClinVar_CLNSUBA",
+    "ClinVar_CLNPMID",
+    "ClinVar_CLNSUBN",
     "ClinVar_CLNRCV",
+    "ClinVar_SCI",
+    "ClinVar_SCIREVSTAT",
+    "ClinVar_SCIDN",
+    "ClinVar_SCIDISDB",
 }
 
 CLINVAR_SV_COLUMNS = {"ClinVar_SV", "ClinVar_SV_CLNSIG", "ClinVar_SV_ORIGIN"}

@@ -139,6 +139,17 @@ class PostOp(BaseModel):
             malformed string: a row with no p-value must show nothing, not
             "e" on its own.
 
+    curie_link  turn a CURIE list into one link. A source that names a thing in
+            several ontologies at once (ClinVar's CLNDISDB —
+            `MeSH:D030342,MedGen:C0950123`) has no single id; `prefer` picks
+            which authority to trust, in order, falling back to whatever is
+            there. `templates` maps the source prefix to its URL, `{id}` being
+            the bare accession. `by` is the CURIE-list field, `into` the URL
+            field to write, `label_into` (optional) the chosen CURIE itself.
+            A list with nothing matching any template writes null, so a
+            condition ClinVar gives no usable id for renders as plain text
+            rather than a dead link.
+
     `exclude` is a post-op rather than a `drop_when` mode because `drop_when`
     takes exactly one mode and the phenotype targets already spend theirs on the
     per-allele rule.
@@ -146,7 +157,7 @@ class PostOp(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    op: Literal["dedup", "sort", "exclude", "lookup", "concat"]
+    op: Literal["dedup", "sort", "exclude", "lookup", "concat", "curie_link"]
     by: str | None = None
     desc: bool = False
     nulls: Literal["first", "last"] = "last"
@@ -158,6 +169,12 @@ class PostOp(BaseModel):
     # `concat` only.
     fields: list[str] | None = None
     sep: str = ""
+    # `curie_link` only.
+    prefer: list[str] | None = None
+    templates: dict[str, str] | None = None
+    label_into: str | None = None
+    # The separator between CURIEs in the source list.
+    curie_sep: str = ","
 
     @model_validator(mode="after")
     def _check_op_shape(self) -> "PostOp":
@@ -171,6 +188,10 @@ class PostOp(BaseModel):
             raise ValueError("`values` belongs to exclude")
         if self.op == "lookup" and not (self.by and self.into and self.table):
             raise ValueError("lookup requires `by`, `into` and `table`")
+        if self.op == "curie_link" and not (self.by and self.into and self.templates):
+            raise ValueError("curie_link requires `by`, `into` and `templates`")
+        if self.op != "curie_link" and (self.prefer or self.templates):
+            raise ValueError("`prefer`/`templates` belong to curie_link")
         if self.op != "lookup" and self.table:
             raise ValueError("`table` belongs to lookup")
         if self.op == "concat" and not (self.fields and self.into):
@@ -179,8 +200,8 @@ class PostOp(BaseModel):
             raise ValueError("concat needs at least two `fields`")
         if self.op != "concat" and self.fields is not None:
             raise ValueError("`fields` belongs to concat")
-        if self.op not in ("lookup", "concat") and self.into:
-            raise ValueError("`into` belongs to lookup or concat")
+        if self.op not in ("lookup", "concat", "curie_link") and self.into:
+            raise ValueError("`into` belongs to lookup, concat or curie_link")
         return self
 
 

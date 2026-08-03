@@ -1173,9 +1173,9 @@ def test_lookup_needs_all_three_of_by_into_and_table():
         PostOp.model_validate({"op": "lookup", "by": "id", "into": "namespace"})
     with pytest.raises(ValidationError, match="`table` belongs to lookup"):
         PostOp.model_validate({"op": "dedup", "table": "go_namespaces"})
-    # `into` is shared with concat now, so it is rejected only for the ops that
-    # write no field at all.
-    with pytest.raises(ValidationError, match="belongs to lookup or concat"):
+    # `into` is shared with concat and curie_link now, so it is rejected only for
+    # the ops that write no field at all.
+    with pytest.raises(ValidationError, match="belongs to lookup, concat or curie_link"):
         PostOp.model_validate({"op": "dedup", "into": "namespace"})
 
 
@@ -1515,3 +1515,76 @@ def test_join_leaves_an_unmatched_left_row_empty():
         recs="R1~Pathogenic~Disease_one",
     )
     assert result["conditions"][1]["records"] == []
+
+
+def _curie_link(ids, **overrides):
+    """A one-row list carrying `ids`, with the ClinVar curie_link post-op."""
+    index_map = index_map_for("Allele", "Names", "Ids")
+    post = {
+        "op": "curie_link", "by": "ids", "into": "id_url", "label_into": "id_curie",
+        "prefer": ["MedGen", "OMIM", "MONDO"],
+        "templates": {
+            "MedGen": "https://www.ncbi.nlm.nih.gov/medgen/{id}",
+            "OMIM": "https://www.omim.org/entry/{id}",
+            "MONDO": "https://purl.obolibrary.org/obo/MONDO_{id}",
+            "MeSH": "https://meshb.nlm.nih.gov/record/ui?ui={id}",
+        },
+        **overrides,
+    }
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe", "scope": "allele", "output": "probe",
+                "csq_fields": ["Names", "Ids"], "require_any_output": ["conditions"],
+                "targets": [
+                    {
+                        "field": "conditions", "from": ["Names", "Ids"],
+                        "transform": "zip", "sep": "+", "decode": True,
+                        "as": [
+                            {"field": "name", "type": "string"},
+                            {"field": "ids", "type": "string", "null_values": ["."]},
+                        ],
+                        "post": [post],
+                    }
+                ],
+            }
+        ]
+    )
+    out = apply_plugin_spec(["A", "Disease", ids], index_map, spec.plugin("probe"))
+    return out["conditions"][0]
+
+
+def test_curie_link_prefers_medgen():
+    row = _curie_link("MeSH:D030342%2CMedGen:C0950123")
+    assert row["id_url"] == "https://www.ncbi.nlm.nih.gov/medgen/C0950123"
+    assert row["id_curie"] == "MedGen:C0950123"
+
+
+def test_curie_link_falls_back_through_the_preference_order():
+    assert _curie_link("OMIM:617710%2CMONDO:MONDO:0060578")["id_url"] == (
+        "https://www.omim.org/entry/617710"
+    )
+    assert _curie_link("MONDO:MONDO:0060578")["id_url"] == (
+        # MONDO writes itself as `MONDO:MONDO:0060578` — the tag plus a
+        # self-prefixing CURIE. The bare accession is what the URL wants.
+        "https://purl.obolibrary.org/obo/MONDO_0060578"
+    )
+
+
+def test_curie_link_takes_an_unpreferred_source_rather_than_nothing():
+    assert _curie_link("MeSH:D030342")["id_url"] == (
+        "https://meshb.nlm.nih.gov/record/ui?ui=D030342"
+    )
+
+
+def test_curie_link_writes_null_when_there_is_no_usable_id():
+    # ClinVar writes '.' for a condition it has no ontology id for; the name
+    # then renders as plain text rather than a dead link.
+    row = _curie_link(".")
+    assert row["ids"] is None
+    assert row["id_url"] is None
+    assert row["id_curie"] is None
+
+
+def test_curie_link_ignores_a_source_it_has_no_template_for():
+    assert _curie_link("Nonesuch:12345")["id_url"] is None

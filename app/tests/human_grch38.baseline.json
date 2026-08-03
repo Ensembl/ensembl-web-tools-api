@@ -1308,9 +1308,32 @@
             ],
             "item_fields": [
               "name",
-              "ids"
+              "ids",
+              "id_url",
+              "id_curie"
             ],
-            "decode": true
+            "decode": true,
+            "post": [
+              {
+                "op": "curie_link",
+                "by": "ids",
+                "into": "id_url",
+                "label_into": "id_curie",
+                "prefer": [
+                  "MedGen",
+                  "OMIM",
+                  "MONDO"
+                ],
+                "templates": {
+                  "MedGen": "https://www.ncbi.nlm.nih.gov/medgen/{id}",
+                  "OMIM": "https://www.omim.org/entry/{id}",
+                  "MONDO": "https://purl.obolibrary.org/obo/MONDO_{id}",
+                  "MeSH": "https://meshb.nlm.nih.gov/record/ui?ui={id}",
+                  "Orphanet": "https://www.orpha.net/en/disease/detail/{id}",
+                  "Human_Phenotype_Ontology": "https://hpo.jax.org/browse/term/HP:{id}"
+                }
+              }
+            ]
           },
           {
             "field": "submissions",

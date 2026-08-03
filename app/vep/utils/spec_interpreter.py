@@ -137,6 +137,39 @@ def _lookup_key(value) -> str | None:
     return str(int(tail)) if tail.isdigit() else tail
 
 
+def _resolve_curie(value, prefer, templates, sep):
+    """One URL from a CURIE list, choosing which authority to trust.
+
+    A source that names a thing in several ontologies at once has no single id.
+    `prefer` is the order to try; anything with a known template is taken as a
+    last resort, so a list of only unpreferred sources still links. Returns
+    (url, curie), both None when nothing is usable.
+    """
+    if not value:
+        return None, None
+    # Decode first, unlike every structural split: post-ops run before the
+    # target's decode step, and by this point the only separators left are the
+    # source's own. ClinVar escapes the comma between CURIEs, so splitting the
+    # raw value would find one CURIE where there are several.
+    curies = [part.strip() for part in unquote(str(value)).split(sep) if part.strip()]
+    by_prefix: dict[str, str] = {}
+    for curie in curies:
+        prefix, _, accession = curie.partition(":")
+        # MONDO writes itself as `MONDO:MONDO:0060578` — the tag plus a
+        # self-prefixing CURIE — so an accession keeping its own prefix is
+        # normal, not a duplication bug.
+        if accession and prefix not in by_prefix:
+            by_prefix[prefix] = accession
+    order = list(prefer or []) + [p for p in by_prefix if p not in (prefer or [])]
+    for prefix in order:
+        accession = by_prefix.get(prefix)
+        template = (templates or {}).get(prefix)
+        if accession and template:
+            bare = accession.split(":")[-1]
+            return template.replace("{id}", bare), f"{prefix}:{accession}"
+    return None, None
+
+
 def _apply_post(rows: list[dict], post) -> list[dict]:
     """Whole-list operations, in the order the spec lists them."""
     for operation in post or []:
@@ -157,6 +190,16 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                     if any(part is None or part == "" for part in parts)
                     else operation.sep.join(str(part) for part in parts)
                 )
+            continue
+        if operation.op == "curie_link":
+            for row in rows:
+                url, label = _resolve_curie(
+                    row.get(operation.by), operation.prefer, operation.templates,
+                    operation.curie_sep,
+                )
+                row[operation.into] = url
+                if operation.label_into:
+                    row[operation.label_into] = label
             continue
         if operation.op == "dedup":
             seen = set()

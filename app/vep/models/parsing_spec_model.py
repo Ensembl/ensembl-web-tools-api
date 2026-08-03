@@ -464,6 +464,12 @@ class JoinSpec(BaseModel):
     right_key_sep: str | None = None
     # ClinVar's submitters write the same condition in different cases.
     case_insensitive: bool = False
+    # Consider only right-hand rows holding this value: the count of what a
+    # source itself says counts, rather than a count we infer. ClinVar flags
+    # which submissions produced the aggregate classification, and no rule we
+    # could write over the terms would agree with it — an expert-panel review
+    # makes one submission the aggregate and the other 43 not.
+    where: ItemCondition | None = None
     # Further equalities a match must satisfy, as {left field: right field}.
     #
     # A single key is not always enough to identify a row: ClinVar lists the

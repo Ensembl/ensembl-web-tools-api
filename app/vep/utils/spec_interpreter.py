@@ -535,6 +535,10 @@ def _apply_joins(built: dict, joins) -> None:
             continue
         buckets: dict[str, list] = {}
         for row in right:
+            if join.where is not None and str(
+                row.get(join.where.field)
+            ) != join.where.equals:
+                continue
             raw_key = row.get(join.right_key)
             parts = (
                 str(raw_key).split(join.right_key_sep)

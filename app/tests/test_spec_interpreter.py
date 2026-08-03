@@ -1840,6 +1840,24 @@ def test_join_count_into_writes_the_number_of_matches():
     assert [c["n"] for c in result["conditions"]] == [3, 0]
 
 
+def test_join_where_counts_only_the_rows_a_source_vouches_for():
+    """Counting the terms that match the aggregate verbatim breaks on the ones a
+    source derives -- nobody submits "Pathogenic/Likely pathogenic", so the count
+    came out zero. ClinVar flags which submissions produced the aggregate, and
+    `where` counts those."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "where": {"field": "verdict", "equals": "1"},
+          "count_into": "counted"},
+         {"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "count_into": "total"}],
+        names="Disease_one",
+        recs="R1~1~Disease_one&R2~0~Disease_one&R3~1~Disease_one",
+    )
+    assert result["conditions"][0]["counted"] == 2
+    assert result["conditions"][0]["total"] == 3
+
+
 def test_a_join_must_write_exactly_one_thing():
     from pydantic import ValidationError
 

@@ -1695,10 +1695,11 @@
             "from": "submissions",
             "left_key": "type",
             "right_key": "classification_type",
-            "also_match": {
-              "classification": "classification"
-            },
-            "count_into": "supporting"
+            "count_into": "supporting",
+            "where": {
+              "field": "contributes",
+              "equals": "1"
+            }
           }
         ]
       },

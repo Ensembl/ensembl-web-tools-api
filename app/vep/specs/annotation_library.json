@@ -2316,26 +2316,6 @@
               },
               {
                 "kind": "table",
-                "when": {
-                  "present": "clinvar.conflicting_breakdown"
-                },
-                "from": "clinvar.conflicting_breakdown",
-                "indent": true,
-                "columns": [
-                  {
-                    "label": "Classification",
-                    "from": "significance",
-                    "format": "humanize"
-                  },
-                  {
-                    "label": "Submitters reporting",
-                    "from": "count",
-                    "format": "num"
-                  }
-                ]
-              },
-              {
-                "kind": "table",
                 "heading": "Conditions",
                 "when": {
                   "present": "clinvar.conditions"

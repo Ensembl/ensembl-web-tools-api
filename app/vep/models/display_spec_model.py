@@ -281,6 +281,10 @@ class CellSpec(BaseModel):
     # ClinVar reads the same review-status wording differently for a germline
     # classification and a somatic one, so which scale applies is data.
     stars_from: str | None = None
+    # Which field the rating is *of*, when it is not this cell's own value: the
+    # stars lead the classification but rate the review status behind it, so
+    # they read as the confidence in the term they precede.
+    stars_of: str | None = None
     # Render the cell as "(value of <this field>)" — a count against its total,
     # like "39 of 44" submissions. Nothing is shown when the cell's own value is
     # zero: no submitter asserting the aggregate verbatim is a fact about
@@ -296,6 +300,8 @@ class CellSpec(BaseModel):
             yield self.source
         if self.stars_from:
             yield self.stars_from
+        if self.stars_of:
+            yield self.stars_of
         if self.of_from:
             yield self.of_from
         if self.link:
@@ -572,10 +578,25 @@ class ColumnItems(BaseModel):
     count_from: str | None = None
     link: LinkSpec | None = None
     link_from: str | None = None
+    # One value packing several, each rendered (and linked) in its own right —
+    # as on a column. A ClinVar submission cites its publications as one
+    # '+'-joined list of PMIDs, and each is its own paper.
+    split: str | None = None
     expand: "ColumnExpand | None" = None
     # A star rating in front of the value, using the named scale (see
     # RatingScale) — as on a row.
     stars: str | None = None
+
+    @model_validator(mode="after")
+    def _split_needs_a_link(self) -> "ColumnItems":
+        # Splitting a value only changes what the reader sees if each part
+        # becomes its own link; without one the parts would run together
+        # exactly as the unsplit string does.
+        if self.split and self.link is None:
+            raise ValueError(
+                f"`split` only applies to a linked item; {self.source!r} has no link"
+            )
+        return self
 
 
 class ColumnExpand(BaseModel):

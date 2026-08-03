@@ -3475,7 +3475,8 @@
                         {
                           "from": "classification",
                           "format": "humanize_terms",
-                          "stars_from": "rating_scale"
+                          "stars_from": "rating_scale",
+                          "stars_of": "review_status"
                         },
                         {
                           "from": "review_status",
@@ -3516,7 +3517,7 @@
                     "link_from": "id_url"
                   },
                   {
-                    "label": "Classification (expand for - submitter, last evaluation date, review status)",
+                    "label": "Classification (expand for - submitter, last evaluation date, review status and associated publications)",
                     "from": "classifications",
                     "items": {
                       "from": "classification",
@@ -3536,6 +3537,14 @@
                             "from": "review_status",
                             "format": "humanize",
                             "stars": "clinvar_submission"
+                          },
+                          {
+                            "from": "pmid",
+                            "split": "+",
+                            "link": {
+                              "kind": "external",
+                              "template": "http://europepmc.org/abstract/MED/{value}"
+                            }
                           }
                         ]
                       }
@@ -3580,7 +3589,7 @@
                     "link_from": "id_url"
                   },
                   {
-                    "label": "Classification (expand for - submitter, last evaluation date, review status)",
+                    "label": "Classification (expand for - submitter, last evaluation date, review status and associated publications)",
                     "from": "classifications",
                     "items": {
                       "from": "classification",
@@ -3600,6 +3609,14 @@
                             "from": "review_status",
                             "format": "humanize",
                             "stars": "clinvar_submission"
+                          },
+                          {
+                            "from": "pmid",
+                            "split": "+",
+                            "link": {
+                              "kind": "external",
+                              "template": "http://europepmc.org/abstract/MED/{value}"
+                            }
                           }
                         ]
                       }

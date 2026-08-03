@@ -2330,7 +2330,7 @@
                     }
                   },
                   {
-                    "label": "Clinical significance",
+                    "label": "Classification",
                     "from": "clinvar.significance",
                     "format": "humanize_join"
                   },
@@ -2349,7 +2349,6 @@
               },
               {
                 "kind": "table",
-                "heading": "Conditions",
                 "when": {
                   "present": "clinvar.conditions"
                 },

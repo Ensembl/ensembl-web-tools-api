@@ -582,6 +582,12 @@ class ColumnItems(BaseModel):
     # as on a column. A ClinVar submission cites its publications as one
     # '+'-joined list of PMIDs, and each is its own paper.
     split: str | None = None
+    # Keep this item on one line. For a value that is an identifier: a link's
+    # icon and its id are one thing, and letting the line break between them
+    # leaves the icon stranded on the row above. Opt-in per item rather than a
+    # blanket rule for links, because the same table links a condition *name* —
+    # prose, which must be free to wrap.
+    nowrap: bool = False
     expand: "ColumnExpand | None" = None
     # A star rating in front of the value, using the named scale (see
     # RatingScale) — as on a row.

@@ -3557,7 +3557,8 @@
                             "link": {
                               "kind": "external",
                               "template": "http://europepmc.org/abstract/MED/{value}"
-                            }
+                            },
+                            "nowrap": true
                           }
                         ],
                         "emphasis": {
@@ -3575,7 +3576,8 @@
                       "link": {
                         "kind": "external",
                         "template": "https://www.ncbi.nlm.nih.gov/clinvar/{value}/"
-                      }
+                      },
+                      "nowrap": true
                     }
                   }
                 ],
@@ -3633,7 +3635,8 @@
                             "link": {
                               "kind": "external",
                               "template": "http://europepmc.org/abstract/MED/{value}"
-                            }
+                            },
+                            "nowrap": true
                           }
                         ],
                         "emphasis": {
@@ -3651,7 +3654,8 @@
                       "link": {
                         "kind": "external",
                         "template": "https://www.ncbi.nlm.nih.gov/clinvar/{value}/"
-                      }
+                      },
+                      "nowrap": true
                     }
                   }
                 ],

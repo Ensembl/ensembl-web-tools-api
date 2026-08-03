@@ -638,6 +638,11 @@ def apply_plugin_spec(
     # Every target reads one column, so a source spreading one logical table
     # across several columns is only whole after they are stitched together.
     _apply_joins(output, spec.joins)
+    # Ordering by what a join added has to wait for the joins (see JoinedPostOp).
+    for operation in spec.post_joins or []:
+        rows = output.get(operation.target)
+        if isinstance(rows, list):
+            output[operation.target] = _apply_post(rows, [operation])
 
     if spec.require_any_output and not any(
         _is_present(output.get(field)) for field in spec.require_any_output

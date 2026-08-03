@@ -543,6 +543,19 @@ class RowScope(BaseModel):
     item_pattern: str | None = None
 
 
+class JoinedPostOp(PostOp):
+    """A post-op over a target, applied *after* the joins have run.
+
+    A target's own `post` cannot see what a join added, because the joins stitch
+    the targets together afterwards. Ordering a list by a joined-in value needs
+    this later pass: whether a ClinVar condition has a submission behind the
+    aggregate classification is only known once the submissions have been
+    matched to it.
+    """
+
+    target: str
+
+
 class PluginSpec(BaseModel):
     """How to parse one plugin's contribution to a CSQ entry.
 
@@ -571,6 +584,8 @@ class PluginSpec(BaseModel):
     targets: list[TargetSpec]
     # Applied after every target is built (see JoinSpec).
     joins: list[JoinSpec] | None = None
+    # Applied to a named target after the joins (see JoinedPostOp).
+    post_joins: list[JoinedPostOp] | None = None
 
 
 class ParsingSpec(BaseModel):

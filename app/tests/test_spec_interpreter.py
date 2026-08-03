@@ -1935,3 +1935,51 @@ def test_nothing_to_narrow_by_keeps_the_annotation():
 def test_an_escaped_separator_is_not_read_as_one():
     """Split before decoding: a name carrying an encoded '&' is one name."""
     assert _scoped(_GENE_SCOPE, "A&B", "A%26B:1") is not None
+
+
+def test_post_joins_can_order_by_what_a_join_added():
+    """A target's own `post` runs before the joins, so ordering by a joined-in
+    value needs the later pass: whether a condition has a submission behind the
+    aggregate is only known once the submissions have been matched to it."""
+    index_map = index_map_for("Allele", "Names", "Recs")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Names", "Recs"],
+                "targets": [
+                    {"field": "conditions", "from": "Names", "transform": "records",
+                     "sep": "+", "item_sep": "~",
+                     "as": [{"field": "name", "type": "string"}]},
+                    {"field": "records", "from": "Recs", "transform": "records",
+                     "sep": "&", "item_sep": "~",
+                     "as": [{"field": "acc", "type": "string"},
+                            {"field": "verdict", "type": "string"},
+                            {"field": "condition", "type": "string"}]},
+                ],
+                "joins": [
+                    {"into": "conditions", "from": "records", "left_key": "name",
+                     "right_key": "condition",
+                     "where": {"field": "verdict", "equals": "1"},
+                     "count_into": "counted"}
+                ],
+                "post_joins": [
+                    {"target": "conditions", "op": "sort", "by": "counted",
+                     "desc": True, "nulls": "last"}
+                ],
+            }
+        ]
+    )
+    result = apply_plugin_spec(
+        ["A", "Quiet_one+Loud_one+Other_quiet", "R1~1~Loud_one&R2~0~Quiet_one"],
+        index_map,
+        spec.plugin("probe"),
+    )
+    # The one with a counted record leads; the rest keep their source order.
+    assert [c["name"] for c in result["conditions"]] == [
+        "Loud_one",
+        "Quiet_one",
+        "Other_quiet",
+    ]

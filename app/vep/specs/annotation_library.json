@@ -646,6 +646,31 @@
               "field": "contributes",
               "equals": "1"
             }
+          },
+          {
+            "into": "conditions",
+            "from": "submissions",
+            "left_key": "name",
+            "right_key": "condition",
+            "right_key_sep": "+",
+            "case_insensitive": true,
+            "also_match": {
+              "type": "classification_type"
+            },
+            "where": {
+              "field": "contributes",
+              "equals": "1"
+            },
+            "count_into": "contributing"
+          }
+        ],
+        "post_joins": [
+          {
+            "target": "conditions",
+            "op": "sort",
+            "by": "contributing",
+            "desc": true,
+            "nulls": "last"
           }
         ]
       },
@@ -2574,16 +2599,6 @@
                 },
                 "columns": [
                   {
-                    "label": "Condition",
-                    "from": "name",
-                    "format": "phenotype",
-                    "link": {
-                      "kind": "external",
-                      "template": "{value}"
-                    },
-                    "link_from": "id_url"
-                  },
-                  {
                     "label": "Classification (expand for - submitter, last evaluation date, review status and associated publications)",
                     "from": "classifications",
                     "items": {
@@ -2621,6 +2636,16 @@
                         }
                       }
                     }
+                  },
+                  {
+                    "label": "Condition",
+                    "from": "name",
+                    "format": "phenotype",
+                    "link": {
+                      "kind": "external",
+                      "template": "{value}"
+                    },
+                    "link_from": "id_url"
                   },
                   {
                     "label": "ClinVar record",
@@ -2652,16 +2677,6 @@
                 },
                 "columns": [
                   {
-                    "label": "Condition",
-                    "from": "name",
-                    "format": "phenotype",
-                    "link": {
-                      "kind": "external",
-                      "template": "{value}"
-                    },
-                    "link_from": "id_url"
-                  },
-                  {
                     "label": "Classification (expand for - submitter, last evaluation date, review status and associated publications)",
                     "from": "classifications",
                     "items": {
@@ -2699,6 +2714,16 @@
                         }
                       }
                     }
+                  },
+                  {
+                    "label": "Condition",
+                    "from": "name",
+                    "format": "phenotype",
+                    "link": {
+                      "kind": "external",
+                      "template": "{value}"
+                    },
+                    "link_from": "id_url"
                   },
                   {
                     "label": "ClinVar record",

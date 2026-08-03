@@ -2058,3 +2058,17 @@ def test_a_join_splits_before_the_value_is_decoded():
     condition = result["conditions"][0]
     assert condition["name"] == "Foo+Bar"
     assert [r["acc"] for r in condition["records"]] == ["R1"]
+
+
+def test_decoding_visits_a_shared_row_once():
+    """A join attaches the *same* row objects in two places, so decoding the
+    output as one tree walked each of them once per path — twice the work, and
+    it broke the sharing so the response carried two copies of every row."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "records"}],
+        names="Disease_one",
+        recs="R1~Pathogenic~Disease_one",
+    )
+    nested = result["conditions"][0]["records"][0]
+    assert any(record is nested for record in result["records"])

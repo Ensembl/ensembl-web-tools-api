@@ -493,19 +493,34 @@ def _build_target(csq_values, index_map, target: TargetSpec):
     raise ValueError(f"unknown transform: {target.transform}")
 
 
-def _decode_leaves(value):
+def _decode_leaves(value, memo: dict | None = None):
     """Percent-decode every string leaf of a produced value.
 
     `unquote`, never `unquote_plus`: '+' is a structural separator in the
     enriched ClinVar VCF, not an encoded space.
+
+    `memo` keys decoded containers by identity, because a join attaches the
+    *same* row objects to more than one place: a submission is reachable both
+    as `submissions[i]` and as `conditions[j].classifications[k].submitters[l]`.
+    Decoding the output as one tree therefore walked each of those records once
+    per path — measured at twice the decode work on ClinVar, and it also broke
+    the sharing, so the response carried two copies of every submission. With
+    the memo each container is decoded once and stays shared.
     """
     if isinstance(value, str):
         return unquote(value)
+    if not isinstance(value, (list, dict)):
+        return value
+    memo = {} if memo is None else memo
+    seen = memo.get(id(value))
+    if seen is not None:
+        return seen
     if isinstance(value, list):
-        return [_decode_leaves(v) for v in value]
-    if isinstance(value, dict):
-        return {k: _decode_leaves(v) for k, v in value.items()}
-    return value
+        decoded = [_decode_leaves(v, memo) for v in value]
+    else:
+        decoded = {k: _decode_leaves(v, memo) for k, v in value.items()}
+    memo[id(value)] = decoded
+    return decoded
 
 
 def _apply_target(csq_values, index_map, target: TargetSpec):
@@ -665,9 +680,10 @@ def apply_plugin_spec(
 
     # Every split has now run — the targets' own and the joins' — so an encoded
     # separator can no longer be mistaken for one (see `_apply_target`).
+    decoded: dict = {}
     for target in spec.targets:
         if target.decode:
-            output[target.field] = _decode_leaves(output[target.field])
+            output[target.field] = _decode_leaves(output[target.field], decoded)
 
     if spec.require_any_output and not any(
         _is_present(output.get(field)) for field in spec.require_any_output

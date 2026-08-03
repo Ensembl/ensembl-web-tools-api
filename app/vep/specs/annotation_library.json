@@ -2099,25 +2099,81 @@
                         "format": "humanize"
                       }
                     ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "group",
+            "heading": "ClinVar",
+            "when": {
+              "present": "clinvar.significance"
+            },
+            "blocks": [
+              {
+                "kind": "rows",
+                "rows": [
+                  {
+                    "label": "ClinVar variant ID",
+                    "from": "clinvar.id",
+                    "link": {
+                      "kind": "external",
+                      "template": "https://www.ncbi.nlm.nih.gov/clinvar/variation/{value}/"
+                    }
                   },
                   {
-                    "kind": "table",
-                    "from": "phenotype_data.clinvar_phenotypes",
-                    "truncate": {
-                      "visible_count": 3
-                    },
-                    "columns": [
-                      {
-                        "label": "Phenotype (ClinVar)",
-                        "from": "phenotype",
-                        "format": "phenotype"
-                      },
-                      {
-                        "label": "Classification",
-                        "from": "clinvar_clin_sig",
-                        "format": "humanize"
-                      }
-                    ]
+                    "label": "Clinical significance",
+                    "from": "clinvar.significance",
+                    "format": "humanize_join"
+                  },
+                  {
+                    "label": "Review status",
+                    "from": "clinvar.review_status",
+                    "format": "humanize"
+                  }
+                ]
+              },
+              {
+                "kind": "table",
+                "when": {
+                  "present": "clinvar.conflicting_breakdown"
+                },
+                "from": "clinvar.conflicting_breakdown",
+                "indent": true,
+                "columns": [
+                  {
+                    "label": "Classification",
+                    "from": "significance",
+                    "format": "humanize"
+                  },
+                  {
+                    "label": "Submitters reporting",
+                    "from": "count",
+                    "format": "num"
+                  }
+                ]
+              },
+              {
+                "kind": "table",
+                "heading": "Conditions",
+                "when": {
+                  "present": "clinvar.conditions"
+                },
+                "from": "clinvar.conditions",
+                "truncate": {
+                  "visible_count": 3
+                },
+                "columns": [
+                  {
+                    "label": "Condition",
+                    "from": "name",
+                    "format": "phenotype"
+                  },
+                  {
+                    "label": "Ontology ids",
+                    "from": "ids",
+                    "format": "text"
                   }
                 ]
               }
@@ -2382,58 +2438,6 @@
       {
         "option_id": "clinvar",
         "blocks": [
-          {
-            "kind": "group",
-            "requires_selected": {
-              "id": "clinvar_short",
-              "default": true
-            },
-            "blocks": [
-              {
-                "kind": "rows",
-                "rows": [
-                  {
-                    "label": "ClinVar variant ID",
-                    "from": "clinvar.id",
-                    "link": {
-                      "kind": "external",
-                      "template": "https://www.ncbi.nlm.nih.gov/clinvar/variation/{value}/"
-                    }
-                  }
-                ]
-              },
-              {
-                "kind": "rows",
-                "rows": [
-                  {
-                    "label": "Clinical significance",
-                    "from": "clinvar.significance",
-                    "format": "humanize_join"
-                  }
-                ]
-              },
-              {
-                "kind": "table",
-                "when": {
-                  "present": "clinvar.conflicting_breakdown"
-                },
-                "from": "clinvar.conflicting_breakdown",
-                "indent": true,
-                "columns": [
-                  {
-                    "label": "Classification",
-                    "from": "significance",
-                    "format": "humanize"
-                  },
-                  {
-                    "label": "Submitters reporting",
-                    "from": "count",
-                    "format": "num"
-                  }
-                ]
-              }
-            ]
-          },
           {
             "kind": "group",
             "heading": "Structural variant",

@@ -1207,3 +1207,105 @@ def test_phenotype_rows_identical_in_every_field_are_collapsed():
     rows = parsed["phenotypes"]
     assert len(rows) == 2, rows
     assert {r["source"] for r in rows} == {"NHGRI-EBI_GWAS_catalog", "OtherSource"}
+
+
+def test_target_sep_splits_on_a_delimiter_vep_leaves_alone():
+    """VEP rewrites both ',' and '|' to '&' in everything it emits, so a source
+    that needs structure *below* the entry level has to carry a delimiter VEP
+    does not touch. The enriched ClinVar VCF uses '+' between repeats; `sep`
+    is what lets a target read it."""
+    index_map = index_map_for("Allele", "Thing")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Thing"],
+                "require_any_output": ["items"],
+                "targets": [
+                    {
+                        "field": "items",
+                        "from": "Thing",
+                        "transform": "list",
+                        "sep": "+",
+                    }
+                ],
+            }
+        ]
+    )
+    plugin = spec.plugin("probe")
+    assert apply_plugin_spec(["A", "one+two+three"], index_map, plugin) == {
+        "items": ["one", "two", "three"]
+    }
+    # '&' is now just a character in the value, not a separator.
+    assert apply_plugin_spec(["A", "a&b+c"], index_map, plugin) == {
+        "items": ["a&b", "c"]
+    }
+
+
+def test_target_sep_defaults_to_amp():
+    index_map = index_map_for("Allele", "Thing")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Thing"],
+                "require_any_output": ["items"],
+                "targets": [
+                    {"field": "items", "from": "Thing", "transform": "list"}
+                ],
+            }
+        ]
+    )
+    assert apply_plugin_spec(["A", "one&two"], index_map, spec.plugin("probe")) == {
+        "items": ["one", "two"]
+    }
+
+
+def test_field_null_values_blank_a_placeholder_token():
+    """ClinVar writes '.' where a condition has no ontology ids. It must read as
+    absent, but only where it is declared: '.' is a real value in other fields,
+    so this is per-field rather than global."""
+    index_map = index_map_for("Allele", "Names", "Ids")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Names", "Ids"],
+                "require_any_output": ["conditions"],
+                "targets": [
+                    {
+                        "field": "conditions",
+                        "from": ["Names", "Ids"],
+                        "transform": "zip",
+                        "sep": "+",
+                        "align": "max",
+                        "as": [
+                            {"field": "name", "type": "string"},
+                            {
+                                "field": "ids",
+                                "type": "string",
+                                "null_values": ["."],
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    )
+    result = apply_plugin_spec(
+        ["A", "Disease_one+Disease_two", "MeSH:D1,MedGen:C1+."],
+        index_map,
+        spec.plugin("probe"),
+    )
+    assert result == {
+        "conditions": [
+            {"name": "Disease_one", "ids": "MeSH:D1,MedGen:C1"},
+            {"name": "Disease_two", "ids": None},
+        ]
+    }

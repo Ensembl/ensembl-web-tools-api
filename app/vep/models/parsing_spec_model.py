@@ -45,6 +45,11 @@ class FieldSpec(BaseModel):
     # that is a general need rather than a GO quirk.
     replace: dict[str, str] | None = None
     strip: bool = False
+    # Extra tokens meaning "no value" for this field, on top of '' and 'NA'.
+    # ClinVar writes '.' where a condition has no ontology ids, and a VCF-derived
+    # source generally uses '.' for an absent value — but '.' is a real value
+    # elsewhere, so this is declared per field rather than made global.
+    null_values: list[str] | None = None
 
 
 class ItemCondition(BaseModel):
@@ -238,6 +243,13 @@ class TargetSpec(BaseModel):
     # `zip` / `regex`: the output fields. For zip they match `from` positionally;
     # for regex each `field` names the regex group to read.
     as_fields: list[FieldSpec] | None = Field(default=None, alias="as")
+    # The separator between items, for the transforms that split a column
+    # (`list`, `first`, `zip`, `chunk`, `positional`, and `regex` with `each`).
+    # '&' is what VEP writes — it rewrites both ',' and '|' to '&' — so a source
+    # carrying structure below that level must use a delimiter VEP leaves alone:
+    # the enriched ClinVar VCF uses '~' between subfields and '+' between
+    # repeats. Defaults to '&', so every existing target is unaffected.
+    sep: str = "&"
     # `zip` only: whether to iterate to the longest or shortest input column.
     # The existing parsers disagree — MaveDB pads to the longest, OpenTargets
     # truncates to the shortest — so it has to be explicit.

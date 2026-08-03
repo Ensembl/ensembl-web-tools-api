@@ -47,6 +47,8 @@ def _coerce(raw: str | None, value_type: str, field_spec=None):
     """A raw CSQ value as `value_type`, or None if absent/'NA'/unparseable."""
     if raw is None or raw in _NULLISH:
         return None
+    if field_spec is not None and raw in (field_spec.null_values or ()):
+        return None
     if value_type == "float":
         return to_float(raw)
     if value_type == "int":
@@ -196,7 +198,10 @@ def _apply_zip(csq_values, index_map, target: TargetSpec) -> list[dict]:
     Uses the position-preserving split: an 'NA' still occupies a slot, which is
     what keeps the columns aligned with each other.
     """
-    columns = [raw_amp(_column(csq_values, name, index_map)) for name in target.source]
+    columns = [
+        raw_amp(_column(csq_values, name, index_map), target.sep)
+        for name in target.source
+    ]
     lengths = [len(column) for column in columns]
     length = (max(lengths) if target.align == "max" else min(lengths)) if lengths else 0
 
@@ -218,7 +223,7 @@ def _apply_regex(csq_values, index_map, target: TargetSpec):
     """Named regex groups -> object(s). Non-matching items are skipped."""
     raw = _column(csq_values, target.source, index_map)
     compiled = re.compile(target.pattern)
-    items = split_amp(raw) if target.each else ([raw] if raw else [])
+    items = split_amp(raw, target.sep) if target.each else ([raw] if raw else [])
 
     rows = []
     for item in items:
@@ -293,12 +298,14 @@ def _build_object(tokens: list[str], field_specs, source_text: str) -> dict:
 def _apply_chunk(csq_values, index_map, target: TargetSpec) -> list[dict]:
     """Fixed-size groups of '&'-items -> a list of objects."""
     raw = _column(csq_values, target.source, index_map)
-    tokens = raw.split("&") if raw else []
+    tokens = raw.split(target.sep) if raw else []
 
     rows = []
     for start in range(0, len(tokens), target.size):
         group = tokens[start : start + target.size]
-        row = _build_object(group, target.as_fields, "&".join(t for t in group if t))
+        row = _build_object(
+            group, target.as_fields, target.sep.join(t for t in group if t)
+        )
         if _should_drop(row, target.drop_when, csq_values, index_map):
             continue
         rows.append(row)
@@ -310,7 +317,7 @@ def _apply_positional(csq_values, index_map, target: TargetSpec):
     raw = _column(csq_values, target.source, index_map)
     if not raw:
         return [] if target.wrap == "list" else None
-    built = _build_object(raw.split("&"), target.as_fields, raw)
+    built = _build_object(raw.split(target.sep), target.as_fields, raw)
     return [built] if target.wrap == "list" else built
 
 
@@ -373,9 +380,9 @@ def _apply_target(csq_values, index_map, target: TargetSpec):
     if target.transform == "scalar":
         return _coerce(raw, target.type)
     if target.transform == "list":
-        return split_amp(raw)
+        return split_amp(raw, target.sep)
     if target.transform == "first":
-        return _coerce(first_amp(raw), target.type)
+        return _coerce(first_amp(raw, target.sep), target.type)
     raise ValueError(f"unknown transform: {target.transform}")
 
 

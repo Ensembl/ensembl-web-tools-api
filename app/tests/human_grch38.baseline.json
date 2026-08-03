@@ -1570,7 +1570,7 @@
               },
               {
                 "field": "contributes",
-                "type": "string"
+                "type": "int"
               }
             ],
             "item_fields": [
@@ -1590,6 +1590,14 @@
               "condition_id",
               "pmid",
               "contributes"
+            ],
+            "post": [
+              {
+                "op": "sort",
+                "by": "contributes",
+                "desc": true,
+                "nulls": "last"
+              }
             ]
           },
           {

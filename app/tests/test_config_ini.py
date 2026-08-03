@@ -920,7 +920,7 @@ def test_clinvar_line_is_assembly_specific(
     assert line == (
         f"custom file={PLUGIN_PATH}/{expected_file},"
         "short_name=ClinVar,"
-        "fields=CLNSIG%CLNSIGCONF%CLNDN%CLNDISDB%CLNREVSTAT,"
+        "fields=CLNSIG%CLNSIGCONF%CLNDN%CLNDISDB%CLNREVSTAT%CLNSUBA%CLNRCV,"
         "format=vcf,type=exact"
     )
 

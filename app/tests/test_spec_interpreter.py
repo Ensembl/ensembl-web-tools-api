@@ -230,6 +230,8 @@ def test_clinvar_non_conflicting_ignores_breakdown():
         "conflicting_breakdown": [],
         "review_status": None,
         "conditions": [],
+        "submissions": [],
+        "records": [],
     }
 
 
@@ -247,6 +249,8 @@ def test_clinvar_when_matches_list_membership_not_substring():
         "conflicting_breakdown": [],
         "review_status": None,
         "conditions": [],
+        "submissions": [],
+        "records": [],
     }
 
 

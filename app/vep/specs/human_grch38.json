@@ -860,7 +860,9 @@
               "CLNSIGCONF",
               "CLNDN",
               "CLNDISDB",
-              "CLNREVSTAT"
+              "CLNREVSTAT",
+              "CLNSUBA",
+              "CLNRCV"
             ]
           }
         }

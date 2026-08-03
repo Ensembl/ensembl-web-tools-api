@@ -322,6 +322,23 @@ def _apply_positional(csq_values, index_map, target: TargetSpec):
     return [built] if target.wrap == "list" else built
 
 
+def _apply_records(csq_values, index_map, target: TargetSpec) -> list[dict]:
+    """Two levels of separator: records, then each record's fields by index.
+
+    A source that packs whole sub-records into one column needs both — ClinVar
+    writes 15 fields per submitter and 5 per RCV, with '~' inside a record and
+    ',' (which VEP rewrites to '&') between them.
+    """
+    raw = _column(csq_values, target.source, index_map)
+    rows: list[dict] = []
+    for record in split_amp(raw, target.sep):
+        row = _build_object(record.split(target.item_sep), target.as_fields, record)
+        if _should_drop(row, target.drop_when, csq_values, index_map):
+            continue
+        rows.append(row)
+    return _apply_post(rows, target.post)
+
+
 def _apply_key_value(csq_values, index_map, target: TargetSpec) -> dict:
     """A ':'-delimited 'k=v' string -> {k: v}.
 
@@ -376,6 +393,8 @@ def _build_target(csq_values, index_map, target: TargetSpec):
         return _apply_positional(csq_values, index_map, target)
     if target.transform == "key_value":
         return _apply_key_value(csq_values, index_map, target)
+    if target.transform == "records":
+        return _apply_records(csq_values, index_map, target)
 
     raw = _column(csq_values, target.source, index_map)
     if target.transform == "scalar":

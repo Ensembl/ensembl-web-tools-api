@@ -24,7 +24,7 @@ ValueType = Literal["string", "float", "int", "raw"]
 # derived by enumerating the existing `_parse_*` functions rather than invented.
 Transform = Literal[
     "scalar", "list", "first", "zip", "regex", "pattern_map", "chunk", "positional",
-    "key_value",
+    "key_value", "records",
 ]
 
 
@@ -223,6 +223,12 @@ class TargetSpec(BaseModel):
                    by index. Items beyond `as` are ignored; missing ones are
                    null. Use `wrap: "list"` where the output is a
                    single-element list.
+      records      one column -> list of objects, two levels of separator:
+                   `sep` between records, `item_sep` between a record's fields,
+                   which are then assigned to `as` by index (like `positional`,
+                   but repeating). This is the shape of a source that packs whole
+                   sub-records into one column — ClinVar's per-submitter (15
+                   fields) and per-RCV (5 fields) data.
       key_value    one column -> dict, splitting on `pair_delimiter` then
                    `kv_delimiter`. Order-independent by construction — for a
                    value whose pair order is not meaningful (or, as observed in
@@ -275,6 +281,8 @@ class TargetSpec(BaseModel):
     # `positional` only: emit the single object inside a list.
     wrap: Literal["list"] | None = None
     # `key_value` only.
+    # `records` only: the separator *within* one record, below `sep`.
+    item_sep: str = "~"
     pair_delimiter: str | None = None
     kv_delimiter: str | None = None
     # Build this target only when the condition holds; otherwise it comes out
@@ -327,6 +335,11 @@ class TargetSpec(BaseModel):
                 raise ValueError("key_value requires `from` to be a single column")
             if not self.pair_delimiter or not self.kv_delimiter:
                 raise ValueError("key_value requires `pair_delimiter` and `kv_delimiter`")
+        elif self.transform == "records":
+            if not isinstance(self.source, str):
+                raise ValueError("records requires `from` to be a single column")
+            if not self.as_fields:
+                raise ValueError("records requires `as` naming each record's fields")
         else:
             if not isinstance(self.source, str):
                 raise ValueError(f"{self.transform} requires `from` to be a single column")

@@ -195,7 +195,9 @@
           "ClinVar_CLNSIGCONF",
           "ClinVar_CLNDN",
           "ClinVar_CLNDISDB",
-          "ClinVar_CLNREVSTAT"
+          "ClinVar_CLNREVSTAT",
+          "ClinVar_CLNSUBA",
+          "ClinVar_CLNRCV"
         ],
         "require_any_input": [
           "ClinVar_CLNSIG"
@@ -274,6 +276,130 @@
               "ids"
             ],
             "decode": true
+          },
+          {
+            "field": "submissions",
+            "from": "ClinVar_CLNSUBA",
+            "transform": "records",
+            "sep": "&",
+            "item_sep": "~",
+            "decode": true,
+            "as": [
+              {
+                "field": "scv",
+                "type": "string"
+              },
+              {
+                "field": "submitter",
+                "type": "string"
+              },
+              {
+                "field": "org_id",
+                "type": "string"
+              },
+              {
+                "field": "org_category",
+                "type": "string"
+              },
+              {
+                "field": "date_last_evaluated",
+                "type": "string"
+              },
+              {
+                "field": "review_status",
+                "type": "string"
+              },
+              {
+                "field": "classification_type",
+                "type": "string"
+              },
+              {
+                "field": "classification",
+                "type": "string"
+              },
+              {
+                "field": "clinical_impact",
+                "type": "string"
+              },
+              {
+                "field": "method",
+                "type": "string"
+              },
+              {
+                "field": "origin",
+                "type": "string"
+              },
+              {
+                "field": "affected_status",
+                "type": "string"
+              },
+              {
+                "field": "condition",
+                "type": "string"
+              },
+              {
+                "field": "condition_id",
+                "type": "string"
+              },
+              {
+                "field": "pmid",
+                "type": "string"
+              }
+            ],
+            "item_fields": [
+              "scv",
+              "submitter",
+              "org_id",
+              "org_category",
+              "date_last_evaluated",
+              "review_status",
+              "classification_type",
+              "classification",
+              "clinical_impact",
+              "method",
+              "origin",
+              "affected_status",
+              "condition",
+              "condition_id",
+              "pmid"
+            ]
+          },
+          {
+            "field": "records",
+            "from": "ClinVar_CLNRCV",
+            "transform": "records",
+            "sep": "&",
+            "item_sep": "~",
+            "decode": true,
+            "as": [
+              {
+                "field": "rcv",
+                "type": "string"
+              },
+              {
+                "field": "classification_type",
+                "type": "string"
+              },
+              {
+                "field": "review_status",
+                "type": "string"
+              },
+              {
+                "field": "classification",
+                "type": "string"
+              },
+              {
+                "field": "condition",
+                "type": "string"
+              }
+            ],
+            "item_fields": [
+              "rcv",
+              "classification_type",
+              "review_status",
+              "classification",
+              "condition"
+            ]
           }
         ]
       },

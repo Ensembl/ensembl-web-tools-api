@@ -365,6 +365,8 @@ CLINVAR_SHORT_COLUMNS = {
     "ClinVar_CLNDN",
     "ClinVar_CLNDISDB",
     "ClinVar_CLNREVSTAT",
+    "ClinVar_CLNSUBA",
+    "ClinVar_CLNRCV",
 }
 
 CLINVAR_SV_COLUMNS = {"ClinVar_SV", "ClinVar_SV_CLNSIG", "ClinVar_SV_ORIGIN"}

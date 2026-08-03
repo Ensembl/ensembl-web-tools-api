@@ -2681,7 +2681,8 @@
                 "where": {
                   "field": "type",
                   "equals": "Germline"
-                }
+                },
+                "indent": true
               },
               {
                 "kind": "rows",
@@ -2805,7 +2806,8 @@
                 "where": {
                   "field": "type",
                   "not_equals": "Germline"
-                }
+                },
+                "indent": true
               }
             ]
           }

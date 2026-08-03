@@ -776,9 +776,12 @@ class DisplayTableBlock(_GatedBlock):
 
     kind: Literal["table"]
     requires: str | None = None
-    # Sit one indent step in, as if under a heading. For a table with no heading
-    # standing beside headed siblings: the ClinVar phenotype table names its
-    # source in a column rather than a heading, but still belongs at the depth of
+    # Sit one indent step in. Either for a table with no heading standing beside
+    # headed siblings, or for one whose heading names it without saying what it
+    # belongs to — ClinVar's Germline and Somatic tables are subordinate to the
+    # Classification above them. Originally only for the headless case: the
+    # ClinVar phenotype table names its source in a column rather than a heading,
+    # but still belongs at the depth of
     # the "Gene associated" / "Variant associated" tables it sits with, not a step
     # out from them.
     indent: bool = False

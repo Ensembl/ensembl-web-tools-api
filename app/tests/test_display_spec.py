@@ -1015,13 +1015,14 @@ def test_a_stacking_rows_item_fields_are_checked():
         MergedSpec.model_validate(_stacking_row({"from": "verdcit"}))
 
 
-def test_stars_from_and_of_from_are_item_refs_too():
-    """Both name a *field of the element*, so both are typo-checked."""
+def test_stars_from_and_template_fields_are_item_refs_too():
+    """Both name *fields of the element*, so both are typo-checked -- including
+    the `{field}` placeholders of a cell's template."""
     with pytest.raises(ValidationError, match="item field 'scale' not in"):
         MergedSpec.model_validate(
             _stacking_row({"from": "kind", "stars_from": "scale"})
         )
     with pytest.raises(ValidationError, match="item field 'total' not in"):
         MergedSpec.model_validate(
-            _stacking_row({"from": "kind", "of_from": "total"})
+            _stacking_row({"from": "kind", "template": "{kind} of {total}"})
         )

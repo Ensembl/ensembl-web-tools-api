@@ -2576,7 +2576,7 @@
                         },
                         {
                           "from": "supporting",
-                          "of_from": "submissions"
+                          "template": "{supporting}/{submissions} submission(s) contribute to aggregate classification"
                         }
                       ]
                     },
@@ -2584,6 +2584,10 @@
                     "help_link": {
                       "href": "https://www.ncbi.nlm.nih.gov/clinvar/docs/review_status/",
                       "label": "ClinVar review status"
+                    },
+                    "where": {
+                      "field": "type",
+                      "equals": "Germline"
                     }
                   }
                 ]
@@ -2599,7 +2603,7 @@
                 },
                 "columns": [
                   {
-                    "label": "Classification (expand for - submitter, last evaluation date, review status and associated publications)",
+                    "label": "Classification (Expand for: submitter, last evaluation date, review status and associated publications. Submissions not contributing to the aggregate classification shown in light text)",
                     "from": "classifications",
                     "items": {
                       "from": "classification",
@@ -2667,6 +2671,39 @@
                 }
               },
               {
+                "kind": "rows",
+                "rows": [
+                  {
+                    "from": "clinvar.classification_summary",
+                    "item": {
+                      "cells": [
+                        {
+                          "from": "type"
+                        },
+                        {
+                          "from": "classification",
+                          "format": "humanize_terms",
+                          "stars_from": "rating_scale",
+                          "stars_of": "review_status"
+                        },
+                        {
+                          "from": "review_status",
+                          "format": "humanize"
+                        },
+                        {
+                          "from": "supporting",
+                          "template": "{supporting}/{submissions} submission(s) contribute to aggregate classification"
+                        }
+                      ]
+                    },
+                    "where": {
+                      "field": "type",
+                      "not_equals": "Germline"
+                    }
+                  }
+                ]
+              },
+              {
                 "kind": "table",
                 "when": {
                   "present": "clinvar.conditions"
@@ -2677,7 +2714,7 @@
                 },
                 "columns": [
                   {
-                    "label": "Classification (expand for - submitter, last evaluation date, review status and associated publications)",
+                    "label": "Classification (Expand for: submitter, last evaluation date, review status and associated publications. Submissions not contributing to the aggregate classification shown in light text)",
                     "from": "classifications",
                     "items": {
                       "from": "classification",

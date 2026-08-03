@@ -196,7 +196,10 @@ class DisplayRow(BaseModel):
     # React list key. Optional: absent means "use the row's position", which is
     # stable for these fixed lists.
     key: str | None = None
-    label: str
+    # Optional only for a row that stacks a list: the somatic classifications
+    # sit directly above the table they describe, where a repeated
+    # "Classification" would say less than their position already does.
+    label: str | None = None
     # `from` is a Python keyword, hence the alias (as in TargetSpec).
     source: str | None = Field(default=None, alias="from")
     compose: ComposeSpec | None = None
@@ -228,6 +231,10 @@ class DisplayRow(BaseModel):
     # repeats, borrowed so a stacked value needs no vocabulary of its own —
     # ClinVar's classification is one line per classification type.
     item: "DisplayItemSpec | None" = None
+    # Keep only some of the stacked list, so one list can be shown in two
+    # places — ClinVar's germline classification belongs above the germline
+    # conditions, the somatic ones above theirs. Same filter a table takes.
+    where: "RowFilter | None" = None
 
     @model_validator(mode="after")
     def _exactly_one_source(self) -> "DisplayRow":
@@ -285,12 +292,11 @@ class CellSpec(BaseModel):
     # stars lead the classification but rate the review status behind it, so
     # they read as the confidence in the term they precede.
     stars_of: str | None = None
-    # Render the cell as "(value of <this field>)" — a count against its total,
-    # like "39 of 44" submissions. Nothing is shown when the cell's own value is
-    # zero: no submitter asserting the aggregate verbatim is a fact about
-    # wording (ClinVar derives terms like "Conflicting classifications of
-    # pathogenicity" that nobody submits), not a measure of support.
-    of_from: str | None = None
+    # The cell's text, as a `{field}` template over the element — for a value
+    # that only means something said in words ("1/44 submissions contribute to
+    # aggregate classification"). `from` still says which field must be there
+    # for the cell to render at all.
+    template: str | None = None
 
     def item_field_refs(self) -> Iterator[str]:
         """Every item field this cell reads: its `from` plus any `{field}`
@@ -302,8 +308,8 @@ class CellSpec(BaseModel):
             yield self.stars_from
         if self.stars_of:
             yield self.stars_of
-        if self.of_from:
-            yield self.of_from
+        if self.template:
+            yield from _TEMPLATE_FIELD.findall(self.template)
         if self.link:
             yield from self.link.template_fields()
 

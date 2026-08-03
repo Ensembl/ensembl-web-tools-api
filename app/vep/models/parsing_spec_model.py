@@ -389,7 +389,10 @@ class JoinSpec(BaseModel):
     `count_by` summarises the matches instead of attaching them: grouped by that
     field, in first-seen order, as `[{<count_by>, count}]`. That is the usual
     shape for "how many submitters said what", and keeps the counting out of the
-    display layer.
+    display layer. `nest_as` additionally keeps each group's own members under
+    it, so the summary and the rows behind it stay together — a count the reader
+    can open is a count plus its evidence, and pairing them here is what stops
+    the display having to re-derive which rows a count was made of.
     """
 
     # populate_by_name so a serialised spec round-trips: dumping writes the field
@@ -417,9 +420,20 @@ class JoinSpec(BaseModel):
     as_field: str = Field(alias="as")
     # Summarise rather than attach: group the matches by this field and count.
     count_by: str | None = None
+    # With `count_by`, the field each group carries its own members under.
+    nest_as: str | None = None
     # Declared, not derived — the display checks its column refs against this,
     # exactly as `item_fields` does for a target.
     item_fields: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _nesting_needs_something_to_nest_under(self) -> "JoinSpec":
+        if self.nest_as and not self.count_by:
+            raise ValueError(
+                "`nest_as` names the field a *group's* members hang off, so it "
+                f"needs `count_by` to group by; join into {self.into!r} has none"
+            )
+        return self
 
 
 class PluginSpec(BaseModel):

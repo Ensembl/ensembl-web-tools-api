@@ -1507,6 +1507,38 @@ def test_join_count_by_summarises_the_matches():
     ]
 
 
+def test_join_nest_as_keeps_each_group_beside_its_count():
+    """A count the reader can open needs the rows it was made of, grouped the
+    same way -- otherwise opening "Pathogenic (2)" shows every submitter of
+    every classification."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "classifications",
+          "count_by": "verdict", "nest_as": "members"}],
+        names="Disease_one",
+        recs=("R1~Pathogenic~Disease_one&R2~Pathogenic~Disease_one"
+              "&R3~Benign~Disease_one"),
+    )
+    groups = result["conditions"][0]["classifications"]
+    assert [g["verdict"] for g in groups] == ["Pathogenic", "Benign"]
+    assert [[m["acc"] for m in g["members"]] for g in groups] == [
+        ["R1", "R2"],
+        ["R3"],
+    ]
+    assert [g["count"] for g in groups] == [2, 1]
+
+
+def test_join_nest_as_needs_a_grouping_to_nest_under():
+    from pydantic import ValidationError
+
+    from app.vep.models.parsing_spec_model import JoinSpec
+
+    with pytest.raises(ValidationError, match="nest_as"):
+        JoinSpec(**{"into": "conditions", "from": "records", "left_key": "name",
+                    "right_key": "condition", "as": "classifications",
+                    "nest_as": "members"})
+
+
 def test_join_leaves_an_unmatched_left_row_empty():
     result = _joined(
         [{"into": "conditions", "from": "records", "left_key": "name",

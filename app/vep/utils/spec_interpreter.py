@@ -513,14 +513,20 @@ def _apply_joins(built: dict, joins) -> None:
             key = _join_key(row.get(join.left_key), None, join.case_insensitive)
             matches = buckets.get(key, []) if key is not None else []
             if join.count_by:
-                counts: dict[str, int] = {}
+                groups: dict[str, list] = {}
                 for match in matches:  # first-seen order
                     value = match.get(join.count_by)
                     if value is not None:
-                        counts[value] = counts.get(value, 0) + 1
+                        groups.setdefault(value, []).append(match)
                 row[join.as_field] = [
-                    {join.count_by: value, "count": count}
-                    for value, count in counts.items()
+                    {
+                        join.count_by: value,
+                        "count": len(members),
+                        # The rows the count was made of, kept beside it rather
+                        # than left for the display to re-group.
+                        **({join.nest_as: members} if join.nest_as else {}),
+                    }
+                    for value, members in groups.items()
                 ]
             else:
                 row[join.as_field] = matches

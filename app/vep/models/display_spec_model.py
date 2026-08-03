@@ -527,7 +527,8 @@ class ColumnItems(BaseModel):
     `from` names the element field to show, `count_from` a companion count
     rendered after it in brackets ("Pathogenic (5)"), and `link`/`link_from`
     work as on the column itself: `{value}` is the displayed value, or the
-    sibling field when `link_from` names one.
+    sibling field when `link_from` names one. `expand` opens that one line onto
+    its own detail (see ColumnExpand).
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -537,22 +538,28 @@ class ColumnItems(BaseModel):
     count_from: str | None = None
     link: LinkSpec | None = None
     link_from: str | None = None
+    expand: "ColumnExpand | None" = None
 
 
 class ColumnExpand(BaseModel):
-    """A cell's collapsed detail: a summary that opens onto per-element lines.
+    """One line's collapsed detail: a summary that opens onto per-element lines.
 
     ClinVar's classifications column summarises what a condition's submitters
     said ("Pathogenic (5)"); the detail is who said it. `from` names the list
-    field holding those elements, and `cells` the fields to show for each, joined
-    on one line. Collapsed by default — a condition can have dozens of
-    submitters, and the summary is the point.
+    field holding those elements — read from the *same* element the summary line
+    came from, so a cell of several summaries opens one at a time rather than
+    all together — and `cells` the fields to show for each, joined on one line.
+    Collapsed by default: a condition can have dozens of submitters, and the
+    summary is the point.
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     source: str = Field(alias="from")
     cells: list[ColumnItems]
+
+
+ColumnItems.model_rebuild()
 
 
 class TableColumn(BaseModel):
@@ -593,8 +600,6 @@ class TableColumn(BaseModel):
     link_from: str | None = None
     # How to render a cell whose value is a list of objects (see ColumnItems).
     items: ColumnItems | None = None
-    # A collapsed detail beneath the cell's summary (see ColumnExpand).
-    expand: ColumnExpand | None = None
     # Which way the column's values (and its header) align.
     #
     # The house rule is by data type: text reads left, numbers read right, so a

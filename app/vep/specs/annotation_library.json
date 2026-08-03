@@ -2603,7 +2603,7 @@
                 },
                 "columns": [
                   {
-                    "label": "Classification (Expand for: submitter, last evaluation date, review status and associated publications. Submissions not contributing to the aggregate classification shown in light text)",
+                    "label": "Classification",
                     "from": "classifications",
                     "items": {
                       "from": "classification",
@@ -2639,7 +2639,16 @@
                           "equals": "1"
                         }
                       }
-                    }
+                    },
+                    "notes": [
+                      {
+                        "text": "Expand for: submitter, last evaluation date, review status and associated publications"
+                      },
+                      {
+                        "text": "Submissions not contributing to the aggregate classification shown in light text",
+                        "muted": true
+                      }
+                    ]
                   },
                   {
                     "label": "Condition",
@@ -2714,7 +2723,7 @@
                 },
                 "columns": [
                   {
-                    "label": "Classification (Expand for: submitter, last evaluation date, review status and associated publications. Submissions not contributing to the aggregate classification shown in light text)",
+                    "label": "Classification",
                     "from": "classifications",
                     "items": {
                       "from": "classification",
@@ -2750,7 +2759,16 @@
                           "equals": "1"
                         }
                       }
-                    }
+                    },
+                    "notes": [
+                      {
+                        "text": "Expand for: submitter, last evaluation date, review status and associated publications"
+                      },
+                      {
+                        "text": "Submissions not contributing to the aggregate classification shown in light text",
+                        "muted": true
+                      }
+                    ]
                   },
                   {
                     "label": "Condition",

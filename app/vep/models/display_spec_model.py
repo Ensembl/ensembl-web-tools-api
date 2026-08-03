@@ -652,6 +652,22 @@ class ColumnExpand(BaseModel):
 ColumnItems.model_rebuild()
 
 
+class ColumnNote(BaseModel):
+    """A further line of a column's heading.
+
+    A column that needs explaining ends up with a heading far longer than the
+    values beneath it, and as one string it wrapped wherever the width happened
+    to run out. Stating the lines lets the breaks fall where the sense does.
+    `muted` sets a line in the same quiet text the thing it describes uses, so
+    the heading demonstrates its own convention.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    muted: bool = False
+
+
 class TableColumn(BaseModel):
     """One column of a `table` block: a header `label`.
 
@@ -688,6 +704,8 @@ class TableColumn(BaseModel):
     # `curie_link` post-op) and lands beside the name, so the name is what the
     # reader sees and the resolved URL is what it points at.
     link_from: str | None = None
+    # Further heading lines beneath the label (see ColumnNote).
+    notes: list[ColumnNote] | None = None
     # How to render a cell whose value is a list of objects (see ColumnItems).
     items: ColumnItems | None = None
     # Which way the column's values (and its header) align.

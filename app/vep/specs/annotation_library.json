@@ -2652,8 +2652,7 @@
                         "text": "Submissions not contributing to the aggregate classification shown in light text",
                         "muted": true
                       }
-                    ],
-                    "width": "content"
+                    ]
                   },
                   {
                     "label": "Condition",
@@ -2663,8 +2662,7 @@
                       "kind": "external",
                       "template": "{value}"
                     },
-                    "link_from": "id_url",
-                    "width": "expand"
+                    "link_from": "id_url"
                   },
                   {
                     "label": "ClinVar record",
@@ -2778,8 +2776,7 @@
                         "text": "Submissions not contributing to the aggregate classification shown in light text",
                         "muted": true
                       }
-                    ],
-                    "width": "content"
+                    ]
                   },
                   {
                     "label": "Condition",
@@ -2789,8 +2786,7 @@
                       "kind": "external",
                       "template": "{value}"
                     },
-                    "link_from": "id_url",
-                    "width": "expand"
+                    "link_from": "id_url"
                   },
                   {
                     "label": "ClinVar record",

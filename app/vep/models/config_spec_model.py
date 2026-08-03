@@ -417,3 +417,19 @@ class ConfigSpec(BaseModel):
 
     def entry(self, option_id: str) -> ConfigEntry | None:
         return next((e for e in self.entries if e.id == option_id), None)
+
+    def effective_options(self, options: dict) -> dict:
+        """`options` plus everything a selected entry `forces_on`.
+
+        A forced option is on for every purpose — the config line it emits, and
+        the CSQ columns that line is then expected to produce. Both callers read
+        it from here so they cannot disagree: emitting a `custom` line whose
+        columns are not expected would silence the missing-field check for
+        exactly the data the user asked for.
+        """
+        effective = dict(options)
+        for entry in self.entries:
+            if options.get(entry.id):
+                for forced_id in entry.forces_on:
+                    effective[forced_id] = True
+        return effective

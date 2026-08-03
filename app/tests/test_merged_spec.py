@@ -414,13 +414,28 @@ def test_one_config_to_many_parse_expects_both():
 
 
 def test_sub_flagged_plugin_is_excluded():
-    # ProtVar has from_option sub-flags (a sub-option can drop a column), so it is
-    # excluded entirely — even with pocket off, nothing is (wrongly) required.
-    assert _expected(protvar=True) == set()
-    assert _expected(protvar=True, protvar_pocket=False) == set()
+    # ProtVar has from_option sub-flags (a sub-option can drop a column), so its
+    # own columns are excluded entirely — even with pocket off, none is
+    # (wrongly) required. HGVSg is there because ProtVar `forces_on` it: the
+    # `--hgvsg` line really is emitted, and an allele-scoped flag column is
+    # present for every variant, so it is expected like any other.
+    assert _expected(protvar=True) == {"HGVSg"}
+    assert _expected(protvar=True, protvar_pocket=False) == {"HGVSg"}
     # IntAct (variadic flags) and mutfunc (from_option sub-flags) likewise
     assert _expected(intact=True) == set()
     assert _expected(mutfunc=True) == set()
+
+
+def test_a_forced_option_contributes_its_columns():
+    """A forced option's config line is emitted, so its output must be there.
+
+    If the expectation ignored `forces_on`, the missing-field check would go
+    silent for exactly the data the option was forced on to produce — which is
+    how ClinVar now rides in on Phenotypes.
+    """
+    # hgvsg is not selected; ProtVar turns it on, and its column comes with it.
+    assert "HGVSg" in _expected(protvar=True)
+    assert "HGVSg" not in _expected(protvar=False)
 
 
 def test_flags_require_only_their_allele_scoped_columns():

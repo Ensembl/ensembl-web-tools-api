@@ -229,6 +229,9 @@ class MergedSpec(BaseModel):
         nothing, matching the config.
         """
         by_plugin = {p.plugin: p for p in self.parsing.plugins}
+        # A forced option's columns are expected too — its config line is emitted,
+        # so its output must be there (ClinVar rides in on Phenotypes this way).
+        options = self.config.effective_options(options)
         expected: set[str] = set()
         for entry in self.config.entries:
             if not options.get(entry.id):

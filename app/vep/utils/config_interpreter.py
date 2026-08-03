@@ -250,11 +250,7 @@ def emit_config_lines(
     # (ProtVar needs HGVSg computed to build its link). This is confined to the
     # config lines — it never touches the options the results view gates display
     # on — so a forced flag is computed without adding its row.
-    effective = dict(options)
-    for entry in spec.entries:
-        if options.get(entry.id):
-            for forced_id in entry.forces_on:
-                effective[forced_id] = True
+    effective = spec.effective_options(options)
     lines: list[str] = []
     for entry in sorted(spec.entries, key=lambda e: e.order):
         context = {"path": resolve_path(entry.id), "gff": gff}

@@ -297,6 +297,14 @@ class CellSpec(BaseModel):
     # aggregate classification"). `from` still says which field must be there
     # for the cell to render at all.
     template: str | None = None
+    # Value -> what to show for it. For a value whose wording is the source's
+    # rather than a reader's: ClinVar's classification type is the key a join
+    # matches on, so it has to stay "SomaticClinicalImpact" in the data while
+    # reading as three words on the page. An unmapped value keeps the data's own
+    # wording, as a heading's `labels` does — only the odd one out needs saying.
+    labels: dict[str, str] | None = None
+    # Keep the cell on one line, so its column is never sized below it.
+    nowrap: bool = False
 
     def item_field_refs(self) -> Iterator[str]:
         """Every item field this cell reads: its `from` plus any `{field}`
@@ -706,6 +714,16 @@ class TableColumn(BaseModel):
     link_from: str | None = None
     # Further heading lines beneath the label (see ColumnNote).
     notes: list[ColumnNote] | None = None
+    # How wide this column would like to be, where the default (size to the
+    # content, sharing what is left) does not suit.
+    #
+    #   content  as wide as its widest line unwrapped — for a column whose
+    #            *heading* is the widest thing in it, so the explanation reads
+    #            as the lines it was written as. A preference, not a floor: the
+    #            table still shrinks it when there is not the room.
+    #   expand   take whatever is left over, so the columns beside it get their
+    #            preferred width first.
+    width: Literal["content", "expand"] | None = None
     # How to render a cell whose value is a list of objects (see ColumnItems).
     items: ColumnItems | None = None
     # Which way the column's values (and its header) align.

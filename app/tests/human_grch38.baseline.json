@@ -3516,7 +3516,11 @@
                     "item": {
                       "cells": [
                         {
-                          "from": "type"
+                          "from": "type",
+                          "labels": {
+                            "SomaticClinicalImpact": "Somatic Clinical Impact"
+                          },
+                          "nowrap": true
                         },
                         {
                           "from": "classification",
@@ -3602,7 +3606,8 @@
                         "text": "Submissions not contributing to the aggregate classification shown in light text",
                         "muted": true
                       }
-                    ]
+                    ],
+                    "width": "content"
                   },
                   {
                     "label": "Condition",
@@ -3612,7 +3617,8 @@
                       "kind": "external",
                       "template": "{value}"
                     },
-                    "link_from": "id_url"
+                    "link_from": "id_url",
+                    "width": "expand"
                   },
                   {
                     "label": "ClinVar record",
@@ -3641,7 +3647,11 @@
                     "item": {
                       "cells": [
                         {
-                          "from": "type"
+                          "from": "type",
+                          "labels": {
+                            "SomaticClinicalImpact": "Somatic Clinical Impact"
+                          },
+                          "nowrap": true
                         },
                         {
                           "from": "classification",
@@ -3722,7 +3732,8 @@
                         "text": "Submissions not contributing to the aggregate classification shown in light text",
                         "muted": true
                       }
-                    ]
+                    ],
+                    "width": "content"
                   },
                   {
                     "label": "Condition",
@@ -3732,7 +3743,8 @@
                       "kind": "external",
                       "template": "{value}"
                     },
-                    "link_from": "id_url"
+                    "link_from": "id_url",
+                    "width": "expand"
                   },
                   {
                     "label": "ClinVar record",

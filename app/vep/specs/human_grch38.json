@@ -209,7 +209,10 @@
             "file": "{path}/Phenotypes.pm_homo_sapiens_116_GRCh38.gvf.gz",
             "cols": "type&source&phenotype&id&risk_allele&clinvar_clin_sig"
           }
-        }
+        },
+        "forces_on": [
+          "clinvar_short"
+        ]
       },
       {
         "id": "go",
@@ -836,7 +839,7 @@
           "clinvar"
         ],
         "requires": [
-          "clinvar"
+          "phenotypes"
         ],
         "config": {
           "emit": "custom",
@@ -853,8 +856,31 @@
           },
           "fields": {
             "literal": [
+              "CLNDN",
+              "CLNDNINCL",
+              "CLNDISDB",
+              "CLNDISDBINCL",
+              "CLNREVSTAT",
               "CLNSIG",
-              "CLNSIGCONF"
+              "CLNSIGINCL",
+              "ONCDN",
+              "ONCDNINCL",
+              "ONCDISDB",
+              "ONCDISDBINCL",
+              "ONC",
+              "ONCINCL",
+              "ONCREVSTAT",
+              "ONCSCV",
+              "ONCCONF",
+              "CLNSUBA",
+              "CLNPMID",
+              "CLNSUBN",
+              "CLNRCV",
+              "SCI",
+              "SCIREVSTAT",
+              "SCIDN",
+              "SCIDISDB",
+              "GENEINFO"
             ]
           }
         }

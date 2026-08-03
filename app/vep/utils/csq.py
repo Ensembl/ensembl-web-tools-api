@@ -60,21 +60,28 @@ def to_float(value: str | None) -> float | None:
         return None
 
 
-def split_amp(value: str | None) -> list[str]:
-    """Split a '&'-delimited CSQ list, dropping empties and 'NA' placeholders."""
+def split_amp(value: str | None, sep: str = "&") -> list[str]:
+    """Split a delimited CSQ list, dropping empties and 'NA' placeholders.
+
+    `sep` defaults to '&' because that is what VEP writes: it rewrites both ','
+    and '|' to '&' in every value it emits. A source that needs its own
+    structure below that level has to bring a separator VEP leaves alone — the
+    enriched ClinVar VCF uses '~' between subfields and '+' between repeats for
+    exactly this reason — hence the parameter.
+    """
     if not value:
         return []
-    return [v for v in value.split("&") if v and v != "NA"]
+    return [v for v in value.split(sep) if v and v != "NA"]
 
 
-def raw_amp(value: str | None) -> list[str]:
-    """Split a '&'-delimited CSQ list keeping every position (incl. 'NA'), so
+def raw_amp(value: str | None, sep: str = "&") -> list[str]:
+    """Split a delimited CSQ list keeping every position (incl. 'NA'), so
     positionally-aligned subfields can be zipped together."""
-    return value.split("&") if value else []
+    return value.split(sep) if value else []
 
 
-def first_amp(value: str | None) -> str | None:
-    """First real (non-empty, non-'NA') item of a '&'-joined CSQ list."""
-    for item in split_amp(value):
+def first_amp(value: str | None, sep: str = "&") -> str | None:
+    """First real (non-empty, non-'NA') item of a delimited CSQ list."""
+    for item in split_amp(value, sep):
         return item
     return None

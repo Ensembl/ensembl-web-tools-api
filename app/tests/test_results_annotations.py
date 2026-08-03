@@ -16,20 +16,29 @@ SPEC = load_merged_spec("human_grch38").parsing
 
 # A CSQ header layout with structural columns plus one allele-scope frequency
 # (gnomad_exomes, incl. a per-population column to exercise the pattern_map
-# flat-frequency shape), one allele-scope custom (clinvar), and one
-# transcript-scope simple plugin (revel).
+# flat-frequency shape), and two transcript-scope plugins: a simple one (revel)
+# and a custom whose rows are narrowed by gene (clinvar).
 COLUMNS = [
     "Allele", "Feature_type", "Consequence", "Feature", "Gene", "BIOTYPE",
     "CANONICAL", "STRAND", "SYMBOL",
     "REVEL", "gnomAD_exomes_AF", "gnomAD_exomes_AF_nfe", "ClinVar_CLNSIG",
+    "ClinVar_GENEINFO",
 ]
 INDEX_MAP = {column: i for i, column in enumerate(COLUMNS)}
 ROW = "|".join([
     "T", "Transcript", "missense_variant", "ENST001", "ENSG001", "protein_coding",
     "YES", "1", "BRCA2",
-    "0.9", "0.01", "0.02", "Pathogenic",
+    "0.9", "0.01", "0.02", "Pathogenic", "BRCA2:675",
 ])
 CSQ_VALUES = ROW.split("|")
+
+# The same variant against a neighbouring gene's transcript: VEP repeats the
+# custom's columns here too, but ClinVar's record is about BRCA2.
+OTHER_GENE_ROW = "|".join([
+    "T", "Transcript", "missense_variant", "ENST002", "ENSG002", "protein_coding",
+    "", "1", "ZAR1L",
+    "0.9", "0.01", "0.02", "Pathogenic", "BRCA2:675",
+])
 
 
 def _expected(plugin_name):
@@ -40,10 +49,11 @@ def test_allele_scope_annotations_attached():
     allele = _get_alt_allele_details("A", "T", [ROW], INDEX_MAP, SPEC)
     by_plugin = {a.plugin: a for a in allele.annotations}
 
-    assert by_plugin.keys() >= {"gnomad_exomes", "clinvar"}
+    assert by_plugin.keys() >= {"gnomad_exomes"}
     assert all(a.scope == "allele" for a in allele.annotations)
     assert by_plugin["gnomad_exomes"].data == _expected("gnomad_exomes")
-    assert by_plugin["clinvar"].data == _expected("clinvar")
+    # ClinVar is about a gene, so it hangs off the consequence, not the allele.
+    assert "clinvar" not in by_plugin
     # the flat frequency shape carries the per-population column
     assert by_plugin["gnomad_exomes"].data["populations"] == {"nfe": 0.02}
 
@@ -53,9 +63,26 @@ def test_transcript_scope_annotations_attached():
     consequence = allele.predicted_molecular_consequences[0]
     by_plugin = {a.plugin: a for a in consequence.annotations}
 
-    assert "revel" in by_plugin
+    assert by_plugin.keys() >= {"revel", "clinvar"}
     assert all(a.scope == "transcript" for a in consequence.annotations)
     assert by_plugin["revel"].data == _expected("revel")
+    assert by_plugin["clinvar"].data == _expected("clinvar")
+
+
+def test_clinvar_is_attached_only_to_the_gene_it_names():
+    """VEP repeats a custom's columns on every CSQ row of the variant, so
+    without narrowing ClinVar's record for one gene is served against every gene
+    the variant touches -- 22:23834143 showed SMARCB1's classification under
+    DERL3, whose transcripts merely overlap the position."""
+    allele = _get_alt_allele_details("A", "T", [ROW, OTHER_GENE_ROW], INDEX_MAP, SPEC)
+    by_gene = {
+        c.gene_symbol: {a.plugin for a in c.annotations}
+        for c in allele.predicted_molecular_consequences
+    }
+    assert "clinvar" in by_gene["BRCA2"]
+    assert "clinvar" not in by_gene["ZAR1L"]
+    # The neighbour keeps everything that really is about it.
+    assert "revel" in by_gene["ZAR1L"]
 
 
 def test_annotations_are_the_only_annotation_data():
@@ -63,9 +90,10 @@ def test_annotations_are_the_only_annotation_data():
     # What used to be the typed `clinvar` / `frequencies` fields now arrives
     # only as generic annotations, at allele scope.
     by_plugin = {a.plugin: a.data for a in allele.annotations}
-    assert by_plugin["clinvar"]["significance"] == ["Pathogenic"]
     assert by_plugin["gnomad_exomes"]["overall"] == 0.01
-    assert allele.predicted_molecular_consequences[0].annotations  # non-empty
+    consequence = allele.predicted_molecular_consequences[0]
+    by_consequence = {a.plugin: a.data for a in consequence.annotations}
+    assert by_consequence["clinvar"]["significance"] == ["Pathogenic"]
 
 
 def test_no_spec_means_no_generic_annotations():

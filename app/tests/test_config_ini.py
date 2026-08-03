@@ -912,29 +912,52 @@ def test_clinvar_off_emits_no_line(monkeypatch, tmp_path):
 def test_clinvar_line_is_assembly_specific(
     monkeypatch, tmp_path, assembly, expected_file
 ):
+    # Phenotypes is what turns the ClinVar custom on now (see forces_on).
     line = find_line(
-        build_lines(
-            monkeypatch, tmp_path, assembly=assembly, clinvar=True, clinvar_short=True
-        ),
+        build_lines(monkeypatch, tmp_path, assembly=assembly, phenotypes=True),
         "short_name=ClinVar,",
     )
     assert line == (
         f"custom file={PLUGIN_PATH}/{expected_file},"
-        "short_name=ClinVar,fields=CLNSIG%CLNSIGCONF,format=vcf,type=exact"
+        "short_name=ClinVar,"
+        "fields=CLNDN%CLNDNINCL%CLNDISDB%CLNDISDBINCL%CLNREVSTAT%CLNSIG"
+        "%CLNSIGINCL%ONCDN%ONCDNINCL%ONCDISDB"
+        "%ONCDISDBINCL%ONC%ONCINCL%ONCREVSTAT%ONCSCV%ONCCONF"
+        "%CLNSUBA%CLNPMID%CLNSUBN%CLNRCV%SCI%SCIREVSTAT%SCIDN"
+        "%SCIDISDB%GENEINFO,"
+        "format=vcf,type=exact"
     )
 
 
-def test_clinvar_sub_option_requires_the_master(monkeypatch, tmp_path):
-    # A sub-option on but the master off (a stale value from edit/rerun) must not
-    # emit its custom — the `requires: ["clinvar"]` gate holds.
-    lines = build_lines(monkeypatch, tmp_path, clinvar=False, clinvar_short=True)
+def test_clinvar_is_emitted_for_grch37_too(monkeypatch, tmp_path):
+    """GRCh37 has its own config entries, and the test above only looks like it
+    covers them: it is parametrised over both assemblies but builds from the
+    GRCh38 spec either way, so only the `by_assembly` file path varies. This
+    builds from the GRCh37 spec, where the ClinVar custom went missing entirely
+    once the form's `clinvar_short` control was removed and only GRCh38 had a
+    `forces_on` to replace it."""
+    line = find_line(
+        build_lines_37(monkeypatch, tmp_path, phenotypes=True), "short_name=ClinVar,"
+    )
+    assert line is not None
+    # Its own, narrower field set: nothing has confirmed that the GRCh37 ClinVar
+    # VCF carries the enriched columns, and requesting one it lacks fails the job.
+    assert "fields=CLNSIG," in line
+
+
+def test_clinvar_short_requires_phenotypes(monkeypatch, tmp_path):
+    # A stale `clinvar_short` from an edit/rerun must not emit its custom on its
+    # own: the germline data is served under Phenotypes, and the
+    # `requires: ["phenotypes"]` gate is what says so.
+    lines = build_lines(monkeypatch, tmp_path, phenotypes=False, clinvar_short=True)
     assert find_line(lines, "short_name=ClinVar,") is None
 
 
-def test_clinvar_master_on_gives_short_variants_by_default(monkeypatch, tmp_path):
-    # Short variants are the default sub-option, so enabling the master alone
-    # runs that custom — but not the structural one, which stays opt-in.
-    lines = build_lines(monkeypatch, tmp_path, clinvar=True)
+def test_phenotypes_turns_on_the_clinvar_custom(monkeypatch, tmp_path):
+    # ClinVar has no option of its own any more: selecting Phenotypes runs the
+    # custom behind the scenes. The structural one is unaffected — it still
+    # belongs to the `clinvar` master and stays opt-in.
+    lines = build_lines(monkeypatch, tmp_path, phenotypes=True)
     assert find_line(lines, "short_name=ClinVar,") is not None
     assert find_line(lines, "short_name=ClinVar_SV,") is None
 
@@ -942,8 +965,8 @@ def test_clinvar_master_on_gives_short_variants_by_default(monkeypatch, tmp_path
 def test_clinvar_master_on_with_both_sub_options_off_emits_nothing(
     monkeypatch, tmp_path
 ):
-    # The master is still only a gate: turning both sub-options off runs neither
-    # custom, however the defaults are set.
+    # The master is still only a gate for the structural custom, and Phenotypes
+    # is off here, so neither custom runs.
     lines = build_lines(
         monkeypatch, tmp_path, clinvar=True, clinvar_short=False, clinvar_sv=False
     )

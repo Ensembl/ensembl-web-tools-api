@@ -884,3 +884,158 @@ def test_the_shared_gates_still_reject_an_unknown_field():
         DisplayRowsBlock.model_validate(
             {"kind": "rows", "rows": [], "whn": {"present": "x.y"}}
         )
+
+
+# --- star ratings -----------------------------------------------------------
+
+
+_SCALE = {
+    "confidence": {"out_of": 4, "ratings": {"reviewed by expert panel": 3}}
+}
+
+
+def _rated(display):
+    display.setdefault("rating_scales", _SCALE)
+    return _doc(display)
+
+
+def _starred_column(scale):
+    """A table column whose items carry a star rating on the named scale."""
+    return _doc(
+        {"options": [{"option_id": "p", "blocks": [{
+            "kind": "table",
+            "from": "p.summary",
+            "columns": [{"label": "Verdict", "from": "verdict",
+                         "items": {"from": "verdict", "stars": scale}}],
+        }]}]},
+        plugins=_LIST_PLUGIN,
+    )
+
+
+def test_stars_must_name_a_known_scale():
+    """A typo'd scale would otherwise render no stars — which is exactly what an
+    unrecognised term legitimately does, so it would read as data, not a bug."""
+    with pytest.raises(ValidationError, match="unknown rating scale"):
+        MergedSpec.model_validate(_starred_column("noscale"))
+
+
+def test_an_item_can_carry_a_known_scale():
+    doc = _starred_column("confidence")
+    doc["display"]["rating_scales"] = _SCALE
+    spec = MergedSpec.model_validate(doc)
+    column = spec.display.options[0].blocks[0].columns[0]
+    assert column.items.stars == "confidence"
+
+
+def test_stars_inside_an_expanded_cell_are_checked():
+    """The reference can sit two levels down — a column's `items`, and the cells
+    of the detail those items expand onto."""
+    doc = _doc(
+        {
+            "options": [{"option_id": "revel", "blocks": [{
+                "kind": "table",
+                "from": "revel.score",
+                "columns": [{
+                    "label": "Score",
+                    "from": "score",
+                    "items": {
+                        "from": "score",
+                        "expand": {
+                            "from": "detail",
+                            "cells": [{"from": "status", "stars": "noscale"}],
+                        },
+                    },
+                }],
+            }]}]
+        }
+    )
+    with pytest.raises(ValidationError, match="unknown rating scale"):
+        MergedSpec.model_validate(doc)
+
+
+def test_a_rating_cannot_exceed_its_scale():
+    from app.vep.models.display_spec_model import RatingScale
+
+    with pytest.raises(ValidationError, match=r"outside 0\.\.4"):
+        RatingScale.model_validate({"out_of": 4, "ratings": {"impossible": 5}})
+
+
+def test_the_payload_carries_the_scales():
+    """The frontend renders the stars, so the term -> rating table has to reach
+    it — this is the only path it travels."""
+    payload = SPEC.display_payload()
+    assert payload.rating_scales["clinvar_aggregate"].out_of == 4
+    assert (
+        payload.rating_scales["clinvar_aggregate"].ratings["practice guideline"] == 4
+    )
+
+
+# --- a row that stacks a list ----------------------------------------------
+
+
+_LIST_PLUGIN = [
+    {
+        "plugin": "p",
+        "scope": "allele",
+        "output": "p",
+        "csq_fields": ["C"],
+        "targets": [
+            {
+                "field": "summary",
+                "from": "C",
+                "transform": "chunk",
+                "size": 2,
+                "as": [
+                    {"field": "kind", "type": "string"},
+                    {"field": "verdict", "type": "string"},
+                ],
+                "item_fields": ["kind", "verdict"],
+            }
+        ],
+    }
+]
+
+
+def _stacking_row(*cells):
+    return _doc(
+        {
+            "options": [{"option_id": "p", "blocks": [{
+                "kind": "rows",
+                "rows": [{
+                    "label": "Classification",
+                    "from": "p.summary",
+                    "item": {"cells": list(cells)},
+                }],
+            }]}]
+        },
+        plugins=_LIST_PLUGIN,
+    )
+
+
+def test_a_row_can_stack_a_list_of_items():
+    spec = MergedSpec.model_validate(
+        _stacking_row({"from": "kind"}, {"from": "verdict"})
+    )
+    row = spec.display.options[0].blocks[0].rows[0]
+    assert row.list_ref() == ("p", "summary")
+    assert [c.source for c in row.item.cells] == ["kind", "verdict"]
+
+
+def test_a_stacking_rows_item_fields_are_checked():
+    """The same check a list block's item gets — otherwise a typo'd field just
+    renders an empty line."""
+    with pytest.raises(ValidationError, match="item field 'verdcit' not in"):
+        MergedSpec.model_validate(_stacking_row({"from": "verdcit"}))
+
+
+def test_stars_from_and_template_fields_are_item_refs_too():
+    """Both name *fields of the element*, so both are typo-checked -- including
+    the `{field}` placeholders of a cell's template."""
+    with pytest.raises(ValidationError, match="item field 'scale' not in"):
+        MergedSpec.model_validate(
+            _stacking_row({"from": "kind", "stars_from": "scale"})
+        )
+    with pytest.raises(ValidationError, match="item field 'total' not in"):
+        MergedSpec.model_validate(
+            _stacking_row({"from": "kind", "template": "{kind} of {total}"})
+        )

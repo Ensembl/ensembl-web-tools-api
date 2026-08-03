@@ -24,7 +24,7 @@ ValueType = Literal["string", "float", "int", "raw"]
 # derived by enumerating the existing `_parse_*` functions rather than invented.
 Transform = Literal[
     "scalar", "list", "first", "zip", "regex", "pattern_map", "chunk", "positional",
-    "key_value",
+    "key_value", "records", "stack",
 ]
 
 
@@ -45,6 +45,11 @@ class FieldSpec(BaseModel):
     # that is a general need rather than a GO quirk.
     replace: dict[str, str] | None = None
     strip: bool = False
+    # Extra tokens meaning "no value" for this field, on top of '' and 'NA'.
+    # ClinVar writes '.' where a condition has no ontology ids, and a VCF-derived
+    # source generally uses '.' for an absent value — but '.' is a real value
+    # elsewhere, so this is declared per field rather than made global.
+    null_values: list[str] | None = None
 
 
 class ItemCondition(BaseModel):
@@ -134,6 +139,17 @@ class PostOp(BaseModel):
             malformed string: a row with no p-value must show nothing, not
             "e" on its own.
 
+    curie_link  turn a CURIE list into one link. A source that names a thing in
+            several ontologies at once (ClinVar's CLNDISDB —
+            `MeSH:D030342,MedGen:C0950123`) has no single id; `prefer` picks
+            which authority to trust, in order, falling back to whatever is
+            there. `templates` maps the source prefix to its URL, `{id}` being
+            the bare accession. `by` is the CURIE-list field, `into` the URL
+            field to write, `label_into` (optional) the chosen CURIE itself.
+            A list with nothing matching any template writes null, so a
+            condition ClinVar gives no usable id for renders as plain text
+            rather than a dead link.
+
     `exclude` is a post-op rather than a `drop_when` mode because `drop_when`
     takes exactly one mode and the phenotype targets already spend theirs on the
     per-allele rule.
@@ -141,7 +157,7 @@ class PostOp(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    op: Literal["dedup", "sort", "exclude", "lookup", "concat"]
+    op: Literal["dedup", "sort", "exclude", "lookup", "concat", "curie_link"]
     by: str | None = None
     desc: bool = False
     nulls: Literal["first", "last"] = "last"
@@ -153,6 +169,12 @@ class PostOp(BaseModel):
     # `concat` only.
     fields: list[str] | None = None
     sep: str = ""
+    # `curie_link` only.
+    prefer: list[str] | None = None
+    templates: dict[str, str] | None = None
+    label_into: str | None = None
+    # The separator between CURIEs in the source list.
+    curie_sep: str = ","
 
     @model_validator(mode="after")
     def _check_op_shape(self) -> "PostOp":
@@ -166,6 +188,10 @@ class PostOp(BaseModel):
             raise ValueError("`values` belongs to exclude")
         if self.op == "lookup" and not (self.by and self.into and self.table):
             raise ValueError("lookup requires `by`, `into` and `table`")
+        if self.op == "curie_link" and not (self.by and self.into and self.templates):
+            raise ValueError("curie_link requires `by`, `into` and `templates`")
+        if self.op != "curie_link" and (self.prefer or self.templates):
+            raise ValueError("`prefer`/`templates` belong to curie_link")
         if self.op != "lookup" and self.table:
             raise ValueError("`table` belongs to lookup")
         if self.op == "concat" and not (self.fields and self.into):
@@ -174,8 +200,8 @@ class PostOp(BaseModel):
             raise ValueError("concat needs at least two `fields`")
         if self.op != "concat" and self.fields is not None:
             raise ValueError("`fields` belongs to concat")
-        if self.op not in ("lookup", "concat") and self.into:
-            raise ValueError("`into` belongs to lookup or concat")
+        if self.op not in ("lookup", "concat", "curie_link") and self.into:
+            raise ValueError("`into` belongs to lookup, concat or curie_link")
         return self
 
 
@@ -192,6 +218,42 @@ class WhenSpec(BaseModel):
 
     field: str
     includes: str
+
+
+class StackGroup(BaseModel):
+    """One source group of a `stack`: a `zip` over its own columns, tagged.
+
+    `const` is what makes the stacked list usable: the rows of different groups
+    are the same shape but not the same thing, and the tag is the only record of
+    which group a row came from. ClinVar states the same facts three times over,
+    once per classification type, in three sets of columns that carry the type
+    only in their *names* — CLNDN vs ONCDN vs SCIDN. Tagging on the way in turns
+    that back into data, so one list can be filtered, joined and split by type
+    rather than three lists having to be kept in step.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    # `from` and `as` are Python keywords, hence the aliases.
+    source: list[str] = Field(alias="from")
+    as_fields: list[FieldSpec] = Field(alias="as")
+    # Fields given the same value on every row this group produces.
+    const: dict[str, str] = Field(default_factory=dict)
+    sep: str = "&"
+    # Read each column whole rather than splitting it, so the group contributes
+    # exactly one row. For a group of scalar columns whose values may themselves
+    # contain the separator: ClinVar's aggregate germline classification is one
+    # assertion even when it reads `Conflicting_classifications_of_pathogenicity
+    # +risk_factor`, and splitting it would invent a second classification with
+    # no review status of its own.
+    split: bool = True
+    align: Literal["max", "min"] = "max"
+
+    @model_validator(mode="after")
+    def _one_as_per_column(self) -> "StackGroup":
+        if len(self.as_fields) != len(self.source):
+            raise ValueError("a stack group needs one `as` entry per `from` column")
+        return self
 
 
 class TargetSpec(BaseModel):
@@ -218,6 +280,17 @@ class TargetSpec(BaseModel):
                    by index. Items beyond `as` are ignored; missing ones are
                    null. Use `wrap: "list"` where the output is a
                    single-element list.
+      records      one column -> list of objects, two levels of separator:
+                   `sep` between records, `item_sep` between a record's fields,
+                   which are then assigned to `as` by index (like `positional`,
+                   but repeating). This is the shape of a source that packs whole
+                   sub-records into one column — ClinVar's per-submitter (15
+                   fields) and per-RCV (5 fields) data.
+      stack        several groups of columns -> one list. Each group in `of` is
+                   a `zip` over its own columns, tagged with that group's
+                   `const` fields, and the groups' rows are concatenated in
+                   order. For a source that publishes the same shape several
+                   times over in differently-named columns (see StackGroup).
       key_value    one column -> dict, splitting on `pair_delimiter` then
                    `kv_delimiter`. Order-independent by construction — for a
                    value whose pair order is not meaningful (or, as observed in
@@ -238,6 +311,18 @@ class TargetSpec(BaseModel):
     # `zip` / `regex`: the output fields. For zip they match `from` positionally;
     # for regex each `field` names the regex group to read.
     as_fields: list[FieldSpec] | None = Field(default=None, alias="as")
+    # The separator between items, for the transforms that split a column
+    # (`list`, `first`, `zip`, `chunk`, `positional`, and `regex` with `each`).
+    # '&' is what VEP writes — it rewrites both ',' and '|' to '&' — so a source
+    # carrying structure below that level must use a delimiter VEP leaves alone:
+    # the enriched ClinVar VCF uses '~' between subfields and '+' between
+    # repeats. Defaults to '&', so every existing target is unaffected.
+    sep: str = "&"
+    # Percent-decode the produced value's string leaves. Off by default: only a
+    # source that escapes its own separators needs it (the enriched ClinVar VCF
+    # escapes '% , ; = | & ~ +' inside values). Applied *after* every split, so
+    # an encoded '%2C' can never be read as a delimiter.
+    decode: bool = False
     # `zip` only: whether to iterate to the longest or shortest input column.
     # The existing parsers disagree — MaveDB pads to the longest, OpenTargets
     # truncates to the shortest — so it has to be explicit.
@@ -253,11 +338,15 @@ class TargetSpec(BaseModel):
     # overall-AF column can itself match the pattern).
     from_pattern: str | None = None
     exclude: list[str] | None = None
+    # `stack` only: the source groups, concatenated in order.
+    of: list[StackGroup] | None = None
     # `chunk` only: how many '&'-items make up one object.
     size: int | None = None
     # `positional` only: emit the single object inside a list.
     wrap: Literal["list"] | None = None
     # `key_value` only.
+    # `records` only: the separator *within* one record, below `sep`.
+    item_sep: str = "~"
     pair_delimiter: str | None = None
     kv_delimiter: str | None = None
     # Build this target only when the condition holds; otherwise it comes out
@@ -310,6 +399,16 @@ class TargetSpec(BaseModel):
                 raise ValueError("key_value requires `from` to be a single column")
             if not self.pair_delimiter or not self.kv_delimiter:
                 raise ValueError("key_value requires `pair_delimiter` and `kv_delimiter`")
+        elif self.transform == "records":
+            if not isinstance(self.source, str):
+                raise ValueError("records requires `from` to be a single column")
+            if not self.as_fields:
+                raise ValueError("records requires `as` naming each record's fields")
+        elif self.transform == "stack":
+            if not self.of:
+                raise ValueError("stack requires `of` naming its source groups")
+            if self.source is not None:
+                raise ValueError("stack reads its columns from `of`, not `from`")
         else:
             if not isinstance(self.source, str):
                 raise ValueError(f"{self.transform} requires `from` to be a single column")
@@ -318,6 +417,143 @@ class TargetSpec(BaseModel):
                     f"`as` is only valid for zip/regex/chunk/positional, not {self.transform}"
                 )
         return self
+
+
+class JoinSpec(BaseModel):
+    """Merge one of a plugin's produced lists into another, matching on a key.
+
+    Every transform reads a single column, so a source that spreads one logical
+    table across several columns cannot be assembled by them alone — ClinVar
+    names a condition in one column, its per-submitter classifications in
+    another, and its RCV records in a third, all keyed by the condition's name.
+    This runs after the targets are built and stitches them together.
+
+    `right_key_pattern` is what makes it general rather than a ClinVar special
+    case: two lists routinely key on the same thing while one writes it
+    decorated (ClinVar's RCV condition is `MedGen:C4540192:<name>` where the
+    condition list has the bare `<name>`). A regex with a `key` group extracts
+    the comparable part; without one the value is used as it stands.
+
+    `count_by` summarises the matches instead of attaching them: grouped by that
+    field, in first-seen order, as `[{<count_by>, count}]`. That is the usual
+    shape for "how many submitters said what", and keeps the counting out of the
+    display layer. `nest_as` additionally keeps each group's own members under
+    it, so the summary and the rows behind it stay together — a count the reader
+    can open is a count plus its evidence, and pairing them here is what stops
+    the display having to re-derive which rows a count was made of.
+    """
+
+    # populate_by_name so a serialised spec round-trips: dumping writes the field
+    # names (`source`/`as_field`), the document uses the aliases (`from`/`as`),
+    # and a pinned sidecar has to load back either way.
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    # The list to enrich, and the list to draw from (both `field` names of this
+    # plugin's targets).
+    into: str
+    # `from` is a Python keyword.
+    source: str = Field(alias="from")
+    left_key: str
+    right_key: str
+    # Applied to the right-hand key before comparing; needs a `key` group.
+    right_key_pattern: str | None = None
+    # When one right-hand row belongs under several left-hand rows, the
+    # separator its key list uses. ClinVar files one submission (or one RCV
+    # record) against several conditions at once, '+'-joined; the row then
+    # appears under each of them. Without this it would match none of them.
+    right_key_sep: str | None = None
+    # ClinVar's submitters write the same condition in different cases.
+    case_insensitive: bool = False
+    # Consider only right-hand rows holding this value: the count of what a
+    # source itself says counts, rather than a count we infer. ClinVar flags
+    # which submissions produced the aggregate classification, and no rule we
+    # could write over the terms would agree with it — an expert-panel review
+    # makes one submission the aggregate and the other 43 not.
+    where: ItemCondition | None = None
+    # Further equalities a match must satisfy, as {left field: right field}.
+    #
+    # A single key is not always enough to identify a row: ClinVar lists the
+    # same condition under more than one classification type (Rosette-forming
+    # glioneuronal tumor is both a germline and a somatic one), so joining on
+    # the name alone files a somatic submission under the germline condition.
+    # Compared like the key, so `case_insensitive` applies here too.
+    also_match: dict[str, str] | None = None
+    # The field added to each left row. Unused by a `count_into` join, whose
+    # product is the number rather than the rows.
+    as_field: str | None = Field(default=None, alias="as")
+    # Attach how many rows matched rather than the rows themselves. For a count
+    # the reader sees as a number ("39 of 44"), where a list would only be
+    # counted again at render time.
+    count_into: str | None = None
+    # Summarise rather than attach: group the matches by this field and count.
+    count_by: str | None = None
+    # With `count_by`, the field each group carries its own members under.
+    nest_as: str | None = None
+    # Declared, not derived — the display checks its column refs against this,
+    # exactly as `item_fields` does for a target.
+    item_fields: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _nesting_needs_something_to_nest_under(self) -> "JoinSpec":
+        if self.nest_as and not self.count_by:
+            raise ValueError(
+                "`nest_as` names the field a *group's* members hang off, so it "
+                f"needs `count_by` to group by; join into {self.into!r} has none"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _writes_exactly_one_field(self) -> "JoinSpec":
+        if bool(self.as_field) == bool(self.count_into):
+            raise ValueError(
+                "a join writes either the matched rows (`as`) or how many there "
+                f"were (`count_into`), not both or neither; join into {self.into!r}"
+            )
+        return self
+
+    def produced_fields(self) -> list[str]:
+        """The fields this join adds to each row of `into`."""
+        return [field for field in (self.as_field, self.count_into) if field]
+
+
+class RowScope(BaseModel):
+    """Which of a variant's CSQ rows a plugin's annotation actually belongs to.
+
+    VEP repeats a custom's columns on *every* CSQ row of the variant, so an
+    annotation about one gene is served against every gene the variant touches.
+    ClinVar's record for 22:23834143 is about SMARCB1, but DERL3's transcripts
+    overlap the same position, and the classification was appearing under both.
+
+    `column` is the row's own (SYMBOL); `listed_in` is the plugin's column naming
+    what it is about (ClinVar_GENEINFO, `SMARCB1:6598&WARS2-AS1:101929147`).
+    `item_pattern` takes the comparable part of an entry via a `key` group, as a
+    join's `right_key_pattern` does.
+
+    Narrowing applies only when there is something to narrow by: a row with no
+    value of its own, or an annotation naming nothing, is left alone. Dropping
+    those would trade a wrong attribution for a missing one — an intergenic row
+    has no symbol to match, and the annotation is still true of the variant.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    column: str
+    listed_in: str
+    sep: str = "&"
+    item_pattern: str | None = None
+
+
+class JoinedPostOp(PostOp):
+    """A post-op over a target, applied *after* the joins have run.
+
+    A target's own `post` cannot see what a join added, because the joins stitch
+    the targets together afterwards. Ordering a list by a joined-in value needs
+    this later pass: whether a ClinVar condition has a submission behind the
+    aggregate classification is only known once the submissions have been
+    matched to it.
+    """
+
+    target: str
 
 
 class PluginSpec(BaseModel):
@@ -341,9 +577,15 @@ class PluginSpec(BaseModel):
     # Where the result attaches on the response model, e.g. "mavedb".
     output: str
     csq_fields: list[str]
+    # Restrict this plugin to the CSQ rows it is really about (see RowScope).
+    applies_to: RowScope | None = None
     require_any_input: list[str] | None = None
     require_any_output: list[str] | None = None
     targets: list[TargetSpec]
+    # Applied after every target is built (see JoinSpec).
+    joins: list[JoinSpec] | None = None
+    # Applied to a named target after the joins (see JoinedPostOp).
+    post_joins: list[JoinedPostOp] | None = None
 
 
 class ParsingSpec(BaseModel):

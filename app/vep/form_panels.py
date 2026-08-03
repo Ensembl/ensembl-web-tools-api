@@ -167,18 +167,16 @@ _HUMAN_37_38_PANELS: list[dict] = [
         "options": [
             {"id": "geno2mp", "label": "Geno2MP", "type": "boolean", "default": False},
             # ClinVar master: two independent sub-option toggles. "Short variants"
-            # (the original ClinVar custom, human 37/38) is here; "Structural
-            # variants" (the ClinVar_SV custom) is GRCh38-only and appended in
-            # _add_human_grch38_options. Both default off, so enabling the master
-            # alone runs nothing until one is picked; each gates its own custom.
+            # "Structural variants" (the ClinVar_SV custom) is appended in
+            # _add_human_grch37/38_options, and is the only thing this master
+            # gates now: ClinVar's germline data has no control of its own, and
+            # is served under Phenotypes, which turns its custom on behind the
+            # scenes (`forces_on: ["clinvar_short"]`).
             {
                 "id": "clinvar",
                 "label": "Clinical Significance (ClinVar)",
                 "type": "boolean",
                 "default": False,
-                "sub_options": [
-                    {"id": "clinvar_short", "label": "Short variants", "type": "boolean", "default": True},
-                ],
             },
         ],
     },

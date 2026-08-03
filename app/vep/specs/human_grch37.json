@@ -75,7 +75,10 @@
             "file": "{path}/Phenotypes.pm_homo_sapiens_116_GRCh37.gvf.gz",
             "cols": "type&source&phenotype&id&risk_allele&clinvar_clin_sig"
           }
-        }
+        },
+        "forces_on": [
+          "clinvar_short"
+        ]
       },
       {
         "id": "go",
@@ -597,7 +600,7 @@
           "clinvar"
         ],
         "requires": [
-          "clinvar"
+          "phenotypes"
         ],
         "config": {
           "emit": "custom",
@@ -614,8 +617,7 @@
           },
           "fields": {
             "literal": [
-              "CLNSIG",
-              "CLNSIGCONF"
+              "CLNSIG"
             ]
           }
         }

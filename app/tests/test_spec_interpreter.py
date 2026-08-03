@@ -192,21 +192,6 @@ def test_mavedb_all_na_assay_dropped():
 CONFLICTING = "Conflicting_classifications_of_pathogenicity"
 
 
-def test_clinvar_conflicting_breakdown_shape():
-    result = run(
-        "clinvar",
-        row_list(
-            ClinVar_CLNSIG=CONFLICTING,
-            ClinVar_CLNSIGCONF="Likely_pathogenic_(6)&Benign_(2)",
-        ),
-    )
-    assert result["significance"] == [CONFLICTING]
-    assert result["conflicting_breakdown"] == [
-        {"significance": "Likely_pathogenic", "count": 6},
-        {"significance": "Benign", "count": 2},
-    ]
-
-
 def test_clinvar_id_from_bare_match_column():
     """The variation id is read from the bare `ClinVar` match column (what VEP
     fills with the matched record's ID), alongside the significance."""
@@ -227,7 +212,19 @@ def test_clinvar_non_conflicting_ignores_breakdown():
     assert run("clinvar", csq) == {
         "id": "12345",
         "significance": ["Pathogenic"],
-        "conflicting_breakdown": [],
+        "conditions": [],
+        "classification_summary": [
+            {
+                "classification": "Pathogenic",
+                "review_status": None,
+                "type": "Germline",
+                "rating_scale": "clinvar_aggregate",
+                "submissions": None,
+                "supporting": None,
+            }
+        ],
+        "submissions": [],
+        "records": [],
     }
 
 
@@ -242,17 +239,20 @@ def test_clinvar_when_matches_list_membership_not_substring():
     assert run("clinvar", csq) == {
         "id": "678",
         "significance": ["Not_" + CONFLICTING],
-        "conflicting_breakdown": [],
+        "conditions": [],
+        "classification_summary": [
+            {
+                "classification": "Not_" + CONFLICTING + "",
+                "review_status": None,
+                "type": "Germline",
+                "rating_scale": "clinvar_aggregate",
+                "submissions": None,
+                "supporting": None,
+            }
+        ],
+        "submissions": [],
+        "records": [],
     }
-
-
-def test_clinvar_unparseable_breakdown_token_skipped():
-    csq = row_list(
-        ClinVar_CLNSIG=CONFLICTING,
-        ClinVar_CLNSIGCONF="Benign_(2)&garbage_no_count",
-    )
-    result = run("clinvar", csq)
-    assert [b["significance"] for b in result["conflicting_breakdown"]] == ["Benign"]
 
 
 def test_clinvar_empty_is_none():
@@ -1165,9 +1165,9 @@ def test_lookup_needs_all_three_of_by_into_and_table():
         PostOp.model_validate({"op": "lookup", "by": "id", "into": "namespace"})
     with pytest.raises(ValidationError, match="`table` belongs to lookup"):
         PostOp.model_validate({"op": "dedup", "table": "go_namespaces"})
-    # `into` is shared with concat now, so it is rejected only for the ops that
-    # write no field at all.
-    with pytest.raises(ValidationError, match="belongs to lookup or concat"):
+    # `into` is shared with concat and curie_link now, so it is rejected only for
+    # the ops that write no field at all.
+    with pytest.raises(ValidationError, match="belongs to lookup, concat or curie_link"):
         PostOp.model_validate({"op": "dedup", "into": "namespace"})
 
 
@@ -1207,3 +1207,791 @@ def test_phenotype_rows_identical_in_every_field_are_collapsed():
     rows = parsed["phenotypes"]
     assert len(rows) == 2, rows
     assert {r["source"] for r in rows} == {"NHGRI-EBI_GWAS_catalog", "OtherSource"}
+
+
+def test_target_sep_splits_on_a_delimiter_vep_leaves_alone():
+    """VEP rewrites both ',' and '|' to '&' in everything it emits, so a source
+    that needs structure *below* the entry level has to carry a delimiter VEP
+    does not touch. The enriched ClinVar VCF uses '+' between repeats; `sep`
+    is what lets a target read it."""
+    index_map = index_map_for("Allele", "Thing")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Thing"],
+                "require_any_output": ["items"],
+                "targets": [
+                    {
+                        "field": "items",
+                        "from": "Thing",
+                        "transform": "list",
+                        "sep": "+",
+                    }
+                ],
+            }
+        ]
+    )
+    plugin = spec.plugin("probe")
+    assert apply_plugin_spec(["A", "one+two+three"], index_map, plugin) == {
+        "items": ["one", "two", "three"]
+    }
+    # '&' is now just a character in the value, not a separator.
+    assert apply_plugin_spec(["A", "a&b+c"], index_map, plugin) == {
+        "items": ["a&b", "c"]
+    }
+
+
+def test_target_sep_defaults_to_amp():
+    index_map = index_map_for("Allele", "Thing")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Thing"],
+                "require_any_output": ["items"],
+                "targets": [
+                    {"field": "items", "from": "Thing", "transform": "list"}
+                ],
+            }
+        ]
+    )
+    assert apply_plugin_spec(["A", "one&two"], index_map, spec.plugin("probe")) == {
+        "items": ["one", "two"]
+    }
+
+
+def test_field_null_values_blank_a_placeholder_token():
+    """ClinVar writes '.' where a condition has no ontology ids. It must read as
+    absent, but only where it is declared: '.' is a real value in other fields,
+    so this is per-field rather than global."""
+    index_map = index_map_for("Allele", "Names", "Ids")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Names", "Ids"],
+                "require_any_output": ["conditions"],
+                "targets": [
+                    {
+                        "field": "conditions",
+                        "from": ["Names", "Ids"],
+                        "transform": "zip",
+                        "sep": "+",
+                        "align": "max",
+                        "as": [
+                            {"field": "name", "type": "string"},
+                            {
+                                "field": "ids",
+                                "type": "string",
+                                "null_values": ["."],
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    )
+    result = apply_plugin_spec(
+        ["A", "Disease_one+Disease_two", "MeSH:D1,MedGen:C1+."],
+        index_map,
+        spec.plugin("probe"),
+    )
+    assert result == {
+        "conditions": [
+            {"name": "Disease_one", "ids": "MeSH:D1,MedGen:C1"},
+            {"name": "Disease_two", "ids": None},
+        ]
+    }
+
+
+def test_decode_happens_after_every_split():
+    """An escaped separator must survive as data.
+
+    ClinVar escapes ',' inside disease names and CURIE lists, and the enriched
+    VCF then uses '+' as its own separator. Decoding first would turn a '%2C'
+    back into a live comma before the splits ran; decoding last, as the
+    interpreter does, keeps it inside the value it belongs to.
+    """
+    index_map = index_map_for("Allele", "Names", "Ids")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Names", "Ids"],
+                "require_any_output": ["conditions"],
+                "targets": [
+                    {
+                        "field": "conditions",
+                        "from": ["Names", "Ids"],
+                        "transform": "zip",
+                        "sep": "+",
+                        "decode": True,
+                        "as": [
+                            {"field": "name", "type": "string"},
+                            {"field": "ids", "type": "string", "null_values": ["."]},
+                        ],
+                    }
+                ],
+            }
+        ]
+    )
+    result = apply_plugin_spec(
+        [
+            "A",
+            # one name containing an escaped comma, then a second name
+            "Neurodevelopmental_disorder%2C_mitochondrial+Inborn_disease",
+            "MONDO:MONDO:0060578%2CMedGen:C4540192+.",
+        ],
+        index_map,
+        spec.plugin("probe"),
+    )
+    assert result == {
+        "conditions": [
+            {
+                "name": "Neurodevelopmental_disorder,_mitochondrial",
+                "ids": "MONDO:MONDO:0060578,MedGen:C4540192",
+            },
+            {"name": "Inborn_disease", "ids": None},
+        ]
+    }
+
+
+def test_decode_is_off_by_default():
+    """A '%' that is genuinely part of a value must not be mangled."""
+    index_map = index_map_for("Allele", "Thing")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Thing"],
+                "require_any_output": ["value"],
+                "targets": [
+                    {"field": "value", "from": "Thing", "transform": "scalar"}
+                ],
+            }
+        ]
+    )
+    assert apply_plugin_spec(["A", "100%2C"], index_map, spec.plugin("probe")) == {
+        "value": "100%2C"
+    }
+
+
+def _joined(joins, **columns):
+    """A two-list plugin with `joins` applied, over the given raw columns."""
+    index_map = index_map_for("Allele", "Names", "Recs")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Names", "Recs"],
+                "require_any_output": ["conditions"],
+                "targets": [
+                    {
+                        "field": "conditions",
+                        "from": "Names",
+                        "transform": "records",
+                        "sep": "+",
+                        "item_sep": "~",
+                        "as": [
+                            {"field": "name", "type": "string"},
+                            # Only the `also_match` test fills this; the rest
+                            # pass bare names, so it comes out null.
+                            {"field": "kind", "type": "string"},
+                        ],
+                    },
+                    {
+                        "field": "records",
+                        "from": "Recs",
+                        "transform": "records",
+                        "sep": "&",
+                        "item_sep": "~",
+                        "as": [
+                            {"field": "acc", "type": "string"},
+                            {"field": "verdict", "type": "string"},
+                            {"field": "condition", "type": "string"},
+                        ],
+                    },
+                ],
+                "joins": joins,
+            }
+        ]
+    )
+    return apply_plugin_spec(
+        ["A", columns["names"], columns["recs"]], index_map, spec.plugin("probe")
+    )
+
+
+def test_join_attaches_matching_rows_by_key():
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "records"}],
+        names="Disease_one+Disease_two",
+        recs="R1~Pathogenic~Disease_one&R2~Benign~Disease_two",
+    )
+    assert [c["name"] for c in result["conditions"]] == ["Disease_one", "Disease_two"]
+    assert [r["acc"] for r in result["conditions"][0]["records"]] == ["R1"]
+    assert [r["acc"] for r in result["conditions"][1]["records"]] == ["R2"]
+
+
+def test_join_matches_case_insensitively_when_asked():
+    """ClinVar submitters write the same condition in different cases; an exact
+    match would drop them from their own condition's counts."""
+    joins = [{"into": "conditions", "from": "records", "left_key": "name",
+              "right_key": "condition", "as": "records"}]
+    exact = _joined(joins, names="Disease_one", recs="R1~Pathogenic~DISEASE_ONE")
+    assert exact["conditions"][0]["records"] == []
+
+    joins[0]["case_insensitive"] = True
+    loose = _joined(joins, names="Disease_one", recs="R1~Pathogenic~DISEASE_ONE")
+    assert [r["acc"] for r in loose["conditions"][0]["records"]] == ["R1"]
+
+
+def test_join_key_pattern_extracts_the_comparable_part():
+    """The two lists key on the same condition, but one writes it decorated —
+    ClinVar's RCV condition is `MedGen:C4540192:<name>`."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "records",
+          "right_key_pattern": r"^(?:[^:]+:[^:]+:)?(?P<key>.*)$"}],
+        names="Disease_one",
+        recs="R1~Pathogenic~MedGen:C123:Disease_one",
+    )
+    assert [r["acc"] for r in result["conditions"][0]["records"]] == ["R1"]
+
+
+def test_join_places_a_row_under_every_condition_it_names():
+    """One ClinVar record can be filed against several conditions at once. It
+    belongs under each of them — without the split it matched none, because the
+    whole '+'-joined string was the key."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "records", "right_key_sep": "+",
+          "right_key_pattern": r"^(?:[^:]+:[^:]+:)?(?P<key>.*)$"}],
+        names="Disease_one+Disease_two",
+        recs="R1~Pathogenic~MedGen:C1:Disease_one+MedGen:C2:Disease_two",
+    )
+    assert [r["acc"] for r in result["conditions"][0]["records"]] == ["R1"]
+    assert [r["acc"] for r in result["conditions"][1]["records"]] == ["R1"]
+
+
+def test_join_count_by_summarises_the_matches():
+    """"How many submitters said what", grouped in first-seen order, so the
+    display renders counts rather than counting."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "classifications",
+          "count_by": "verdict"}],
+        names="Disease_one",
+        recs=("R1~Pathogenic~Disease_one&R2~Pathogenic~Disease_one"
+              "&R3~Benign~Disease_one"),
+    )
+    assert result["conditions"][0]["classifications"] == [
+        {"verdict": "Pathogenic", "count": 2},
+        {"verdict": "Benign", "count": 1},
+    ]
+
+
+def test_join_nest_as_keeps_each_group_beside_its_count():
+    """A count the reader can open needs the rows it was made of, grouped the
+    same way -- otherwise opening "Pathogenic (2)" shows every submitter of
+    every classification."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "classifications",
+          "count_by": "verdict", "nest_as": "members"}],
+        names="Disease_one",
+        recs=("R1~Pathogenic~Disease_one&R2~Pathogenic~Disease_one"
+              "&R3~Benign~Disease_one"),
+    )
+    groups = result["conditions"][0]["classifications"]
+    assert [g["verdict"] for g in groups] == ["Pathogenic", "Benign"]
+    assert [[m["acc"] for m in g["members"]] for g in groups] == [
+        ["R1", "R2"],
+        ["R3"],
+    ]
+    assert [g["count"] for g in groups] == [2, 1]
+
+
+def test_join_nest_as_needs_a_grouping_to_nest_under():
+    from pydantic import ValidationError
+
+    from app.vep.models.parsing_spec_model import JoinSpec
+
+    with pytest.raises(ValidationError, match="nest_as"):
+        JoinSpec(**{"into": "conditions", "from": "records", "left_key": "name",
+                    "right_key": "condition", "as": "classifications",
+                    "nest_as": "members"})
+
+
+def test_join_leaves_an_unmatched_left_row_empty():
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "records"}],
+        names="Disease_one+Orphan_disease",
+        recs="R1~Pathogenic~Disease_one",
+    )
+    assert result["conditions"][1]["records"] == []
+
+
+def _curie_link(ids, **overrides):
+    """A one-row list carrying `ids`, with the ClinVar curie_link post-op."""
+    index_map = index_map_for("Allele", "Names", "Ids")
+    post = {
+        "op": "curie_link", "by": "ids", "into": "id_url", "label_into": "id_curie",
+        "prefer": ["MedGen", "OMIM", "MONDO"],
+        "templates": {
+            "MedGen": "https://www.ncbi.nlm.nih.gov/medgen/{id}",
+            "OMIM": "https://www.omim.org/entry/{id}",
+            "MONDO": "https://purl.obolibrary.org/obo/MONDO_{id}",
+            "MeSH": "https://meshb.nlm.nih.gov/record/ui?ui={id}",
+        },
+        **overrides,
+    }
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe", "scope": "allele", "output": "probe",
+                "csq_fields": ["Names", "Ids"], "require_any_output": ["conditions"],
+                "targets": [
+                    {
+                        "field": "conditions", "from": ["Names", "Ids"],
+                        "transform": "zip", "sep": "+", "decode": True,
+                        "as": [
+                            {"field": "name", "type": "string"},
+                            {"field": "ids", "type": "string", "null_values": ["."]},
+                        ],
+                        "post": [post],
+                    }
+                ],
+            }
+        ]
+    )
+    out = apply_plugin_spec(["A", "Disease", ids], index_map, spec.plugin("probe"))
+    return out["conditions"][0]
+
+
+def test_curie_link_prefers_medgen():
+    row = _curie_link("MeSH:D030342%2CMedGen:C0950123")
+    assert row["id_url"] == "https://www.ncbi.nlm.nih.gov/medgen/C0950123"
+    assert row["id_curie"] == "MedGen:C0950123"
+
+
+def test_curie_link_falls_back_through_the_preference_order():
+    assert _curie_link("OMIM:617710%2CMONDO:MONDO:0060578")["id_url"] == (
+        "https://www.omim.org/entry/617710"
+    )
+    assert _curie_link("MONDO:MONDO:0060578")["id_url"] == (
+        # MONDO writes itself as `MONDO:MONDO:0060578` — the tag plus a
+        # self-prefixing CURIE. The bare accession is what the URL wants.
+        "https://purl.obolibrary.org/obo/MONDO_0060578"
+    )
+
+
+def test_curie_link_takes_an_unpreferred_source_rather_than_nothing():
+    assert _curie_link("MeSH:D030342")["id_url"] == (
+        "https://meshb.nlm.nih.gov/record/ui?ui=D030342"
+    )
+
+
+def test_curie_link_writes_null_when_there_is_no_usable_id():
+    # ClinVar writes '.' for a condition it has no ontology id for; the name
+    # then renders as plain text rather than a dead link.
+    row = _curie_link(".")
+    assert row["ids"] is None
+    assert row["id_url"] is None
+    assert row["id_curie"] is None
+
+
+def test_curie_link_ignores_a_source_it_has_no_template_for():
+    assert _curie_link("Nonesuch:12345")["id_url"] is None
+
+
+# --- the `stack` transform --------------------------------------------------
+
+
+def _stacked(groups, **columns):
+    """A one-target plugin whose target stacks `groups` over the given columns."""
+    index_map = index_map_for("Allele", "GermDN", "GermIDs", "SomDN", "SomIDs")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["GermDN", "SomDN"],
+                "targets": [
+                    {
+                        "field": "conditions",
+                        "transform": "stack",
+                        "of": groups,
+                        "item_fields": ["name", "ids", "type"],
+                    }
+                ],
+            }
+        ]
+    )
+    return apply_plugin_spec(
+        [
+            "A",
+            columns.get("germ_dn", ""),
+            columns.get("germ_ids", ""),
+            columns.get("som_dn", ""),
+            columns.get("som_ids", ""),
+        ],
+        index_map,
+        spec.plugin("probe"),
+    )
+
+
+_STACK_GROUPS = [
+    {
+        "from": ["GermDN", "GermIDs"],
+        "as": [{"field": "name", "type": "string"}, {"field": "ids", "type": "string"}],
+        "const": {"type": "Germline"},
+        "sep": "+",
+    },
+    {
+        "from": ["SomDN", "SomIDs"],
+        "as": [{"field": "name", "type": "string"}, {"field": "ids", "type": "string"}],
+        "const": {"type": "Somatic"},
+        "sep": "+",
+    },
+]
+
+
+def test_stack_concatenates_its_groups_in_order():
+    result = _stacked(
+        _STACK_GROUPS,
+        germ_dn="Disease_one+Disease_two",
+        germ_ids="MedGen:C1+MedGen:C2",
+        som_dn="Tumour_one",
+        som_ids="MedGen:C3",
+    )
+    assert [(c["name"], c["ids"]) for c in result["conditions"]] == [
+        ("Disease_one", "MedGen:C1"),
+        ("Disease_two", "MedGen:C2"),
+        ("Tumour_one", "MedGen:C3"),
+    ]
+
+
+def test_stack_tags_every_row_with_its_group():
+    """The tag is the only record of which columns a row came from -- ClinVar
+    carries the classification type in the column *names* (CLNDN vs SCIDN), and
+    nowhere in the values."""
+    result = _stacked(
+        _STACK_GROUPS,
+        germ_dn="Disease_one+Disease_two",
+        germ_ids=".+.",
+        som_dn="Tumour_one",
+        som_ids=".",
+    )
+    assert [c["type"] for c in result["conditions"]] == [
+        "Germline",
+        "Germline",
+        "Somatic",
+    ]
+
+
+def test_stack_keeps_a_name_that_appears_under_two_types():
+    """The same condition can be both germline and somatic; it is two rows, not
+    one, because the classifications behind them are different claims."""
+    result = _stacked(
+        _STACK_GROUPS,
+        germ_dn="Shared_disease",
+        germ_ids="MedGen:C1",
+        som_dn="Shared_disease",
+        som_ids="MedGen:C1",
+    )
+    assert [(c["name"], c["type"]) for c in result["conditions"]] == [
+        ("Shared_disease", "Germline"),
+        ("Shared_disease", "Somatic"),
+    ]
+
+
+def test_stack_skips_a_group_whose_columns_are_empty():
+    result = _stacked(
+        _STACK_GROUPS, germ_dn="Disease_one", germ_ids="MedGen:C1", som_dn="", som_ids=""
+    )
+    assert [c["type"] for c in result["conditions"]] == ["Germline"]
+
+
+def test_stack_over_scalar_columns_yields_one_row_per_group():
+    """A group of scalar columns is a zip of one-element lists -- which is how
+    three aggregate classifications become a three-row list."""
+    result = _stacked(
+        [
+            {
+                "from": ["GermDN", "GermIDs"],
+                "as": [
+                    {"field": "name", "type": "string"},
+                    {"field": "ids", "type": "string"},
+                ],
+                "const": {"type": "Germline"},
+            },
+            {
+                "from": ["SomDN", "SomIDs"],
+                "as": [
+                    {"field": "name", "type": "string"},
+                    {"field": "ids", "type": "string"},
+                ],
+                "const": {"type": "Somatic"},
+            },
+        ],
+        germ_dn="Pathogenic",
+        germ_ids="reviewed_by_expert_panel",
+        som_dn="Tier_I",
+        som_ids="criteria_provided",
+    )
+    assert [(c["name"], c["type"]) for c in result["conditions"]] == [
+        ("Pathogenic", "Germline"),
+        ("Tier_I", "Somatic"),
+    ]
+
+
+def test_stack_rejects_a_group_whose_as_does_not_match_its_columns():
+    from pydantic import ValidationError
+
+    from app.vep.models.parsing_spec_model import StackGroup
+
+    with pytest.raises(ValidationError, match="one `as` entry per `from` column"):
+        StackGroup.model_validate(
+            {"from": ["A", "B"], "as": [{"field": "name", "type": "string"}]}
+        )
+
+
+# --- join refinements -------------------------------------------------------
+
+
+def test_join_also_match_disambiguates_a_shared_key():
+    """One condition name under two classification types: without the extra
+    equality the somatic record files itself under the germline condition."""
+    joins = [{"into": "conditions", "from": "records", "left_key": "name",
+              "right_key": "condition", "as": "records"}]
+    loose = _joined(
+        joins,
+        names="Shared_disease~Germline+Shared_disease~Somatic",
+        recs="R1~Germline~Shared_disease&R2~Somatic~Shared_disease",
+    )
+    # Both records land under both conditions -- the leak.
+    assert [[r["acc"] for r in c["records"]] for c in loose["conditions"]] == [
+        ["R1", "R2"],
+        ["R1", "R2"],
+    ]
+
+    joins[0]["also_match"] = {"kind": "verdict"}
+    tight = _joined(
+        joins,
+        names="Shared_disease~Germline+Shared_disease~Somatic",
+        recs="R1~Germline~Shared_disease&R2~Somatic~Shared_disease",
+    )
+    assert [[r["acc"] for r in c["records"]] for c in tight["conditions"]] == [
+        ["R1"],
+        ["R2"],
+    ]
+
+
+def test_join_count_into_writes_the_number_of_matches():
+    """A row with no candidates at all counts as nothing, not as zero: "0 of 0
+    submissions contribute" is a sentence about nothing, while a real zero —
+    none of several qualifying — is worth saying."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "count_into": "n"}],
+        names="Disease_one+Orphan_disease",
+        recs=("R1~Pathogenic~Disease_one&R2~Pathogenic~Disease_one"
+              "&R3~Benign~Disease_one"),
+    )
+    assert [c["n"] for c in result["conditions"]] == [3, None]
+
+
+def test_join_where_counts_zero_when_candidates_all_fail_it():
+    """The distinction the null depends on: these conditions *have* records,
+    none of which qualify, so the count is a real 0."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "where": {"field": "verdict", "equals": "1"},
+          "count_into": "n"}],
+        names="Has_records+Has_none",
+        recs="R1~0~Has_records&R2~0~Has_records",
+    )
+    assert [c["n"] for c in result["conditions"]] == [0, None]
+
+
+def test_join_where_counts_only_the_rows_a_source_vouches_for():
+    """Counting the terms that match the aggregate verbatim breaks on the ones a
+    source derives -- nobody submits "Pathogenic/Likely pathogenic", so the count
+    came out zero. ClinVar flags which submissions produced the aggregate, and
+    `where` counts those."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "where": {"field": "verdict", "equals": "1"},
+          "count_into": "counted"},
+         {"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "count_into": "total"}],
+        names="Disease_one",
+        recs="R1~1~Disease_one&R2~0~Disease_one&R3~1~Disease_one",
+    )
+    assert result["conditions"][0]["counted"] == 2
+    assert result["conditions"][0]["total"] == 3
+
+
+def test_a_join_must_write_exactly_one_thing():
+    from pydantic import ValidationError
+
+    from app.vep.models.parsing_spec_model import JoinSpec
+
+    base = {"into": "conditions", "from": "records", "left_key": "name",
+            "right_key": "condition"}
+    with pytest.raises(ValidationError, match="not both or neither"):
+        JoinSpec(**base)
+    with pytest.raises(ValidationError, match="not both or neither"):
+        JoinSpec(**base, **{"as": "records", "count_into": "n"})
+
+
+# --- narrowing a plugin to the rows it is about -----------------------------
+
+
+def _scoped(applies_to, symbol, geneinfo, sig="Pathogenic"):
+    """One plugin gated by `applies_to`, over a row with these columns."""
+    index_map = index_map_for("Allele", "SYMBOL", "Probe_SIG", "Probe_GENEINFO")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "transcript",
+                "output": "probe",
+                "csq_fields": ["Probe_SIG", "Probe_GENEINFO"],
+                "applies_to": applies_to,
+                "targets": [
+                    {
+                        "field": "significance",
+                        "from": "Probe_SIG",
+                        "transform": "scalar",
+                        "type": "string",
+                    }
+                ],
+            }
+        ]
+    )
+    return apply_plugin_spec(
+        ["A", symbol, sig, geneinfo], index_map, spec.plugin("probe")
+    )
+
+
+_GENE_SCOPE = {
+    "column": "SYMBOL",
+    "listed_in": "Probe_GENEINFO",
+    "item_pattern": "^(?P<key>[^:]+)",
+}
+
+
+def test_a_plugin_is_dropped_on_a_row_it_is_not_about():
+    """VEP repeats a custom's columns on every CSQ row of the variant, so
+    ClinVar's record for SMARCB1 was also being served under DERL3, whose
+    transcripts merely overlap the same position."""
+    assert _scoped(_GENE_SCOPE, "SMARCB1", "SMARCB1:6598") is not None
+    assert _scoped(_GENE_SCOPE, "DERL3", "SMARCB1:6598") is None
+
+
+def test_every_gene_the_annotation_names_keeps_it():
+    """A record can name several genes; each of them is one it is about."""
+    listed = "WARS2:10352&WARS2-AS1:101929147&LOC129931299:129931299"
+    assert _scoped(_GENE_SCOPE, "WARS2", listed) is not None
+    assert _scoped(_GENE_SCOPE, "WARS2-AS1", listed) is not None
+    assert _scoped(_GENE_SCOPE, "SMARCB1", listed) is None
+
+
+def test_nothing_to_narrow_by_keeps_the_annotation():
+    """Dropping here would trade a wrong attribution for a missing one: an
+    intergenic row has no symbol to match, and the annotation is still true of
+    the variant."""
+    assert _scoped(_GENE_SCOPE, "", "SMARCB1:6598") is not None
+    assert _scoped(_GENE_SCOPE, "SMARCB1", "") is not None
+
+
+def test_an_escaped_separator_is_not_read_as_one():
+    """Split before decoding: a name carrying an encoded '&' is one name."""
+    assert _scoped(_GENE_SCOPE, "A&B", "A%26B:1") is not None
+
+
+def test_post_joins_can_order_by_what_a_join_added():
+    """A target's own `post` runs before the joins, so ordering by a joined-in
+    value needs the later pass: whether a condition has a submission behind the
+    aggregate is only known once the submissions have been matched to it."""
+    index_map = index_map_for("Allele", "Names", "Recs")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Names", "Recs"],
+                "targets": [
+                    {"field": "conditions", "from": "Names", "transform": "records",
+                     "sep": "+", "item_sep": "~",
+                     "as": [{"field": "name", "type": "string"}]},
+                    {"field": "records", "from": "Recs", "transform": "records",
+                     "sep": "&", "item_sep": "~",
+                     "as": [{"field": "acc", "type": "string"},
+                            {"field": "verdict", "type": "string"},
+                            {"field": "condition", "type": "string"}]},
+                ],
+                "joins": [
+                    {"into": "conditions", "from": "records", "left_key": "name",
+                     "right_key": "condition",
+                     "where": {"field": "verdict", "equals": "1"},
+                     "count_into": "counted"}
+                ],
+                "post_joins": [
+                    {"target": "conditions", "op": "sort", "by": "counted",
+                     "desc": True, "nulls": "last"}
+                ],
+            }
+        ]
+    )
+    result = apply_plugin_spec(
+        ["A", "Quiet_one+Loud_one+Other_quiet", "R1~1~Loud_one&R2~0~Quiet_one"],
+        index_map,
+        spec.plugin("probe"),
+    )
+    # The one with a counted record leads; the rest keep their source order.
+    assert [c["name"] for c in result["conditions"]] == [
+        "Loud_one",
+        "Quiet_one",
+        "Other_quiet",
+    ]
+
+
+def test_a_gated_out_list_transform_yields_a_list():
+    """A `when` that does not hold must leave the target *empty*, not null: a
+    join tests `isinstance(left, list)` before it runs, so a null here silently
+    skips every join into that target -- and a `post_joins` sort by a field the
+    join was meant to write then has nothing to sort by."""
+    index_map = index_map_for("Allele", "Flag", "Recs")
+    spec = ParsingSpec(plugins=[{
+        "plugin": "probe", "scope": "allele", "output": "probe",
+        "csq_fields": ["Recs"],
+        "targets": [
+            {"field": "recs", "from": "Recs", "transform": "records",
+             "item_sep": "~", "as": [{"field": "a", "type": "string"}],
+             "when": {"field": "Flag", "includes": "on"}},
+            {"field": "stacked", "transform": "stack",
+             "of": [{"from": ["Recs"], "as": [{"field": "a", "type": "string"}]}],
+             "when": {"field": "Flag", "includes": "on"}},
+        ],
+    }])
+    off = apply_plugin_spec(["A", "off", "x"], index_map, spec.plugin("probe"))
+    assert off == {"recs": [], "stacked": []}

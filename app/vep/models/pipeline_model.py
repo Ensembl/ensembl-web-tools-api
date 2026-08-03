@@ -449,15 +449,15 @@ class ConfigIniParams(BaseModel):
     gnomad_cnv_sf_nfe: bool = False
     gnomad_cnv_sf_sas: bool = False
     gnomad_cnv_sf_remaining: bool = False
-    # ClinVar clinical significance. `clinvar` is the master toggle; the two
-    # sub-options each gate their own VEP `custom` line, and require the master
-    # (config entries carry `requires: ["clinvar"]`). `clinvar_short` is the
-    # original ClinVar CLNSIG custom (human GRCh37/GRCh38); `clinvar_sv` is the
-    # ClinVar_SV structural-variant custom (GRCh38-only).
+    # ClinVar. `clinvar` is the master toggle for the structural custom only —
+    # `clinvar_sv` is the ClinVar_SV custom and requires it.
     clinvar: bool = False
-    # Default ON: enabling the ClinVar master should give you short variants
-    # without a second click. It still runs nothing unless `clinvar` is on.
-    clinvar_short: bool = True
+    # `clinvar_short` (the germline CLNSIG custom) has no form control: it is
+    # served under Phenotypes, whose config entry `forces_on` it. Hence the
+    # default is off — the only thing that turns it on is that force, and its
+    # entry additionally `requires: ["phenotypes"]` so a stale True restored by
+    # an edit/rerun cannot emit the custom on its own.
+    clinvar_short: bool = False
     clinvar_sv: bool = False
     # GENCODE promoter windows (human GRCh38). A VEP `custom` gff overlap line
     # (no `fields=`; VEP emits the gff attributes itself).

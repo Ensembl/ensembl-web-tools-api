@@ -358,38 +358,63 @@ def test_simple_plugin_expects_its_csq_fields():
     assert _expected(cadd=True) == {"CADD_PHRED", "CADD_RAW"}
 
 
+CLINVAR_SHORT_COLUMNS = {
+    "ClinVar",  # the bare match column a custom always emits
+    "ClinVar_CLNDN",
+    "ClinVar_CLNDNINCL",
+    "ClinVar_CLNDISDB",
+    "ClinVar_CLNDISDBINCL",
+    "ClinVar_CLNREVSTAT",
+    "ClinVar_CLNSIG",
+    "ClinVar_CLNSIGINCL",
+    "ClinVar_ONCDN",
+    "ClinVar_ONCDNINCL",
+    "ClinVar_ONCDISDB",
+    "ClinVar_ONCDISDBINCL",
+    "ClinVar_ONC",
+    "ClinVar_ONCINCL",
+    "ClinVar_ONCREVSTAT",
+    "ClinVar_ONCSCV",
+    "ClinVar_ONCCONF",
+    "ClinVar_CLNSUBA",
+    "ClinVar_CLNPMID",
+    "ClinVar_CLNSUBN",
+    "ClinVar_CLNRCV",
+    "ClinVar_SCI",
+    "ClinVar_SCIREVSTAT",
+    "ClinVar_SCIDN",
+    "ClinVar_SCIDISDB",
+    "ClinVar_GENEINFO",
+}
+
+CLINVAR_SV_COLUMNS = {"ClinVar_SV", "ClinVar_SV_CLNSIG", "ClinVar_SV_ORIGIN"}
+
+
 def test_custom_literal_expects_exact_columns():
     # The bare `short_name` match column is always emitted by a custom, so it is
-    # expected too, alongside the literal `short_name_<field>` columns. ClinVar's
-    # short custom requires the master (`clinvar`) as well as its own sub-option.
-    assert _expected(clinvar=True, clinvar_short=True) == {
-        "ClinVar",
-        "ClinVar_CLNSIG",
-        "ClinVar_CLNSIGCONF",
-    }
+    # expected too, alongside the literal `short_name_<field>` columns. The
+    # germline custom rides in on Phenotypes (`forces_on`), which is what makes
+    # its columns expected — alongside Phenotypes' own column.
+    assert _expected(phenotypes=True) == CLINVAR_SHORT_COLUMNS | {"PHENOTYPES"}
 
 
-def test_clinvar_sub_option_requires_the_master():
-    # A ClinVar sub-option selected without the master (a stale value restored by
-    # edit/rerun) expects nothing — the `requires: ["clinvar"]` gate holds.
+def test_clinvar_short_expects_nothing_without_phenotypes():
+    # A stale `clinvar_short` restored by edit/rerun expects nothing on its own —
+    # the `requires: ["phenotypes"]` gate holds.
     assert _expected(clinvar_short=True) == set()
+
+
+def test_clinvar_sv_still_requires_its_master():
+    # The structural custom is unchanged: it belongs to the `clinvar` master and
+    # expects nothing without it.
     assert _expected(clinvar_sv=True) == set()
-    # With the master on, each sub-option expects its own custom's columns.
-    # Short variants are on by default, so they come along with the master.
-    assert _expected(clinvar=True, clinvar_sv=True) == {
-        "ClinVar",
-        "ClinVar_CLNSIG",
-        "ClinVar_CLNSIGCONF",
-        "ClinVar_SV",
-        "ClinVar_SV_CLNSIG",
-        "ClinVar_SV_ORIGIN",
-    }
-    # ...and turning them off leaves only the structural columns.
-    assert _expected(clinvar=True, clinvar_sv=True, clinvar_short=False) == {
-        "ClinVar_SV",
-        "ClinVar_SV_CLNSIG",
-        "ClinVar_SV_ORIGIN",
-    }
+    assert _expected(clinvar=True, clinvar_sv=True) == CLINVAR_SV_COLUMNS
+    # The two are independent now: Phenotypes brings the germline columns, the
+    # master brings the structural ones, and neither implies the other.
+    assert (
+        _expected(phenotypes=True, clinvar=True, clinvar_sv=True)
+        == CLINVAR_SHORT_COLUMNS | CLINVAR_SV_COLUMNS | {"PHENOTYPES"}
+    )
 
 
 def test_custom_builder_expects_the_combinatorial_columns():
@@ -414,13 +439,28 @@ def test_one_config_to_many_parse_expects_both():
 
 
 def test_sub_flagged_plugin_is_excluded():
-    # ProtVar has from_option sub-flags (a sub-option can drop a column), so it is
-    # excluded entirely — even with pocket off, nothing is (wrongly) required.
-    assert _expected(protvar=True) == set()
-    assert _expected(protvar=True, protvar_pocket=False) == set()
+    # ProtVar has from_option sub-flags (a sub-option can drop a column), so its
+    # own columns are excluded entirely — even with pocket off, none is
+    # (wrongly) required. HGVSg is there because ProtVar `forces_on` it: the
+    # `--hgvsg` line really is emitted, and an allele-scoped flag column is
+    # present for every variant, so it is expected like any other.
+    assert _expected(protvar=True) == {"HGVSg"}
+    assert _expected(protvar=True, protvar_pocket=False) == {"HGVSg"}
     # IntAct (variadic flags) and mutfunc (from_option sub-flags) likewise
     assert _expected(intact=True) == set()
     assert _expected(mutfunc=True) == set()
+
+
+def test_a_forced_option_contributes_its_columns():
+    """A forced option's config line is emitted, so its output must be there.
+
+    If the expectation ignored `forces_on`, the missing-field check would go
+    silent for exactly the data the option was forced on to produce — which is
+    how ClinVar now rides in on Phenotypes.
+    """
+    # hgvsg is not selected; ProtVar turns it on, and its column comes with it.
+    assert "HGVSg" in _expected(protvar=True)
+    assert "HGVSg" not in _expected(protvar=False)
 
 
 def test_flags_require_only_their_allele_scoped_columns():

@@ -12,11 +12,16 @@ It is authored per genome, so unlike the per-job display *panels* it lives
 inside the merged spec document as a third sibling section, under the same
 content digest, and is pinned to a job for free.
 
-Deliberately small: every field here maps 1:1 onto a rendering primitive the
-frontend already has (`RowSpec` / `renderRowGroup` / `renderRowBlock`). Nothing
-in this model invents new rendering behaviour, and options whose output is
-interactive or derived (ClinVar, OpenTargets, ProtVar, ...) are deliberately
-*not* expressible — they stay as frontend overrides.
+This model owns every option's layout. It began deliberately small — one field
+per rendering primitive the frontend already had, with the interactive and
+derived options (ClinVar, OpenTargets, ProtVar) left as frontend overrides — but
+the override registry is now empty, and ClinVar, once the example of what could
+not be expressed, is the largest thing described here. Some constructs (a
+collapsed detail, a star rating) do invent behaviour the row primitives had no
+equivalent for.
+
+What stays on the frontend: named `builder` links, which need job context no
+annotation field carries.
 """
 
 import re
@@ -32,7 +37,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # absent (drops / dashes) when the count is zero — ProtVar's Show-all pockets /
 # interfaces counts.
 RowFormat = Literal[
-    "text", "num", "humanize", "phenotype", "join", "humanize_join", "count"
+    "text", "num", "humanize", "phenotype", "join", "humanize_join", "count",
+    "humanize_terms",
 ]
 
 # Which view a block belongs to: the default annotation view or "Show all". A
@@ -75,6 +81,13 @@ class SubOption(BaseModel):
     `subOptionRan`). The id is a form option id — the hand-synced seam with
     `form_panels`, like the top-level `option_id`; not a `plugin.field` ref, so
     the display↔parsing check does not touch it.
+
+    Also names the gate a block renders behind (`requires_selected`), which is
+    the same question asked of the whole block rather than of one row: was this
+    id in the submitted parameters. The ClinVar master needs it because dev-data
+    VCFs are annotated from a full cache and carry columns the user did not
+    pick, so gating on the data alone would leak an unselected variant kind into
+    the view.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -127,24 +140,6 @@ class WhenSpec(BaseModel):
         return self.present or self.empty  # type: ignore[return-value]
 
 
-class SelectedGate(BaseModel):
-    """Gate a block on whether a form option/sub-option was *selected* for the
-    job (as opposed to `when`/`requires`, which test the annotation data).
-
-    The ClinVar master's display renders its short and structural blocks under
-    one option, so each block gates on its own sub-option: dev-data VCFs are
-    annotated from a full cache and carry columns the user didn't pick, so
-    gating on data alone would leak the unselected variant kind into the view.
-    `id` is the sub-option id; `default` is that sub-option's default (an option
-    left at its default isn't written to the submitted parameters).
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    default: bool = False
-
-
 class LinkSpec(BaseModel):
     """How to turn a value into a link.
 
@@ -195,7 +190,10 @@ class DisplayRow(BaseModel):
     # React list key. Optional: absent means "use the row's position", which is
     # stable for these fixed lists.
     key: str | None = None
-    label: str
+    # Optional only for a row that stacks a list: the somatic classifications
+    # sit directly above the table they describe, where a repeated
+    # "Classification" would say less than their position already does.
+    label: str | None = None
     # `from` is a Python keyword, hence the alias (as in TargetSpec).
     source: str | None = Field(default=None, alias="from")
     compose: ComposeSpec | None = None
@@ -219,6 +217,15 @@ class DisplayRow(BaseModel):
     # A trailing link on the value (a named `builder` — ProtVar's link icon on
     # each row). Builder links contribute no field refs.
     link: LinkSpec | None = None
+    # A row whose `from` is a *list*: one rendered line per element, stacked as
+    # the row's value under a single label. The same element shape a list block
+    # repeats, borrowed so a stacked value needs no vocabulary of its own —
+    # ClinVar's classification is one line per classification type.
+    item: "DisplayItemSpec | None" = None
+    # Keep only some of the stacked list, so one list can be shown in two
+    # places — ClinVar's germline classification belongs above the germline
+    # conditions, the somatic ones above theirs. Same filter a table takes.
+    where: "RowFilter | None" = None
 
     @model_validator(mode="after")
     def _exactly_one_source(self) -> "DisplayRow":
@@ -242,6 +249,13 @@ class DisplayRow(BaseModel):
             return [self.source]
         return self.compose.field_refs() if self.compose else []
 
+    def list_ref(self) -> tuple[str, str] | None:
+        """The `(plugin, listField)` this row stacks, if it stacks one."""
+        if not self.item or not self.source:
+            return None
+        plugin, _, field = self.source.partition(".")
+        return plugin, field
+
 
 class CellSpec(BaseModel):
     """One cell of a repeated item (see `DisplayListBlock`).
@@ -260,6 +274,28 @@ class CellSpec(BaseModel):
     format: RowFormat | None = None
     mono: bool = False
     link: LinkSpec | None = None
+    # A star rating in front of this cell, on the scale *named by this field of
+    # the element*. Unlike a row's fixed `stars`, the scale varies per element:
+    # ClinVar reads the same review-status wording differently for a germline
+    # classification and a somatic one, so which scale applies is data.
+    stars_from: str | None = None
+    # Which field the rating is *of*, when it is not this cell's own value: the
+    # stars lead the classification but rate the review status behind it, so
+    # they read as the confidence in the term they precede.
+    stars_of: str | None = None
+    # The cell's text, as a `{field}` template over the element — for a value
+    # that only means something said in words ("1/44 submissions contribute to
+    # aggregate classification"). `from` still says which field must be there
+    # for the cell to render at all.
+    template: str | None = None
+    # Value -> what to show for it. For a value whose wording is the source's
+    # rather than a reader's: ClinVar's classification type is the key a join
+    # matches on, so it has to stay "SomaticClinicalImpact" in the data while
+    # reading as three words on the page. An unmapped value keeps the data's own
+    # wording, as a heading's `labels` does — only the odd one out needs saying.
+    labels: dict[str, str] | None = None
+    # Keep the cell on one line, so its column is never sized below it.
+    nowrap: bool = False
 
     def item_field_refs(self) -> Iterator[str]:
         """Every item field this cell reads: its `from` plus any `{field}`
@@ -267,6 +303,12 @@ class CellSpec(BaseModel):
         frontend builder owns its inputs)."""
         if self.source:
             yield self.source
+        if self.stars_from:
+            yield self.stars_from
+        if self.stars_of:
+            yield self.stars_of
+        if self.template:
+            yield from _TEMPLATE_FIELD.findall(self.template)
         if self.link:
             yield from self.link.template_fields()
 
@@ -408,7 +450,7 @@ class _GatedBlock(BaseModel):
 
     heading: str | None = None
     # Render only when this sub-option was selected (ClinVar short/structural).
-    requires_selected: SelectedGate | None = None
+    requires_selected: SubOption | None = None
     # A data condition: render only when the named field is present / empty
     # (ClinVar's bare vs headed shapes).
     when: WhenSpec | None = None
@@ -484,6 +526,9 @@ class GroupBy(BaseModel):
     labels: dict[str, str] | None = None
 
 
+DisplayRow.model_rebuild()
+
+
 class DisplayListBlock(_GatedBlock):
     """A variable-length list: one item (a row of cells) per element of a
     list-valued field, optionally truncated. Covers the options whose output is
@@ -514,6 +559,98 @@ class DisplayListBlock(_GatedBlock):
         """The `(plugin, listField)` this block iterates."""
         plugin, _, field = self.source.partition(".")
         return plugin, field
+
+
+class ColumnItems(BaseModel):
+    """One line per element of a list-valued cell.
+
+    A column normally shows one value. ClinVar's conditions table has two that
+    do not: the classifications its submitters gave (each with a count), and
+    every RCV record covering the condition — a condition can have several, and
+    they stack.
+
+    `from` names the element field to show, `count_from` a companion count
+    rendered after it in brackets ("Pathogenic (5)"), and `link`/`link_from`
+    work as on the column itself: `{value}` is the displayed value, or the
+    sibling field when `link_from` names one. `expand` opens that one line onto
+    its own detail (see ColumnExpand).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    source: str = Field(alias="from")
+    format: RowFormat | None = None
+    count_from: str | None = None
+    link: LinkSpec | None = None
+    link_from: str | None = None
+    # One value packing several, each rendered (and linked) in its own right —
+    # as on a column. A ClinVar submission cites its publications as one
+    # '+'-joined list of PMIDs, and each is its own paper.
+    split: str | None = None
+    # Keep this item on one line. For a value that is an identifier: a link's
+    # icon and its id are one thing, and letting the line break between them
+    # leaves the icon stranded on the row above. Opt-in per item rather than a
+    # blanket rule for links, because the same table links a condition *name* —
+    # prose, which must be free to wrap.
+    nowrap: bool = False
+    expand: "ColumnExpand | None" = None
+    # A star rating in front of the value, using the named scale (see
+    # RatingScale) — as on a row.
+    stars: str | None = None
+
+    @model_validator(mode="after")
+    def _split_needs_a_link(self) -> "ColumnItems":
+        # Splitting a value only changes what the reader sees if each part
+        # becomes its own link; without one the parts would run together
+        # exactly as the unsplit string does.
+        if self.split and self.link is None:
+            raise ValueError(
+                f"`split` only applies to a linked item; {self.source!r} has no link"
+            )
+        return self
+
+
+class ColumnExpand(BaseModel):
+    """One line's collapsed detail: a summary that opens onto per-element lines.
+
+    ClinVar's classifications column summarises what a condition's submitters
+    said ("Pathogenic (5)"); the detail is who said it. `from` names the list
+    field holding those elements — read from the *same* element the summary line
+    came from, so a cell of several summaries opens one at a time rather than
+    all together — and `cells` the fields to show for each, joined on one line.
+    Collapsed by default: a condition can have dozens of submitters, and the
+    summary is the point.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    source: str = Field(alias="from")
+    cells: list[ColumnItems]
+    # Which of these lines to set apart: the detail is a long list of much the
+    # same thing, and only some of it bears on the classification above. A
+    # ClinVar submission that counts toward the aggregate reads at full weight;
+    # one that does not stays quiet rather than being hidden, since it is still
+    # a real submission somebody made.
+    emphasis: RowFilter | None = None
+
+
+ColumnItems.model_rebuild()
+
+
+class ColumnNote(BaseModel):
+    """A further line of a column's heading.
+
+    A column that needs explaining ends up with a heading far longer than the
+    values beneath it, and as one string it wrapped wherever the width happened
+    to run out. Stating the lines lets the breaks fall where the sense does.
+    `muted` sets a line in the same quiet text the thing it describes uses, so
+    the heading demonstrates its own convention.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    muted: bool = False
 
 
 class TableColumn(BaseModel):
@@ -547,6 +684,15 @@ class TableColumn(BaseModel):
     # accession. A value without the prefix is not a UniProt accession at all, so
     # it renders as plain text rather than becoming a broken link.
     link_prefix: str | None = None
+    # Build the link from a *sibling* field of the same element rather than from
+    # the cell's own text. A condition's URL is resolved in the parse (see the
+    # `curie_link` post-op) and lands beside the name, so the name is what the
+    # reader sees and the resolved URL is what it points at.
+    link_from: str | None = None
+    # Further heading lines beneath the label (see ColumnNote).
+    notes: list[ColumnNote] | None = None
+    # How to render a cell whose value is a list of objects (see ColumnItems).
+    items: ColumnItems | None = None
     # Which way the column's values (and its header) align.
     #
     # The house rule is by data type: text reads left, numbers read right, so a
@@ -607,9 +753,12 @@ class DisplayTableBlock(_GatedBlock):
 
     kind: Literal["table"]
     requires: str | None = None
-    # Sit one indent step in, as if under a heading. For a table with no heading
-    # standing beside headed siblings: the ClinVar phenotype table names its
-    # source in a column rather than a heading, but still belongs at the depth of
+    # Sit one indent step in. Either for a table with no heading standing beside
+    # headed siblings, or for one whose heading names it without saying what it
+    # belongs to — ClinVar's Germline and Somatic tables are subordinate to the
+    # Classification above them. Originally only for the headless case: the
+    # ClinVar phenotype table names its source in a column rather than a heading,
+    # but still belongs at the depth of
     # the "Gene associated" / "Variant associated" tables it sits with, not a step
     # out from them.
     indent: bool = False
@@ -698,7 +847,7 @@ class DisplayGroupBlock(_GatedBlock):
 
     kind: Literal["group"] = "group"
     heading: str | None = None
-    requires_selected: SelectedGate | None = None
+    requires_selected: SubOption | None = None
     when: WhenSpec | None = None
     view: BlockView | None = None
     blocks: list["DisplayBlock"]
@@ -781,12 +930,78 @@ class DisplayOptionSpec(BaseModel):
         return refs
 
 
+class RatingScale(BaseModel):
+    """A term -> rating table, drawn as a row of filled and empty marks.
+
+    Some sources state confidence as a phrase and publish a rating for it:
+    ClinVar's review status is "criteria provided, multiple submitters, no
+    conflicts", worth two stars of four. Which phrase earns which rating depends
+    on *what* is being rated — a variant's aggregate classification, a single
+    submission, and a somatic classification read the same words differently —
+    so scales are named and referenced rather than being one table.
+
+    Keys are matched loosely (case, and '_' as a space) so a scale can be
+    authored as the phrases a reader would recognise while the data keeps the
+    source's own punctuation. A term the scale does not know renders no rating
+    at all rather than a wrong one: sources add terms without warning, and no
+    stars reads as "not rated here", which is true, where zero stars would be a
+    claim the source never made.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    out_of: int
+    ratings: dict[str, int]
+
+    @model_validator(mode="after")
+    def _ratings_fit_the_scale(self) -> "RatingScale":
+        outside = sorted(
+            term
+            for term, rating in self.ratings.items()
+            if rating > self.out_of or rating < 0
+        )
+        if outside:
+            raise ValueError(f"ratings outside 0..{self.out_of}: {outside}")
+        return self
+
+
+def _items_stars_refs(items: ColumnItems | None) -> Iterator[str]:
+    """The scales an item line and its expanded detail refer to."""
+    if items is None:
+        return
+    if items.stars:
+        yield items.stars
+    for cell in items.expand.cells if items.expand else []:
+        yield from _items_stars_refs(cell)
+
+
 class DisplaySpec(BaseModel):
     """The display half of the merged document: every laid-out option."""
 
     model_config = ConfigDict(extra="forbid")
 
     options: list[DisplayOptionSpec]
+    # Named scales a row's or item's `stars` refers to (see RatingScale).
+    rating_scales: dict[str, RatingScale] = Field(default_factory=dict)
+
+    def stars_refs(self) -> Iterator[str]:
+        """Every scale name the options refer to."""
+        for option in self.options:
+            for block in option.iter_blocks():
+                for column in getattr(block, "columns", None) or []:
+                    yield from _items_stars_refs(column.items)
+
+    @model_validator(mode="after")
+    def _stars_name_a_known_scale(self) -> "DisplaySpec":
+        unknown = sorted(
+            {ref for ref in self.stars_refs() if ref not in self.rating_scales}
+        )
+        if unknown:
+            # A typo would otherwise show no stars at all, which is exactly what
+            # an unrecognised *term* legitimately does — so it would look like
+            # data rather than a broken spec.
+            raise ValueError(f"display references unknown rating scale(s): {unknown}")
+        return self
 
 
 class DisplayPayload(BaseModel):
@@ -802,3 +1017,4 @@ class DisplayPayload(BaseModel):
 
     options: list[DisplayOptionSpec]
     plugin_scopes: dict[str, str]
+    rating_scales: dict[str, RatingScale] = Field(default_factory=dict)

@@ -493,16 +493,23 @@ def test_clinvar_in_phenotype_and_disease_associations_for_grch37_and_grch38():
     for assembly in ("GRCh37.p13", "GRCh38.p14"):
         clinvar = _clinvar_option(assembly)
         assert clinvar["label"] == "Clinical Significance (ClinVar)"
-        # "Short variants" is available on both assemblies.
-        sub_ids = [s["id"] for s in clinvar["sub_options"]]
-        assert "clinvar_short" in sub_ids
+
+
+def test_clinvar_germline_has_no_form_control():
+    """The germline data is served under Phenotypes, which turns its custom on
+    behind the scenes — so there is nothing to tick for it here. Offering a
+    control that Phenotypes overrides would only misreport what ran."""
+    for assembly in ("GRCh38.p14", "GRCh37.p13"):
+        panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name=assembly)
+        assert "clinvar_short" not in option_ids(panels)
 
 
 def test_clinvar_structural_sub_option_available_for_both_human_assemblies():
-    # "Structural variants" (ClinVar_SV) exists for GRCh37 and GRCh38.
+    # "Structural variants" (ClinVar_SV) exists for GRCh37 and GRCh38, and is now
+    # the only thing the master gates.
     for assembly in ("GRCh38.p14", "GRCh37.p13"):
         subs = [s["id"] for s in _clinvar_option(assembly)["sub_options"]]
-        assert subs == ["clinvar_short", "clinvar_sv"]
+        assert subs == ["clinvar_sv"]
 
 
 def test_clinvar_absent_for_non_human():

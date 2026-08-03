@@ -11,6 +11,7 @@ over the same CSQ fixtures (see tests/test_spec_interpreter.py).
 
 import json
 import re
+from urllib.parse import unquote
 from functools import lru_cache
 from pathlib import Path
 
@@ -46,6 +47,8 @@ def _is_present(value) -> bool:
 def _coerce(raw: str | None, value_type: str, field_spec=None):
     """A raw CSQ value as `value_type`, or None if absent/'NA'/unparseable."""
     if raw is None or raw in _NULLISH:
+        return None
+    if field_spec is not None and raw in (field_spec.null_values or ()):
         return None
     if value_type == "float":
         return to_float(raw)
@@ -134,6 +137,39 @@ def _lookup_key(value) -> str | None:
     return str(int(tail)) if tail.isdigit() else tail
 
 
+def _resolve_curie(value, prefer, templates, sep):
+    """One URL from a CURIE list, choosing which authority to trust.
+
+    A source that names a thing in several ontologies at once has no single id.
+    `prefer` is the order to try; anything with a known template is taken as a
+    last resort, so a list of only unpreferred sources still links. Returns
+    (url, curie), both None when nothing is usable.
+    """
+    if not value:
+        return None, None
+    # Decode first, unlike every structural split: post-ops run before the
+    # target's decode step, and by this point the only separators left are the
+    # source's own. ClinVar escapes the comma between CURIEs, so splitting the
+    # raw value would find one CURIE where there are several.
+    curies = [part.strip() for part in unquote(str(value)).split(sep) if part.strip()]
+    by_prefix: dict[str, str] = {}
+    for curie in curies:
+        prefix, _, accession = curie.partition(":")
+        # MONDO writes itself as `MONDO:MONDO:0060578` — the tag plus a
+        # self-prefixing CURIE — so an accession keeping its own prefix is
+        # normal, not a duplication bug.
+        if accession and prefix not in by_prefix:
+            by_prefix[prefix] = accession
+    order = list(prefer or []) + [p for p in by_prefix if p not in (prefer or [])]
+    for prefix in order:
+        accession = by_prefix.get(prefix)
+        template = (templates or {}).get(prefix)
+        if accession and template:
+            bare = accession.split(":")[-1]
+            return template.replace("{id}", bare), f"{prefix}:{accession}"
+    return None, None
+
+
 def _apply_post(rows: list[dict], post) -> list[dict]:
     """Whole-list operations, in the order the spec lists them."""
     for operation in post or []:
@@ -154,6 +190,16 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                     if any(part is None or part == "" for part in parts)
                     else operation.sep.join(str(part) for part in parts)
                 )
+            continue
+        if operation.op == "curie_link":
+            for row in rows:
+                url, label = _resolve_curie(
+                    row.get(operation.by), operation.prefer, operation.templates,
+                    operation.curie_sep,
+                )
+                row[operation.into] = url
+                if operation.label_into:
+                    row[operation.label_into] = label
             continue
         if operation.op == "dedup":
             seen = set()
@@ -196,7 +242,10 @@ def _apply_zip(csq_values, index_map, target: TargetSpec) -> list[dict]:
     Uses the position-preserving split: an 'NA' still occupies a slot, which is
     what keeps the columns aligned with each other.
     """
-    columns = [raw_amp(_column(csq_values, name, index_map)) for name in target.source]
+    columns = [
+        raw_amp(_column(csq_values, name, index_map), target.sep)
+        for name in target.source
+    ]
     lengths = [len(column) for column in columns]
     length = (max(lengths) if target.align == "max" else min(lengths)) if lengths else 0
 
@@ -214,11 +263,45 @@ def _apply_zip(csq_values, index_map, target: TargetSpec) -> list[dict]:
     return _apply_post(rows, target.post)
 
 
+def _apply_stack(csq_values, index_map, target: TargetSpec) -> list[dict]:
+    """Several groups of columns -> one list, each group's rows tagged.
+
+    Each group is a `zip` over its own columns, so a group of scalar columns
+    yields a single row and a group of list columns yields one row per position.
+    `drop_when` and `post` then apply to the whole stack, which is what lets one
+    `curie_link` resolve every group's ids.
+    """
+    rows: list[dict] = []
+    for group in target.of:
+        columns = [
+            raw_amp(_column(csq_values, name, index_map), group.sep)
+            if group.split
+            else ([raw] if (raw := _column(csq_values, name, index_map)) else [])
+            for name in group.source
+        ]
+        lengths = [len(column) for column in columns]
+        length = (
+            (max(lengths) if group.align == "max" else min(lengths)) if lengths else 0
+        )
+        for i in range(length):
+            row = {
+                field_spec.field: _coerce(
+                    column[i] if i < len(column) else None, field_spec.type, field_spec
+                )
+                for column, field_spec in zip(columns, group.as_fields)
+            }
+            row.update(group.const)
+            if _should_drop(row, target.drop_when, csq_values, index_map):
+                continue
+            rows.append(row)
+    return _apply_post(rows, target.post)
+
+
 def _apply_regex(csq_values, index_map, target: TargetSpec):
     """Named regex groups -> object(s). Non-matching items are skipped."""
     raw = _column(csq_values, target.source, index_map)
     compiled = re.compile(target.pattern)
-    items = split_amp(raw) if target.each else ([raw] if raw else [])
+    items = split_amp(raw, target.sep) if target.each else ([raw] if raw else [])
 
     rows = []
     for item in items:
@@ -293,12 +376,14 @@ def _build_object(tokens: list[str], field_specs, source_text: str) -> dict:
 def _apply_chunk(csq_values, index_map, target: TargetSpec) -> list[dict]:
     """Fixed-size groups of '&'-items -> a list of objects."""
     raw = _column(csq_values, target.source, index_map)
-    tokens = raw.split("&") if raw else []
+    tokens = raw.split(target.sep) if raw else []
 
     rows = []
     for start in range(0, len(tokens), target.size):
         group = tokens[start : start + target.size]
-        row = _build_object(group, target.as_fields, "&".join(t for t in group if t))
+        row = _build_object(
+            group, target.as_fields, target.sep.join(t for t in group if t)
+        )
         if _should_drop(row, target.drop_when, csq_values, index_map):
             continue
         rows.append(row)
@@ -310,8 +395,25 @@ def _apply_positional(csq_values, index_map, target: TargetSpec):
     raw = _column(csq_values, target.source, index_map)
     if not raw:
         return [] if target.wrap == "list" else None
-    built = _build_object(raw.split("&"), target.as_fields, raw)
+    built = _build_object(raw.split(target.sep), target.as_fields, raw)
     return [built] if target.wrap == "list" else built
+
+
+def _apply_records(csq_values, index_map, target: TargetSpec) -> list[dict]:
+    """Two levels of separator: records, then each record's fields by index.
+
+    A source that packs whole sub-records into one column needs both — ClinVar
+    writes 15 fields per submitter and 5 per RCV, with '~' inside a record and
+    ',' (which VEP rewrites to '&') between them.
+    """
+    raw = _column(csq_values, target.source, index_map)
+    rows: list[dict] = []
+    for record in split_amp(raw, target.sep):
+        row = _build_object(record.split(target.item_sep), target.as_fields, record)
+        if _should_drop(row, target.drop_when, csq_values, index_map):
+            continue
+        rows.append(row)
+    return _apply_post(rows, target.post)
 
 
 def _apply_key_value(csq_values, index_map, target: TargetSpec) -> dict:
@@ -341,7 +443,7 @@ def _when_holds(csq_values, index_map, when: WhenSpec | None) -> bool:
 
 def _empty_value(target: TargetSpec):
     """What a target yields when its `when` condition does not hold."""
-    if target.transform in ("list", "zip", "chunk"):
+    if target.transform in ("list", "zip", "chunk", "records", "stack"):
         return []
     if target.transform == "regex":
         return [] if target.each else None
@@ -352,7 +454,7 @@ def _empty_value(target: TargetSpec):
     return None
 
 
-def _apply_target(csq_values, index_map, target: TargetSpec):
+def _build_target(csq_values, index_map, target: TargetSpec):
     if not _when_holds(csq_values, index_map, target.when):
         return _empty_value(target)
 
@@ -368,15 +470,152 @@ def _apply_target(csq_values, index_map, target: TargetSpec):
         return _apply_positional(csq_values, index_map, target)
     if target.transform == "key_value":
         return _apply_key_value(csq_values, index_map, target)
+    if target.transform == "records":
+        return _apply_records(csq_values, index_map, target)
+    if target.transform == "stack":
+        return _apply_stack(csq_values, index_map, target)
 
     raw = _column(csq_values, target.source, index_map)
     if target.transform == "scalar":
         return _coerce(raw, target.type)
     if target.transform == "list":
-        return split_amp(raw)
+        return split_amp(raw, target.sep)
     if target.transform == "first":
-        return _coerce(first_amp(raw), target.type)
+        return _coerce(first_amp(raw, target.sep), target.type)
     raise ValueError(f"unknown transform: {target.transform}")
+
+
+def _decode_leaves(value):
+    """Percent-decode every string leaf of a produced value.
+
+    `unquote`, never `unquote_plus`: '+' is a structural separator in the
+    enriched ClinVar VCF, not an encoded space.
+    """
+    if isinstance(value, str):
+        return unquote(value)
+    if isinstance(value, list):
+        return [_decode_leaves(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _decode_leaves(v) for k, v in value.items()}
+    return value
+
+
+def _apply_target(csq_values, index_map, target: TargetSpec):
+    """One target's value, decoded if the source escapes its separators.
+
+    Decoding is the *last* step by construction: the value has already been split
+    on every delimiter, so an encoded '%2C' cannot be mistaken for one. Doing it
+    the other way round is how a comma inside a disease name becomes a field
+    boundary.
+    """
+    value = _build_target(csq_values, index_map, target)
+    return _decode_leaves(value) if target.decode else value
+
+
+def _join_key(value, pattern, case_insensitive: bool) -> str | None:
+    """The comparable form of a key: the `key` group of `pattern` if it matches,
+    else the value as it stands. A value the pattern rejects still keys on
+    itself rather than vanishing."""
+    if value is None:
+        return None
+    key = str(value)
+    if pattern:
+        match = re.search(pattern, key)
+        if match and match.groupdict().get("key") is not None:
+            key = match.group("key")
+    return key.casefold() if case_insensitive else key
+
+
+def _apply_joins(built: dict, joins) -> None:
+    """Stitch the plugin's lists together in place (see JoinSpec)."""
+    for join in joins or []:
+        left = built.get(join.into)
+        right = built.get(join.source)
+        if not isinstance(left, list) or not isinstance(right, list):
+            continue
+        buckets: dict[str, list] = {}
+        for row in right:
+            raw_key = row.get(join.right_key)
+            parts = (
+                str(raw_key).split(join.right_key_sep)
+                if join.right_key_sep and raw_key is not None
+                else [raw_key]
+            )
+            for part in parts:
+                key = _join_key(part, join.right_key_pattern, join.case_insensitive)
+                if key is not None:
+                    buckets.setdefault(key, []).append(row)
+        for row in left:
+            key = _join_key(row.get(join.left_key), None, join.case_insensitive)
+            matches = buckets.get(key, []) if key is not None else []
+            # A key can be ambiguous on its own (one condition name under two
+            # classification types); the extra equalities disambiguate it.
+            for left_field, right_field in (join.also_match or {}).items():
+                wanted = _join_key(row.get(left_field), None, join.case_insensitive)
+                matches = [
+                    match
+                    for match in matches
+                    if _join_key(
+                        match.get(right_field), None, join.case_insensitive
+                    )
+                    == wanted
+                ]
+            # `where` narrows the matches rather than the buckets, so a count
+            # can still tell "none of them qualified" from "there were none" —
+            # and two joins differing only by `where` share one bucket map.
+            candidates = matches
+            if join.where is not None:
+                matches = [
+                    match
+                    for match in matches
+                    if str(match.get(join.where.field)) == join.where.equals
+                ]
+            if join.count_into:
+                # No candidates at all means there is nothing to report, not a
+                # count of zero: "0 of 0 submissions" is a sentence about
+                # nothing. A real zero — none of several qualifying — is kept.
+                row[join.count_into] = len(matches) if candidates else None
+            elif join.count_by:
+                groups: dict[str, list] = {}
+                for match in matches:  # first-seen order
+                    value = match.get(join.count_by)
+                    if value is not None:
+                        groups.setdefault(value, []).append(match)
+                row[join.as_field] = [
+                    {
+                        join.count_by: value,
+                        "count": len(members),
+                        # The rows the count was made of, kept beside it rather
+                        # than left for the display to re-group.
+                        **({join.nest_as: members} if join.nest_as else {}),
+                    }
+                    for value, members in groups.items()
+                ]
+            else:
+                row[join.as_field] = matches
+
+
+def _row_in_scope(csq_values, index_map, scope) -> bool:
+    """Whether this CSQ row is one the plugin's annotation belongs to.
+
+    True when there is nothing to narrow by — see RowScope: a row with no value
+    of its own, or an annotation naming nothing, keeps the annotation rather
+    than losing it.
+    """
+    if scope is None:
+        return True
+    listed = _column(csq_values, scope.listed_in, index_map)
+    value = _column(csq_values, scope.column, index_map)
+    if not listed or not value:
+        return True
+    # Split on the separator first, decode after: an escaped separator inside a
+    # name must not be read as one (the house rule for this VCF).
+    names = {
+        _join_key(unquote(entry), scope.item_pattern, False)
+        for entry in listed.split(scope.sep)
+        if entry
+    }
+    return value in names
 
 
 def apply_plugin_spec(
@@ -391,6 +630,9 @@ def apply_plugin_spec(
     if not has_any_column(index_map, *spec.csq_fields):
         return None
 
+    if not _row_in_scope(csq_values, index_map, spec.applies_to):
+        return None
+
     # Raw presence, deliberately: a literal 'NA' counts as present here, which
     # is what the hand-written parsers do.
     if spec.require_any_input and not any(
@@ -402,6 +644,14 @@ def apply_plugin_spec(
         target.field: _apply_target(csq_values, index_map, target)
         for target in spec.targets
     }
+    # Every target reads one column, so a source spreading one logical table
+    # across several columns is only whole after they are stitched together.
+    _apply_joins(output, spec.joins)
+    # Ordering by what a join added has to wait for the joins (see JoinedPostOp).
+    for operation in spec.post_joins or []:
+        rows = output.get(operation.target)
+        if isinstance(rows, list):
+            output[operation.target] = _apply_post(rows, [operation])
 
     if spec.require_any_output and not any(
         _is_present(output.get(field)) for field in spec.require_any_output

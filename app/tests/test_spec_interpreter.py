@@ -1405,6 +1405,7 @@ def _joined(joins, **columns):
                         "transform": "records",
                         "sep": "+",
                         "item_sep": "~",
+                        "decode": True,
                         "as": [
                             {"field": "name", "type": "string"},
                             # Only the `also_match` test fills this; the rest
@@ -1418,6 +1419,7 @@ def _joined(joins, **columns):
                         "transform": "records",
                         "sep": "&",
                         "item_sep": "~",
+                        "decode": True,
                         "as": [
                             {"field": "acc", "type": "string"},
                             {"field": "verdict", "type": "string"},
@@ -1995,3 +1997,64 @@ def test_a_gated_out_list_transform_yields_a_list():
     }])
     off = apply_plugin_spec(["A", "off", "x"], index_map, spec.plugin("probe"))
     assert off == {"recs": [], "stacked": []}
+
+
+def test_sort_survives_a_row_that_lacks_the_key():
+    """A sentinel has to be comparable with the real keys, so a missing field
+    raised KeyError and a string column with one null raised TypeError — both at
+    request time, on data no spec could forbid."""
+    index_map = index_map_for("Allele", "Recs")
+    spec = ParsingSpec(plugins=[{
+        "plugin": "probe", "scope": "allele", "output": "probe",
+        "csq_fields": ["Recs"],
+        "targets": [{
+            "field": "rows", "from": "Recs", "transform": "records",
+            "item_sep": "~",
+            "as": [{"field": "name", "type": "string"},
+                   {"field": "rank", "type": "string"}],
+            "post": [{"op": "sort", "by": "rank", "desc": True, "nulls": "last"}],
+        }],
+    }])
+    # "Bare" has no second field at all, so `rank` comes out null.
+    result = apply_plugin_spec(["A", "Low~a&Bare&High~b"], index_map, spec.plugin("probe"))
+    assert [r["name"] for r in result["rows"]] == ["High", "Low", "Bare"]
+
+
+def test_dedup_survives_a_row_holding_a_list():
+    """A tuple containing a list is unhashable, so `dedup` in `post_joins` —
+    where every row may carry joined-in rows — raised at request time."""
+    index_map = index_map_for("Allele", "Names", "Recs")
+    spec = ParsingSpec(plugins=[{
+        "plugin": "probe", "scope": "allele", "output": "probe",
+        "csq_fields": ["Names", "Recs"],
+        "targets": [
+            {"field": "conditions", "from": "Names", "transform": "records",
+             "sep": "+", "item_sep": "~", "as": [{"field": "name", "type": "string"}]},
+            {"field": "recs", "from": "Recs", "transform": "records",
+             "item_sep": "~", "as": [{"field": "acc", "type": "string"},
+                                     {"field": "cond", "type": "string"}]},
+        ],
+        "joins": [{"into": "conditions", "from": "recs", "left_key": "name",
+                   "right_key": "cond", "as": "hits"}],
+        "post_joins": [{"target": "conditions", "op": "dedup"}],
+    }])
+    result = apply_plugin_spec(
+        ["A", "One+One+Two", "R1~One"], index_map, spec.plugin("probe")
+    )
+    assert [c["name"] for c in result["conditions"]] == ["One", "Two"]
+
+
+def test_a_join_splits_before_the_value_is_decoded():
+    """The whole reason decoding is one step at the end. A condition literally
+    named `Foo+Bar` arrives as `Foo%2BBar`; if the target decodes as it is built,
+    the join then splits on the '+' the source had escaped and the condition
+    matches nothing — silently, since a join drops evidence rather than erroring."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "right_key_sep": "+", "as": "records"}],
+        names="Foo%2BBar",
+        recs="R1~Pathogenic~Foo%2BBar",
+    )
+    condition = result["conditions"][0]
+    assert condition["name"] == "Foo+Bar"
+    assert [r["acc"] for r in condition["records"]] == ["R1"]

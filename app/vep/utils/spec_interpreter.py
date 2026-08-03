@@ -147,10 +147,15 @@ def _resolve_curie(value, prefer, templates, sep):
     """
     if not value:
         return None, None
-    # Decode first, unlike every structural split: post-ops run before the
-    # target's decode step, and by this point the only separators left are the
-    # source's own. ClinVar escapes the comma between CURIEs, so splitting the
-    # raw value would find one CURIE where there are several.
+    # Decode *first*, which is the exception to the split-before-decode rule the
+    # rest of this module follows — and the reason is in the source: ClinVar
+    # escapes the comma that separates one CURIE from the next, so the separator
+    # only exists after decoding. Splitting the raw value finds one CURIE where
+    # there are several, and the wrong authority wins the `prefer` order.
+    #
+    # The cost is that this post-op's own output is decoded a second time by the
+    # final pass. Harmless for the numeric accessions ClinVar publishes; wrong
+    # for any label carrying a literal '%'.
     curies = [part.strip() for part in unquote(str(value)).split(sep) if part.strip()]
     by_prefix: dict[str, str] = {}
     for curie in curies:
@@ -202,10 +207,14 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                     row[operation.label_into] = label
             continue
         if operation.op == "dedup":
+            # Keyed on the row's JSON rather than a tuple of its values: after a
+            # join a row can hold a list, and a tuple containing one is
+            # unhashable — which raised at request time for any `dedup` in
+            # `post_joins`.
             seen = set()
             unique = []
             for row in rows:
-                key = tuple(row.values())
+                key = json.dumps(row, sort_keys=True, default=str)
                 if key in seen:
                     continue
                 seen.add(key)
@@ -222,17 +231,16 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                 )
             ]
         elif operation.op == "sort":
-            nulls_last = operation.nulls == "last"
-            # A null key sorts to whichever end `nulls` asks for, whatever `desc`
-            # does to the rest.
-            sentinel = float("-inf") if nulls_last == operation.desc else float("inf")
-            rows = sorted(
-                rows,
-                key=lambda row: (
-                    row[operation.by] if row[operation.by] is not None else sentinel
-                ),
-                reverse=operation.desc,
-            )
+            # Partitioned rather than sorted against a sentinel value. A sentinel
+            # has to be comparable with the real keys, so a string column with
+            # one null raised TypeError, and a row missing the field entirely
+            # raised KeyError — both at request time, on data the spec had no
+            # way to forbid. Partitioning also delivers what the docstring
+            # promises: `nulls` places them independently of `desc`.
+            keyed = [row for row in rows if row.get(operation.by) is not None]
+            absent = [row for row in rows if row.get(operation.by) is None]
+            keyed.sort(key=lambda row: row[operation.by], reverse=operation.desc)
+            rows = keyed + absent if operation.nulls == "last" else absent + keyed
     return rows
 
 
@@ -501,15 +509,17 @@ def _decode_leaves(value):
 
 
 def _apply_target(csq_values, index_map, target: TargetSpec):
-    """One target's value, decoded if the source escapes its separators.
+    """One target's value, still encoded.
 
-    Decoding is the *last* step by construction: the value has already been split
-    on every delimiter, so an encoded '%2C' cannot be mistaken for one. Doing it
-    the other way round is how a comma inside a disease name becomes a field
-    boundary.
+    Decoding is deliberately *not* done here. It is the last step of
+    `apply_plugin_spec`, after the joins, because a join splits on a separator
+    too: decoding a target as it was built left the join splitting text that had
+    already been decoded, so an escaped separator inside a value — a condition
+    literally named `Foo+Bar` — was read as a real one and its rows silently
+    vanished. One decode point, after every split, is the only arrangement in
+    which that cannot happen.
     """
-    value = _build_target(csq_values, index_map, target)
-    return _decode_leaves(value) if target.decode else value
+    return _build_target(csq_values, index_map, target)
 
 
 def _join_key(value, pattern, case_insensitive: bool) -> str | None:
@@ -652,6 +662,12 @@ def apply_plugin_spec(
         rows = output.get(operation.target)
         if isinstance(rows, list):
             output[operation.target] = _apply_post(rows, [operation])
+
+    # Every split has now run — the targets' own and the joins' — so an encoded
+    # separator can no longer be mistaken for one (see `_apply_target`).
+    for target in spec.targets:
+        if target.decode:
+            output[target.field] = _decode_leaves(output[target.field])
 
     if spec.require_any_output and not any(
         _is_present(output.get(field)) for field in spec.require_any_output

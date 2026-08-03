@@ -1871,6 +1871,31 @@
     ]
   },
   "display": {
+    "rating_scales": {
+      "clinvar_aggregate": {
+        "out_of": 4,
+        "ratings": {
+          "practice guideline": 4,
+          "reviewed by expert panel": 3,
+          "criteria provided, multiple submitters, no conflicts": 2,
+          "criteria provided, conflicting classifications": 1,
+          "criteria provided, single submitter": 1,
+          "no assertion criteria provided": 0,
+          "no classification provided": 0,
+          "no classification for the individual variant": 0
+        }
+      },
+      "clinvar_submission": {
+        "out_of": 4,
+        "ratings": {
+          "practice guideline": 4,
+          "reviewed by expert panel": 3,
+          "criteria provided, single submitter": 1,
+          "no assertion criteria provided": 0,
+          "no classification provided": 0
+        }
+      }
+    },
     "options": [
       {
         "option_id": "hgvs",
@@ -2312,7 +2337,13 @@
                   {
                     "label": "Review status",
                     "from": "clinvar.review_status",
-                    "format": "humanize"
+                    "format": "humanize",
+                    "stars": "clinvar_aggregate",
+                    "help": "For more detail regarding ClinVar's calculation of review status see",
+                    "help_link": {
+                      "href": "https://www.ncbi.nlm.nih.gov/clinvar/docs/review_status/",
+                      "label": "ClinVar review status"
+                    }
                   }
                 ]
               },
@@ -2338,7 +2369,7 @@
                     "link_from": "id_url"
                   },
                   {
-                    "label": "Classification(s) of submission",
+                    "label": "Classification (expand for - submitter, last evaluation date, review status)",
                     "from": "classifications",
                     "items": {
                       "from": "classification",
@@ -2356,14 +2387,15 @@
                           },
                           {
                             "from": "review_status",
-                            "format": "humanize"
+                            "format": "humanize",
+                            "stars": "clinvar_submission"
                           }
                         ]
                       }
                     }
                   },
                   {
-                    "label": "Variation/condition record",
+                    "label": "ClinVar record",
                     "from": "records",
                     "items": {
                       "from": "rcv",

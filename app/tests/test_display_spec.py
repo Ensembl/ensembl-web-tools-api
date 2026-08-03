@@ -884,3 +884,74 @@ def test_the_shared_gates_still_reject_an_unknown_field():
         DisplayRowsBlock.model_validate(
             {"kind": "rows", "rows": [], "whn": {"present": "x.y"}}
         )
+
+
+# --- star ratings -----------------------------------------------------------
+
+
+_SCALE = {
+    "confidence": {"out_of": 4, "ratings": {"reviewed by expert panel": 3}}
+}
+
+
+def _rated(display):
+    display.setdefault("rating_scales", _SCALE)
+    return _doc(display)
+
+
+def test_stars_must_name_a_known_scale():
+    """A typo'd scale would otherwise render no stars — which is exactly what an
+    unrecognised term legitimately does, so it would read as data, not a bug."""
+    doc = _doc(_display({"label": "REVEL", "from": "revel.score", "stars": "noscale"}))
+    with pytest.raises(ValidationError, match="unknown rating scale"):
+        MergedSpec.model_validate(doc)
+
+
+def test_a_row_can_carry_a_known_scale():
+    spec = MergedSpec.model_validate(
+        _rated(_display({"label": "REVEL", "from": "revel.score", "stars": "confidence"}))
+    )
+    assert spec.display.options[0].blocks[0].rows[0].stars == "confidence"
+
+
+def test_stars_inside_an_expanded_cell_are_checked():
+    """The reference can sit two levels down — a column's `items`, and the cells
+    of the detail those items expand onto."""
+    doc = _doc(
+        {
+            "options": [{"option_id": "revel", "blocks": [{
+                "kind": "table",
+                "from": "revel.score",
+                "columns": [{
+                    "label": "Score",
+                    "from": "score",
+                    "items": {
+                        "from": "score",
+                        "expand": {
+                            "from": "detail",
+                            "cells": [{"from": "status", "stars": "noscale"}],
+                        },
+                    },
+                }],
+            }]}]
+        }
+    )
+    with pytest.raises(ValidationError, match="unknown rating scale"):
+        MergedSpec.model_validate(doc)
+
+
+def test_a_rating_cannot_exceed_its_scale():
+    from app.vep.models.display_spec_model import RatingScale
+
+    with pytest.raises(ValidationError, match=r"outside 0\.\.4"):
+        RatingScale.model_validate({"out_of": 4, "ratings": {"impossible": 5}})
+
+
+def test_the_payload_carries_the_scales():
+    """The frontend renders the stars, so the term -> rating table has to reach
+    it — this is the only path it travels."""
+    payload = SPEC.display_payload()
+    assert payload.rating_scales["clinvar_aggregate"].out_of == 4
+    assert (
+        payload.rating_scales["clinvar_aggregate"].ratings["practice guideline"] == 4
+    )

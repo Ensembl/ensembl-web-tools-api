@@ -219,6 +219,9 @@ class DisplayRow(BaseModel):
     # A trailing link on the value (a named `builder` — ProtVar's link icon on
     # each row). Builder links contribute no field refs.
     link: LinkSpec | None = None
+    # Show a star rating in front of the value, using the named scale (see
+    # RatingScale). The value itself still renders.
+    stars: str | None = None
 
     @model_validator(mode="after")
     def _exactly_one_source(self) -> "DisplayRow":
@@ -539,6 +542,9 @@ class ColumnItems(BaseModel):
     link: LinkSpec | None = None
     link_from: str | None = None
     expand: "ColumnExpand | None" = None
+    # A star rating in front of the value, using the named scale (see
+    # RatingScale) — as on a row.
+    stars: str | None = None
 
 
 class ColumnExpand(BaseModel):
@@ -834,12 +840,82 @@ class DisplayOptionSpec(BaseModel):
         return refs
 
 
+class RatingScale(BaseModel):
+    """A term -> rating table, drawn as a row of filled and empty marks.
+
+    Some sources state confidence as a phrase and publish a rating for it:
+    ClinVar's review status is "criteria provided, multiple submitters, no
+    conflicts", worth two stars of four. Which phrase earns which rating depends
+    on *what* is being rated — a variant's aggregate classification, a single
+    submission, and a somatic classification read the same words differently —
+    so scales are named and referenced rather than being one table.
+
+    Keys are matched loosely (case, and '_' as a space) so a scale can be
+    authored as the phrases a reader would recognise while the data keeps the
+    source's own punctuation. A term the scale does not know renders no rating
+    at all rather than a wrong one: sources add terms without warning, and no
+    stars reads as "not rated here", which is true, where zero stars would be a
+    claim the source never made.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    out_of: int
+    ratings: dict[str, int]
+
+    @model_validator(mode="after")
+    def _ratings_fit_the_scale(self) -> "RatingScale":
+        outside = sorted(
+            term
+            for term, rating in self.ratings.items()
+            if rating > self.out_of or rating < 0
+        )
+        if outside:
+            raise ValueError(f"ratings outside 0..{self.out_of}: {outside}")
+        return self
+
+
+def _items_stars_refs(items: ColumnItems | None) -> Iterator[str]:
+    """The scales an item line and its expanded detail refer to."""
+    if items is None:
+        return
+    if items.stars:
+        yield items.stars
+    for cell in items.expand.cells if items.expand else []:
+        yield from _items_stars_refs(cell)
+
+
 class DisplaySpec(BaseModel):
     """The display half of the merged document: every laid-out option."""
 
     model_config = ConfigDict(extra="forbid")
 
     options: list[DisplayOptionSpec]
+    # Named scales a row's or item's `stars` refers to (see RatingScale).
+    rating_scales: dict[str, RatingScale] = Field(default_factory=dict)
+
+    def stars_refs(self) -> Iterator[str]:
+        """Every scale name the options refer to."""
+        for option in self.options:
+            for block in option.iter_blocks():
+                for row in getattr(block, "rows", None) or []:
+                    # Matrix rows carry no rating; only label/value rows do.
+                    if getattr(row, "stars", None):
+                        yield row.stars
+                for column in getattr(block, "columns", None) or []:
+                    yield from _items_stars_refs(column.items)
+
+    @model_validator(mode="after")
+    def _stars_name_a_known_scale(self) -> "DisplaySpec":
+        unknown = sorted(
+            {ref for ref in self.stars_refs() if ref not in self.rating_scales}
+        )
+        if unknown:
+            # A typo would otherwise show no stars at all, which is exactly what
+            # an unrecognised *term* legitimately does — so it would look like
+            # data rather than a broken spec.
+            raise ValueError(f"display references unknown rating scale(s): {unknown}")
+        return self
 
 
 class DisplayPayload(BaseModel):
@@ -855,3 +931,4 @@ class DisplayPayload(BaseModel):
 
     options: list[DisplayOptionSpec]
     plugin_scopes: dict[str, str]
+    rating_scales: dict[str, RatingScale] = Field(default_factory=dict)

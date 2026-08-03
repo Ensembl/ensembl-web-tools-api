@@ -199,7 +199,9 @@ class MergedSpec(BaseModel):
         if self.display is None:
             return None
         return DisplayPayload(
-            options=self.display.options, plugin_scopes=self.plugin_scopes()
+            options=self.display.options,
+            plugin_scopes=self.plugin_scopes(),
+            rating_scales=self.display.rating_scales,
         )
 
     def parse_plugins(self) -> list[PluginSpec]:

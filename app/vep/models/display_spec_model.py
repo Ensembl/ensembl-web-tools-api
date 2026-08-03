@@ -12,11 +12,16 @@ It is authored per genome, so unlike the per-job display *panels* it lives
 inside the merged spec document as a third sibling section, under the same
 content digest, and is pinned to a job for free.
 
-Deliberately small: every field here maps 1:1 onto a rendering primitive the
-frontend already has (`RowSpec` / `renderRowGroup` / `renderRowBlock`). Nothing
-in this model invents new rendering behaviour, and options whose output is
-interactive or derived (ClinVar, OpenTargets, ProtVar, ...) are deliberately
-*not* expressible — they stay as frontend overrides.
+This model owns every option's layout. It began deliberately small — one field
+per rendering primitive the frontend already had, with the interactive and
+derived options (ClinVar, OpenTargets, ProtVar) left as frontend overrides — but
+the override registry is now empty, and ClinVar, once the example of what could
+not be expressed, is the largest thing described here. Some constructs (a
+collapsed detail, a star rating) do invent behaviour the row primitives had no
+equivalent for.
+
+What stays on the frontend: named `builder` links, which need job context no
+annotation field carries.
 """
 
 import re
@@ -76,6 +81,13 @@ class SubOption(BaseModel):
     `subOptionRan`). The id is a form option id — the hand-synced seam with
     `form_panels`, like the top-level `option_id`; not a `plugin.field` ref, so
     the display↔parsing check does not touch it.
+
+    Also names the gate a block renders behind (`requires_selected`), which is
+    the same question asked of the whole block rather than of one row: was this
+    id in the submitted parameters. The ClinVar master needs it because dev-data
+    VCFs are annotated from a full cache and carry columns the user did not
+    pick, so gating on the data alone would leak an unselected variant kind into
+    the view.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -126,24 +138,6 @@ class WhenSpec(BaseModel):
     def field_ref(self) -> str:
         # exactly one is set (validated above)
         return self.present or self.empty  # type: ignore[return-value]
-
-
-class SelectedGate(BaseModel):
-    """Gate a block on whether a form option/sub-option was *selected* for the
-    job (as opposed to `when`/`requires`, which test the annotation data).
-
-    The ClinVar master's display renders its short and structural blocks under
-    one option, so each block gates on its own sub-option: dev-data VCFs are
-    annotated from a full cache and carry columns the user didn't pick, so
-    gating on data alone would leak the unselected variant kind into the view.
-    `id` is the sub-option id; `default` is that sub-option's default (an option
-    left at its default isn't written to the submitted parameters).
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    default: bool = False
 
 
 class LinkSpec(BaseModel):
@@ -223,9 +217,6 @@ class DisplayRow(BaseModel):
     # A trailing link on the value (a named `builder` — ProtVar's link icon on
     # each row). Builder links contribute no field refs.
     link: LinkSpec | None = None
-    # Show a star rating in front of the value, using the named scale (see
-    # RatingScale). The value itself still renders.
-    stars: str | None = None
     # A row whose `from` is a *list*: one rendered line per element, stacked as
     # the row's value under a single label. The same element shape a list block
     # repeats, borrowed so a stacked value needs no vocabulary of its own —
@@ -459,7 +450,7 @@ class _GatedBlock(BaseModel):
 
     heading: str | None = None
     # Render only when this sub-option was selected (ClinVar short/structural).
-    requires_selected: SelectedGate | None = None
+    requires_selected: SubOption | None = None
     # A data condition: render only when the named field is present / empty
     # (ClinVar's bare vs headed shapes).
     when: WhenSpec | None = None
@@ -619,20 +610,6 @@ class ColumnItems(BaseModel):
         return self
 
 
-class ItemMatch(BaseModel):
-    """A test on one field of an element: does it hold this value?
-
-    Explicit rather than truthiness, because the values that need testing are
-    codes: ClinVar flags whether a submission counts toward the aggregate as
-    1/0, and "0" is a perfectly true-looking string.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    field: str
-    equals: str
-
-
 class ColumnExpand(BaseModel):
     """One line's collapsed detail: a summary that opens onto per-element lines.
 
@@ -654,7 +631,7 @@ class ColumnExpand(BaseModel):
     # ClinVar submission that counts toward the aggregate reads at full weight;
     # one that does not stays quiet rather than being hidden, since it is still
     # a real submission somebody made.
-    emphasis: ItemMatch | None = None
+    emphasis: RowFilter | None = None
 
 
 ColumnItems.model_rebuild()
@@ -870,7 +847,7 @@ class DisplayGroupBlock(_GatedBlock):
 
     kind: Literal["group"] = "group"
     heading: str | None = None
-    requires_selected: SelectedGate | None = None
+    requires_selected: SubOption | None = None
     when: WhenSpec | None = None
     view: BlockView | None = None
     blocks: list["DisplayBlock"]
@@ -1011,10 +988,6 @@ class DisplaySpec(BaseModel):
         """Every scale name the options refer to."""
         for option in self.options:
             for block in option.iter_blocks():
-                for row in getattr(block, "rows", None) or []:
-                    # Matrix rows carry no rating; only label/value rows do.
-                    if getattr(row, "stars", None):
-                        yield row.stars
                 for column in getattr(block, "columns", None) or []:
                     yield from _items_stars_refs(column.items)
 

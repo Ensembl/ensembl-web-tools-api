@@ -899,19 +899,32 @@ def _rated(display):
     return _doc(display)
 
 
+def _starred_column(scale):
+    """A table column whose items carry a star rating on the named scale."""
+    return _doc(
+        {"options": [{"option_id": "p", "blocks": [{
+            "kind": "table",
+            "from": "p.summary",
+            "columns": [{"label": "Verdict", "from": "verdict",
+                         "items": {"from": "verdict", "stars": scale}}],
+        }]}]},
+        plugins=_LIST_PLUGIN,
+    )
+
+
 def test_stars_must_name_a_known_scale():
     """A typo'd scale would otherwise render no stars — which is exactly what an
     unrecognised term legitimately does, so it would read as data, not a bug."""
-    doc = _doc(_display({"label": "REVEL", "from": "revel.score", "stars": "noscale"}))
     with pytest.raises(ValidationError, match="unknown rating scale"):
-        MergedSpec.model_validate(doc)
+        MergedSpec.model_validate(_starred_column("noscale"))
 
 
-def test_a_row_can_carry_a_known_scale():
-    spec = MergedSpec.model_validate(
-        _rated(_display({"label": "REVEL", "from": "revel.score", "stars": "confidence"}))
-    )
-    assert spec.display.options[0].blocks[0].rows[0].stars == "confidence"
+def test_an_item_can_carry_a_known_scale():
+    doc = _starred_column("confidence")
+    doc["display"]["rating_scales"] = _SCALE
+    spec = MergedSpec.model_validate(doc)
+    column = spec.display.options[0].blocks[0].columns[0]
+    assert column.items.stars == "confidence"
 
 
 def test_stars_inside_an_expanded_cell_are_checked():

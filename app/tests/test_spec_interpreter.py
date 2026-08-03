@@ -192,21 +192,6 @@ def test_mavedb_all_na_assay_dropped():
 CONFLICTING = "Conflicting_classifications_of_pathogenicity"
 
 
-def test_clinvar_conflicting_breakdown_shape():
-    result = run(
-        "clinvar",
-        row_list(
-            ClinVar_CLNSIG=CONFLICTING,
-            ClinVar_CLNSIGCONF="Likely_pathogenic_(6)+Benign_(2)",
-        ),
-    )
-    assert result["significance"] == [CONFLICTING]
-    assert result["conflicting_breakdown"] == [
-        {"significance": "Likely_pathogenic", "count": 6},
-        {"significance": "Benign", "count": 2},
-    ]
-
-
 def test_clinvar_id_from_bare_match_column():
     """The variation id is read from the bare `ClinVar` match column (what VEP
     fills with the matched record's ID), alongside the significance."""
@@ -227,7 +212,6 @@ def test_clinvar_non_conflicting_ignores_breakdown():
     assert run("clinvar", csq) == {
         "id": "12345",
         "significance": ["Pathogenic"],
-        "conflicting_breakdown": [],
         "conditions": [],
         "classification_summary": [
             {
@@ -255,7 +239,6 @@ def test_clinvar_when_matches_list_membership_not_substring():
     assert run("clinvar", csq) == {
         "id": "678",
         "significance": ["Not_" + CONFLICTING],
-        "conflicting_breakdown": [],
         "conditions": [],
         "classification_summary": [
             {
@@ -270,15 +253,6 @@ def test_clinvar_when_matches_list_membership_not_substring():
         "submissions": [],
         "records": [],
     }
-
-
-def test_clinvar_unparseable_breakdown_token_skipped():
-    csq = row_list(
-        ClinVar_CLNSIG=CONFLICTING,
-        ClinVar_CLNSIGCONF="Benign_(2)+garbage_no_count",
-    )
-    result = run("clinvar", csq)
-    assert [b["significance"] for b in result["conflicting_breakdown"]] == ["Benign"]
 
 
 def test_clinvar_empty_is_none():
@@ -1999,3 +1973,25 @@ def test_post_joins_can_order_by_what_a_join_added():
         "Quiet_one",
         "Other_quiet",
     ]
+
+
+def test_a_gated_out_list_transform_yields_a_list():
+    """A `when` that does not hold must leave the target *empty*, not null: a
+    join tests `isinstance(left, list)` before it runs, so a null here silently
+    skips every join into that target -- and a `post_joins` sort by a field the
+    join was meant to write then has nothing to sort by."""
+    index_map = index_map_for("Allele", "Flag", "Recs")
+    spec = ParsingSpec(plugins=[{
+        "plugin": "probe", "scope": "allele", "output": "probe",
+        "csq_fields": ["Recs"],
+        "targets": [
+            {"field": "recs", "from": "Recs", "transform": "records",
+             "item_sep": "~", "as": [{"field": "a", "type": "string"}],
+             "when": {"field": "Flag", "includes": "on"}},
+            {"field": "stacked", "transform": "stack",
+             "of": [{"from": ["Recs"], "as": [{"field": "a", "type": "string"}]}],
+             "when": {"field": "Flag", "includes": "on"}},
+        ],
+    }])
+    off = apply_plugin_spec(["A", "off", "x"], index_map, spec.plugin("probe"))
+    assert off == {"recs": [], "stacked": []}

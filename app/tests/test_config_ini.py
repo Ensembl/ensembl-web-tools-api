@@ -921,7 +921,7 @@ def test_clinvar_line_is_assembly_specific(
         f"custom file={PLUGIN_PATH}/{expected_file},"
         "short_name=ClinVar,"
         "fields=CLNDN%CLNDNINCL%CLNDISDB%CLNDISDBINCL%CLNREVSTAT%CLNSIG"
-        "%CLNSIGCONF%CLNSIGINCL%ONCDN%ONCDNINCL%ONCDISDB"
+        "%CLNSIGINCL%ONCDN%ONCDNINCL%ONCDISDB"
         "%ONCDISDBINCL%ONC%ONCINCL%ONCREVSTAT%ONCSCV%ONCCONF"
         "%CLNSUBA%CLNPMID%CLNSUBN%CLNRCV%SCI%SCIREVSTAT%SCIDN"
         "%SCIDISDB%GENEINFO,"
@@ -942,7 +942,7 @@ def test_clinvar_is_emitted_for_grch37_too(monkeypatch, tmp_path):
     assert line is not None
     # Its own, narrower field set: nothing has confirmed that the GRCh37 ClinVar
     # VCF carries the enriched columns, and requesting one it lacks fails the job.
-    assert "fields=CLNSIG%CLNSIGCONF," in line
+    assert "fields=CLNSIG," in line
 
 
 def test_clinvar_short_requires_phenotypes(monkeypatch, tmp_path):

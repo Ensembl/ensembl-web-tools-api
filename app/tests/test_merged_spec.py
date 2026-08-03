@@ -366,7 +366,6 @@ CLINVAR_SHORT_COLUMNS = {
     "ClinVar_CLNDISDBINCL",
     "ClinVar_CLNREVSTAT",
     "ClinVar_CLNSIG",
-    "ClinVar_CLNSIGCONF",
     "ClinVar_CLNSIGINCL",
     "ClinVar_ONCDN",
     "ClinVar_ONCDNINCL",

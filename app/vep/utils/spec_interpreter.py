@@ -443,7 +443,7 @@ def _when_holds(csq_values, index_map, when: WhenSpec | None) -> bool:
 
 def _empty_value(target: TargetSpec):
     """What a target yields when its `when` condition does not hold."""
-    if target.transform in ("list", "zip", "chunk"):
+    if target.transform in ("list", "zip", "chunk", "records", "stack"):
         return []
     if target.transform == "regex":
         return [] if target.each else None

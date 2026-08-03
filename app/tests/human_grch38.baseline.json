@@ -971,7 +971,6 @@
               "CLNDISDBINCL",
               "CLNREVSTAT",
               "CLNSIG",
-              "CLNSIGCONF",
               "CLNSIGINCL",
               "ONCDN",
               "ONCDNINCL",
@@ -1251,7 +1250,6 @@
           "ClinVar_CLNDISDBINCL",
           "ClinVar_CLNREVSTAT",
           "ClinVar_CLNSIG",
-          "ClinVar_CLNSIGCONF",
           "ClinVar_CLNSIGINCL",
           "ClinVar_ONCDN",
           "ClinVar_ONCDNINCL",
@@ -1293,33 +1291,6 @@
             "field": "significance",
             "from": "ClinVar_CLNSIG",
             "transform": "list",
-            "decode": true
-          },
-          {
-            "field": "conflicting_breakdown",
-            "from": "ClinVar_CLNSIGCONF",
-            "transform": "regex",
-            "each": true,
-            "pattern": "^(?P<significance>.+)_\\((?P<count>\\d+)\\)$",
-            "as": [
-              {
-                "field": "significance",
-                "type": "string"
-              },
-              {
-                "field": "count",
-                "type": "int"
-              }
-            ],
-            "when": {
-              "field": "ClinVar_CLNSIG",
-              "includes": "Conflicting_classifications_of_pathogenicity"
-            },
-            "item_fields": [
-              "significance",
-              "count"
-            ],
-            "sep": "+",
             "decode": true
           },
           {

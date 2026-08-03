@@ -617,8 +617,7 @@
           },
           "fields": {
             "literal": [
-              "CLNSIG",
-              "CLNSIGCONF"
+              "CLNSIG"
             ]
           }
         }

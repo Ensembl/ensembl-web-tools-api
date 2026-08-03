@@ -1413,7 +1413,12 @@ def _joined(joins, **columns):
                         "transform": "records",
                         "sep": "+",
                         "item_sep": "~",
-                        "as": [{"field": "name", "type": "string"}],
+                        "as": [
+                            {"field": "name", "type": "string"},
+                            # Only the `also_match` test fills this; the rest
+                            # pass bare names, so it comes out null.
+                            {"field": "kind", "type": "string"},
+                        ],
                     },
                     {
                         "field": "records",
@@ -1620,3 +1625,211 @@ def test_curie_link_writes_null_when_there_is_no_usable_id():
 
 def test_curie_link_ignores_a_source_it_has_no_template_for():
     assert _curie_link("Nonesuch:12345")["id_url"] is None
+
+
+# --- the `stack` transform --------------------------------------------------
+
+
+def _stacked(groups, **columns):
+    """A one-target plugin whose target stacks `groups` over the given columns."""
+    index_map = index_map_for("Allele", "GermDN", "GermIDs", "SomDN", "SomIDs")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["GermDN", "SomDN"],
+                "targets": [
+                    {
+                        "field": "conditions",
+                        "transform": "stack",
+                        "of": groups,
+                        "item_fields": ["name", "ids", "type"],
+                    }
+                ],
+            }
+        ]
+    )
+    return apply_plugin_spec(
+        [
+            "A",
+            columns.get("germ_dn", ""),
+            columns.get("germ_ids", ""),
+            columns.get("som_dn", ""),
+            columns.get("som_ids", ""),
+        ],
+        index_map,
+        spec.plugin("probe"),
+    )
+
+
+_STACK_GROUPS = [
+    {
+        "from": ["GermDN", "GermIDs"],
+        "as": [{"field": "name", "type": "string"}, {"field": "ids", "type": "string"}],
+        "const": {"type": "Germline"},
+        "sep": "+",
+    },
+    {
+        "from": ["SomDN", "SomIDs"],
+        "as": [{"field": "name", "type": "string"}, {"field": "ids", "type": "string"}],
+        "const": {"type": "Somatic"},
+        "sep": "+",
+    },
+]
+
+
+def test_stack_concatenates_its_groups_in_order():
+    result = _stacked(
+        _STACK_GROUPS,
+        germ_dn="Disease_one+Disease_two",
+        germ_ids="MedGen:C1+MedGen:C2",
+        som_dn="Tumour_one",
+        som_ids="MedGen:C3",
+    )
+    assert [(c["name"], c["ids"]) for c in result["conditions"]] == [
+        ("Disease_one", "MedGen:C1"),
+        ("Disease_two", "MedGen:C2"),
+        ("Tumour_one", "MedGen:C3"),
+    ]
+
+
+def test_stack_tags_every_row_with_its_group():
+    """The tag is the only record of which columns a row came from -- ClinVar
+    carries the classification type in the column *names* (CLNDN vs SCIDN), and
+    nowhere in the values."""
+    result = _stacked(
+        _STACK_GROUPS,
+        germ_dn="Disease_one+Disease_two",
+        germ_ids=".+.",
+        som_dn="Tumour_one",
+        som_ids=".",
+    )
+    assert [c["type"] for c in result["conditions"]] == [
+        "Germline",
+        "Germline",
+        "Somatic",
+    ]
+
+
+def test_stack_keeps_a_name_that_appears_under_two_types():
+    """The same condition can be both germline and somatic; it is two rows, not
+    one, because the classifications behind them are different claims."""
+    result = _stacked(
+        _STACK_GROUPS,
+        germ_dn="Shared_disease",
+        germ_ids="MedGen:C1",
+        som_dn="Shared_disease",
+        som_ids="MedGen:C1",
+    )
+    assert [(c["name"], c["type"]) for c in result["conditions"]] == [
+        ("Shared_disease", "Germline"),
+        ("Shared_disease", "Somatic"),
+    ]
+
+
+def test_stack_skips_a_group_whose_columns_are_empty():
+    result = _stacked(
+        _STACK_GROUPS, germ_dn="Disease_one", germ_ids="MedGen:C1", som_dn="", som_ids=""
+    )
+    assert [c["type"] for c in result["conditions"]] == ["Germline"]
+
+
+def test_stack_over_scalar_columns_yields_one_row_per_group():
+    """A group of scalar columns is a zip of one-element lists -- which is how
+    three aggregate classifications become a three-row list."""
+    result = _stacked(
+        [
+            {
+                "from": ["GermDN", "GermIDs"],
+                "as": [
+                    {"field": "name", "type": "string"},
+                    {"field": "ids", "type": "string"},
+                ],
+                "const": {"type": "Germline"},
+            },
+            {
+                "from": ["SomDN", "SomIDs"],
+                "as": [
+                    {"field": "name", "type": "string"},
+                    {"field": "ids", "type": "string"},
+                ],
+                "const": {"type": "Somatic"},
+            },
+        ],
+        germ_dn="Pathogenic",
+        germ_ids="reviewed_by_expert_panel",
+        som_dn="Tier_I",
+        som_ids="criteria_provided",
+    )
+    assert [(c["name"], c["type"]) for c in result["conditions"]] == [
+        ("Pathogenic", "Germline"),
+        ("Tier_I", "Somatic"),
+    ]
+
+
+def test_stack_rejects_a_group_whose_as_does_not_match_its_columns():
+    from pydantic import ValidationError
+
+    from app.vep.models.parsing_spec_model import StackGroup
+
+    with pytest.raises(ValidationError, match="one `as` entry per `from` column"):
+        StackGroup.model_validate(
+            {"from": ["A", "B"], "as": [{"field": "name", "type": "string"}]}
+        )
+
+
+# --- join refinements -------------------------------------------------------
+
+
+def test_join_also_match_disambiguates_a_shared_key():
+    """One condition name under two classification types: without the extra
+    equality the somatic record files itself under the germline condition."""
+    joins = [{"into": "conditions", "from": "records", "left_key": "name",
+              "right_key": "condition", "as": "records"}]
+    loose = _joined(
+        joins,
+        names="Shared_disease~Germline+Shared_disease~Somatic",
+        recs="R1~Germline~Shared_disease&R2~Somatic~Shared_disease",
+    )
+    # Both records land under both conditions -- the leak.
+    assert [[r["acc"] for r in c["records"]] for c in loose["conditions"]] == [
+        ["R1", "R2"],
+        ["R1", "R2"],
+    ]
+
+    joins[0]["also_match"] = {"kind": "verdict"}
+    tight = _joined(
+        joins,
+        names="Shared_disease~Germline+Shared_disease~Somatic",
+        recs="R1~Germline~Shared_disease&R2~Somatic~Shared_disease",
+    )
+    assert [[r["acc"] for r in c["records"]] for c in tight["conditions"]] == [
+        ["R1"],
+        ["R2"],
+    ]
+
+
+def test_join_count_into_writes_the_number_of_matches():
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "count_into": "n"}],
+        names="Disease_one+Orphan_disease",
+        recs=("R1~Pathogenic~Disease_one&R2~Pathogenic~Disease_one"
+              "&R3~Benign~Disease_one"),
+    )
+    assert [c["n"] for c in result["conditions"]] == [3, 0]
+
+
+def test_a_join_must_write_exactly_one_thing():
+    from pydantic import ValidationError
+
+    from app.vep.models.parsing_spec_model import JoinSpec
+
+    base = {"into": "conditions", "from": "records", "left_key": "name",
+            "right_key": "condition"}
+    with pytest.raises(ValidationError, match="not both or neither"):
+        JoinSpec(**base)
+    with pytest.raises(ValidationError, match="not both or neither"):
+        JoinSpec(**base, **{"as": "records", "count_into": "n"})

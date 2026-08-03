@@ -343,7 +343,7 @@ class MergedSpec(BaseModel):
             for join in plugin.joins or []:
                 fields = item_fields_by_plugin[plugin.plugin].get(join.into)
                 if fields is not None:
-                    fields.add(join.as_field)
+                    fields.update(join.produced_fields())
         errors: list[str] = []
 
         def field_error(option_id: str, plugin: str, field: str) -> str | None:

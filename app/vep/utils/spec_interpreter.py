@@ -263,6 +263,38 @@ def _apply_zip(csq_values, index_map, target: TargetSpec) -> list[dict]:
     return _apply_post(rows, target.post)
 
 
+def _apply_stack(csq_values, index_map, target: TargetSpec) -> list[dict]:
+    """Several groups of columns -> one list, each group's rows tagged.
+
+    Each group is a `zip` over its own columns, so a group of scalar columns
+    yields a single row and a group of list columns yields one row per position.
+    `drop_when` and `post` then apply to the whole stack, which is what lets one
+    `curie_link` resolve every group's ids.
+    """
+    rows: list[dict] = []
+    for group in target.of:
+        columns = [
+            raw_amp(_column(csq_values, name, index_map), group.sep)
+            for name in group.source
+        ]
+        lengths = [len(column) for column in columns]
+        length = (
+            (max(lengths) if group.align == "max" else min(lengths)) if lengths else 0
+        )
+        for i in range(length):
+            row = {
+                field_spec.field: _coerce(
+                    column[i] if i < len(column) else None, field_spec.type, field_spec
+                )
+                for column, field_spec in zip(columns, group.as_fields)
+            }
+            row.update(group.const)
+            if _should_drop(row, target.drop_when, csq_values, index_map):
+                continue
+            rows.append(row)
+    return _apply_post(rows, target.post)
+
+
 def _apply_regex(csq_values, index_map, target: TargetSpec):
     """Named regex groups -> object(s). Non-matching items are skipped."""
     raw = _column(csq_values, target.source, index_map)
@@ -438,6 +470,8 @@ def _build_target(csq_values, index_map, target: TargetSpec):
         return _apply_key_value(csq_values, index_map, target)
     if target.transform == "records":
         return _apply_records(csq_values, index_map, target)
+    if target.transform == "stack":
+        return _apply_stack(csq_values, index_map, target)
 
     raw = _column(csq_values, target.source, index_map)
     if target.transform == "scalar":
@@ -512,7 +546,21 @@ def _apply_joins(built: dict, joins) -> None:
         for row in left:
             key = _join_key(row.get(join.left_key), None, join.case_insensitive)
             matches = buckets.get(key, []) if key is not None else []
-            if join.count_by:
+            # A key can be ambiguous on its own (one condition name under two
+            # classification types); the extra equalities disambiguate it.
+            for left_field, right_field in (join.also_match or {}).items():
+                wanted = _join_key(row.get(left_field), None, join.case_insensitive)
+                matches = [
+                    match
+                    for match in matches
+                    if _join_key(
+                        match.get(right_field), None, join.case_insensitive
+                    )
+                    == wanted
+                ]
+            if join.count_into:
+                row[join.count_into] = len(matches)
+            elif join.count_by:
                 groups: dict[str, list] = {}
                 for match in matches:  # first-seen order
                     value = match.get(join.count_by)

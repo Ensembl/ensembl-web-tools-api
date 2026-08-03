@@ -24,7 +24,7 @@ ValueType = Literal["string", "float", "int", "raw"]
 # derived by enumerating the existing `_parse_*` functions rather than invented.
 Transform = Literal[
     "scalar", "list", "first", "zip", "regex", "pattern_map", "chunk", "positional",
-    "key_value", "records",
+    "key_value", "records", "stack",
 ]
 
 
@@ -220,6 +220,35 @@ class WhenSpec(BaseModel):
     includes: str
 
 
+class StackGroup(BaseModel):
+    """One source group of a `stack`: a `zip` over its own columns, tagged.
+
+    `const` is what makes the stacked list usable: the rows of different groups
+    are the same shape but not the same thing, and the tag is the only record of
+    which group a row came from. ClinVar states the same facts three times over,
+    once per classification type, in three sets of columns that carry the type
+    only in their *names* — CLNDN vs ONCDN vs SCIDN. Tagging on the way in turns
+    that back into data, so one list can be filtered, joined and split by type
+    rather than three lists having to be kept in step.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    # `from` and `as` are Python keywords, hence the aliases.
+    source: list[str] = Field(alias="from")
+    as_fields: list[FieldSpec] = Field(alias="as")
+    # Fields given the same value on every row this group produces.
+    const: dict[str, str] = Field(default_factory=dict)
+    sep: str = "&"
+    align: Literal["max", "min"] = "max"
+
+    @model_validator(mode="after")
+    def _one_as_per_column(self) -> "StackGroup":
+        if len(self.as_fields) != len(self.source):
+            raise ValueError("a stack group needs one `as` entry per `from` column")
+        return self
+
+
 class TargetSpec(BaseModel):
     """How to build one output field from one or more CSQ columns.
 
@@ -250,6 +279,11 @@ class TargetSpec(BaseModel):
                    but repeating). This is the shape of a source that packs whole
                    sub-records into one column — ClinVar's per-submitter (15
                    fields) and per-RCV (5 fields) data.
+      stack        several groups of columns -> one list. Each group in `of` is
+                   a `zip` over its own columns, tagged with that group's
+                   `const` fields, and the groups' rows are concatenated in
+                   order. For a source that publishes the same shape several
+                   times over in differently-named columns (see StackGroup).
       key_value    one column -> dict, splitting on `pair_delimiter` then
                    `kv_delimiter`. Order-independent by construction — for a
                    value whose pair order is not meaningful (or, as observed in
@@ -297,6 +331,8 @@ class TargetSpec(BaseModel):
     # overall-AF column can itself match the pattern).
     from_pattern: str | None = None
     exclude: list[str] | None = None
+    # `stack` only: the source groups, concatenated in order.
+    of: list[StackGroup] | None = None
     # `chunk` only: how many '&'-items make up one object.
     size: int | None = None
     # `positional` only: emit the single object inside a list.
@@ -361,6 +397,11 @@ class TargetSpec(BaseModel):
                 raise ValueError("records requires `from` to be a single column")
             if not self.as_fields:
                 raise ValueError("records requires `as` naming each record's fields")
+        elif self.transform == "stack":
+            if not self.of:
+                raise ValueError("stack requires `of` naming its source groups")
+            if self.source is not None:
+                raise ValueError("stack reads its columns from `of`, not `from`")
         else:
             if not isinstance(self.source, str):
                 raise ValueError(f"{self.transform} requires `from` to be a single column")
@@ -416,8 +457,21 @@ class JoinSpec(BaseModel):
     right_key_sep: str | None = None
     # ClinVar's submitters write the same condition in different cases.
     case_insensitive: bool = False
-    # The field added to each left row.
-    as_field: str = Field(alias="as")
+    # Further equalities a match must satisfy, as {left field: right field}.
+    #
+    # A single key is not always enough to identify a row: ClinVar lists the
+    # same condition under more than one classification type (Rosette-forming
+    # glioneuronal tumor is both a germline and a somatic one), so joining on
+    # the name alone files a somatic submission under the germline condition.
+    # Compared like the key, so `case_insensitive` applies here too.
+    also_match: dict[str, str] | None = None
+    # The field added to each left row. Unused by a `count_into` join, whose
+    # product is the number rather than the rows.
+    as_field: str | None = Field(default=None, alias="as")
+    # Attach how many rows matched rather than the rows themselves. For a count
+    # the reader sees as a number ("39 of 44"), where a list would only be
+    # counted again at render time.
+    count_into: str | None = None
     # Summarise rather than attach: group the matches by this field and count.
     count_by: str | None = None
     # With `count_by`, the field each group carries its own members under.
@@ -434,6 +488,19 @@ class JoinSpec(BaseModel):
                 f"needs `count_by` to group by; join into {self.into!r} has none"
             )
         return self
+
+    @model_validator(mode="after")
+    def _writes_exactly_one_field(self) -> "JoinSpec":
+        if bool(self.as_field) == bool(self.count_into):
+            raise ValueError(
+                "a join writes either the matched rows (`as`) or how many there "
+                f"were (`count_into`), not both or neither; join into {self.into!r}"
+            )
+        return self
+
+    def produced_fields(self) -> list[str]:
+        """The fields this join adds to each row of `into`."""
+        return [field for field in (self.as_field, self.count_into) if field]
 
 
 class PluginSpec(BaseModel):

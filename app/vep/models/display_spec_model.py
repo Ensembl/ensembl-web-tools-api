@@ -516,6 +516,29 @@ class DisplayListBlock(_GatedBlock):
         return plugin, field
 
 
+class ColumnItems(BaseModel):
+    """One line per element of a list-valued cell.
+
+    A column normally shows one value. ClinVar's conditions table has two that
+    do not: the classifications its submitters gave (each with a count), and
+    every RCV record covering the condition — a condition can have several, and
+    they stack.
+
+    `from` names the element field to show, `count_from` a companion count
+    rendered after it in brackets ("Pathogenic (5)"), and `link`/`link_from`
+    work as on the column itself: `{value}` is the displayed value, or the
+    sibling field when `link_from` names one.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    source: str = Field(alias="from")
+    format: RowFormat | None = None
+    count_from: str | None = None
+    link: LinkSpec | None = None
+    link_from: str | None = None
+
+
 class TableColumn(BaseModel):
     """One column of a `table` block: a header `label`.
 
@@ -547,6 +570,13 @@ class TableColumn(BaseModel):
     # accession. A value without the prefix is not a UniProt accession at all, so
     # it renders as plain text rather than becoming a broken link.
     link_prefix: str | None = None
+    # Build the link from a *sibling* field of the same element rather than from
+    # the cell's own text. A condition's URL is resolved in the parse (see the
+    # `curie_link` post-op) and lands beside the name, so the name is what the
+    # reader sees and the resolved URL is what it points at.
+    link_from: str | None = None
+    # How to render a cell whose value is a list of objects (see ColumnItems).
+    items: ColumnItems | None = None
     # Which way the column's values (and its header) align.
     #
     # The house rule is by data type: text reads left, numbers read right, so a

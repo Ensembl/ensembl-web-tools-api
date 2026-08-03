@@ -3283,12 +3283,32 @@
                   {
                     "label": "Condition",
                     "from": "name",
-                    "format": "phenotype"
+                    "format": "phenotype",
+                    "link": {
+                      "kind": "external",
+                      "template": "{value}"
+                    },
+                    "link_from": "id_url"
                   },
                   {
-                    "label": "Ontology ids",
-                    "from": "ids",
-                    "format": "text"
+                    "label": "Classification(s) of submission",
+                    "from": "classifications",
+                    "items": {
+                      "from": "classification",
+                      "format": "humanize",
+                      "count_from": "count"
+                    }
+                  },
+                  {
+                    "label": "Variation/condition record",
+                    "from": "records",
+                    "items": {
+                      "from": "rcv",
+                      "link": {
+                        "kind": "external",
+                        "template": "https://www.ncbi.nlm.nih.gov/clinvar/{value}/"
+                      }
+                    }
                   }
                 ]
               }

@@ -328,6 +328,20 @@ class MergedSpec(BaseModel):
             plugin.plugin: {t.field: t for t in plugin.targets}
             for plugin in self.parsing.plugins
         }
+        # An element's fields are its target's `item_fields` *plus* whatever a
+        # join adds to that list: the join's `as` field is as real as a parsed
+        # one, and a display column may read it.
+        item_fields_by_plugin: dict[str, dict[str, set[str]]] = {
+            plugin.plugin: {
+                t.field: set(t.item_fields or []) for t in plugin.targets
+            }
+            for plugin in self.parsing.plugins
+        }
+        for plugin in self.parsing.plugins:
+            for join in plugin.joins or []:
+                fields = item_fields_by_plugin[plugin.plugin].get(join.into)
+                if fields is not None:
+                    fields.add(join.as_field)
         errors: list[str] = []
 
         def field_error(option_id: str, plugin: str, field: str) -> str | None:
@@ -371,9 +385,7 @@ class MergedSpec(BaseModel):
                     if err:
                         errors.append(err)
                         continue
-                    item_fields = set(
-                        targets_by_plugin[plugin][list_field].item_fields or []
-                    )
+                    item_fields = item_fields_by_plugin[plugin][list_field]
                     refs = list(block.item.item_field_refs())
                     if block.group_by:
                         # The field the items group on is an item field too, and
@@ -403,9 +415,7 @@ class MergedSpec(BaseModel):
                     if err:
                         errors.append(err)
                         continue
-                    item_fields = set(
-                        targets_by_plugin[plugin][list_field].item_fields or []
-                    )
+                    item_fields = item_fields_by_plugin[plugin][list_field]
                     for item_field in block.column_field_refs():
                         if item_field not in item_fields:
                             errors.append(

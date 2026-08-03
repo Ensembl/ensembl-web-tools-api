@@ -250,6 +250,11 @@ class TargetSpec(BaseModel):
     # the enriched ClinVar VCF uses '~' between subfields and '+' between
     # repeats. Defaults to '&', so every existing target is unaffected.
     sep: str = "&"
+    # Percent-decode the produced value's string leaves. Off by default: only a
+    # source that escapes its own separators needs it (the enriched ClinVar VCF
+    # escapes '% , ; = | & ~ +' inside values). Applied *after* every split, so
+    # an encoded '%2C' can never be read as a delimiter.
+    decode: bool = False
     # `zip` only: whether to iterate to the longest or shortest input column.
     # The existing parsers disagree — MaveDB pads to the longest, OpenTargets
     # truncates to the shortest — so it has to be explicit.

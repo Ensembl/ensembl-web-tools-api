@@ -197,7 +197,7 @@ def test_clinvar_conflicting_breakdown_shape():
         "clinvar",
         row_list(
             ClinVar_CLNSIG=CONFLICTING,
-            ClinVar_CLNSIGCONF="Likely_pathogenic_(6)&Benign_(2)",
+            ClinVar_CLNSIGCONF="Likely_pathogenic_(6)+Benign_(2)",
         ),
     )
     assert result["significance"] == [CONFLICTING]
@@ -228,6 +228,8 @@ def test_clinvar_non_conflicting_ignores_breakdown():
         "id": "12345",
         "significance": ["Pathogenic"],
         "conflicting_breakdown": [],
+        "review_status": None,
+        "conditions": [],
     }
 
 
@@ -243,13 +245,15 @@ def test_clinvar_when_matches_list_membership_not_substring():
         "id": "678",
         "significance": ["Not_" + CONFLICTING],
         "conflicting_breakdown": [],
+        "review_status": None,
+        "conditions": [],
     }
 
 
 def test_clinvar_unparseable_breakdown_token_skipped():
     csq = row_list(
         ClinVar_CLNSIG=CONFLICTING,
-        ClinVar_CLNSIGCONF="Benign_(2)&garbage_no_count",
+        ClinVar_CLNSIGCONF="Benign_(2)+garbage_no_count",
     )
     result = run("clinvar", csq)
     assert [b["significance"] for b in result["conflicting_breakdown"]] == ["Benign"]
@@ -1308,4 +1312,80 @@ def test_field_null_values_blank_a_placeholder_token():
             {"name": "Disease_one", "ids": "MeSH:D1,MedGen:C1"},
             {"name": "Disease_two", "ids": None},
         ]
+    }
+
+
+def test_decode_happens_after_every_split():
+    """An escaped separator must survive as data.
+
+    ClinVar escapes ',' inside disease names and CURIE lists, and the enriched
+    VCF then uses '+' as its own separator. Decoding first would turn a '%2C'
+    back into a live comma before the splits ran; decoding last, as the
+    interpreter does, keeps it inside the value it belongs to.
+    """
+    index_map = index_map_for("Allele", "Names", "Ids")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Names", "Ids"],
+                "require_any_output": ["conditions"],
+                "targets": [
+                    {
+                        "field": "conditions",
+                        "from": ["Names", "Ids"],
+                        "transform": "zip",
+                        "sep": "+",
+                        "decode": True,
+                        "as": [
+                            {"field": "name", "type": "string"},
+                            {"field": "ids", "type": "string", "null_values": ["."]},
+                        ],
+                    }
+                ],
+            }
+        ]
+    )
+    result = apply_plugin_spec(
+        [
+            "A",
+            # one name containing an escaped comma, then a second name
+            "Neurodevelopmental_disorder%2C_mitochondrial+Inborn_disease",
+            "MONDO:MONDO:0060578%2CMedGen:C4540192+.",
+        ],
+        index_map,
+        spec.plugin("probe"),
+    )
+    assert result == {
+        "conditions": [
+            {
+                "name": "Neurodevelopmental_disorder,_mitochondrial",
+                "ids": "MONDO:MONDO:0060578,MedGen:C4540192",
+            },
+            {"name": "Inborn_disease", "ids": None},
+        ]
+    }
+
+
+def test_decode_is_off_by_default():
+    """A '%' that is genuinely part of a value must not be mangled."""
+    index_map = index_map_for("Allele", "Thing")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Thing"],
+                "require_any_output": ["value"],
+                "targets": [
+                    {"field": "value", "from": "Thing", "transform": "scalar"}
+                ],
+            }
+        ]
+    )
+    assert apply_plugin_spec(["A", "100%2C"], index_map, spec.plugin("probe")) == {
+        "value": "100%2C"
     }

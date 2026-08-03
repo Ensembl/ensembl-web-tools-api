@@ -256,7 +256,10 @@
             "file": "{path}/Phenotypes.pm_homo_sapiens_116_GRCh38.gvf.gz",
             "cols": "type&source&phenotype&id&risk_allele&clinvar_clin_sig"
           }
-        }
+        },
+        "forces_on": [
+          "clinvar_short"
+        ]
       },
       {
         "id": "go",
@@ -945,7 +948,7 @@
           "clinvar"
         ],
         "requires": [
-          "clinvar"
+          "phenotypes"
         ],
         "config": {
           "emit": "custom",
@@ -963,7 +966,10 @@
           "fields": {
             "literal": [
               "CLNSIG",
-              "CLNSIGCONF"
+              "CLNSIGCONF",
+              "CLNDN",
+              "CLNDISDB",
+              "CLNREVSTAT"
             ]
           }
         }
@@ -1219,7 +1225,10 @@
         "csq_fields": [
           "ClinVar",
           "ClinVar_CLNSIG",
-          "ClinVar_CLNSIGCONF"
+          "ClinVar_CLNSIGCONF",
+          "ClinVar_CLNDN",
+          "ClinVar_CLNDISDB",
+          "ClinVar_CLNREVSTAT"
         ],
         "require_any_input": [
           "ClinVar_CLNSIG"
@@ -1234,7 +1243,8 @@
           {
             "field": "significance",
             "from": "ClinVar_CLNSIG",
-            "transform": "list"
+            "transform": "list",
+            "decode": true
           },
           {
             "field": "conflicting_breakdown",
@@ -1259,7 +1269,44 @@
             "item_fields": [
               "significance",
               "count"
-            ]
+            ],
+            "sep": "+",
+            "decode": true
+          },
+          {
+            "field": "review_status",
+            "from": "ClinVar_CLNREVSTAT",
+            "transform": "scalar",
+            "type": "string",
+            "decode": true
+          },
+          {
+            "field": "conditions",
+            "from": [
+              "ClinVar_CLNDN",
+              "ClinVar_CLNDISDB"
+            ],
+            "transform": "zip",
+            "sep": "+",
+            "align": "max",
+            "as": [
+              {
+                "field": "name",
+                "type": "string"
+              },
+              {
+                "field": "ids",
+                "type": "string",
+                "null_values": [
+                  "."
+                ]
+              }
+            ],
+            "item_fields": [
+              "name",
+              "ids"
+            ],
+            "decode": true
           }
         ]
       },

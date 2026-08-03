@@ -358,38 +358,43 @@ def test_simple_plugin_expects_its_csq_fields():
     assert _expected(cadd=True) == {"CADD_PHRED", "CADD_RAW"}
 
 
+CLINVAR_SHORT_COLUMNS = {
+    "ClinVar",  # the bare match column a custom always emits
+    "ClinVar_CLNSIG",
+    "ClinVar_CLNSIGCONF",
+    "ClinVar_CLNDN",
+    "ClinVar_CLNDISDB",
+    "ClinVar_CLNREVSTAT",
+}
+
+CLINVAR_SV_COLUMNS = {"ClinVar_SV", "ClinVar_SV_CLNSIG", "ClinVar_SV_ORIGIN"}
+
+
 def test_custom_literal_expects_exact_columns():
     # The bare `short_name` match column is always emitted by a custom, so it is
-    # expected too, alongside the literal `short_name_<field>` columns. ClinVar's
-    # short custom requires the master (`clinvar`) as well as its own sub-option.
-    assert _expected(clinvar=True, clinvar_short=True) == {
-        "ClinVar",
-        "ClinVar_CLNSIG",
-        "ClinVar_CLNSIGCONF",
-    }
+    # expected too, alongside the literal `short_name_<field>` columns. The
+    # germline custom rides in on Phenotypes (`forces_on`), which is what makes
+    # its columns expected — alongside Phenotypes' own column.
+    assert _expected(phenotypes=True) == CLINVAR_SHORT_COLUMNS | {"PHENOTYPES"}
 
 
-def test_clinvar_sub_option_requires_the_master():
-    # A ClinVar sub-option selected without the master (a stale value restored by
-    # edit/rerun) expects nothing — the `requires: ["clinvar"]` gate holds.
+def test_clinvar_short_expects_nothing_without_phenotypes():
+    # A stale `clinvar_short` restored by edit/rerun expects nothing on its own —
+    # the `requires: ["phenotypes"]` gate holds.
     assert _expected(clinvar_short=True) == set()
+
+
+def test_clinvar_sv_still_requires_its_master():
+    # The structural custom is unchanged: it belongs to the `clinvar` master and
+    # expects nothing without it.
     assert _expected(clinvar_sv=True) == set()
-    # With the master on, each sub-option expects its own custom's columns.
-    # Short variants are on by default, so they come along with the master.
-    assert _expected(clinvar=True, clinvar_sv=True) == {
-        "ClinVar",
-        "ClinVar_CLNSIG",
-        "ClinVar_CLNSIGCONF",
-        "ClinVar_SV",
-        "ClinVar_SV_CLNSIG",
-        "ClinVar_SV_ORIGIN",
-    }
-    # ...and turning them off leaves only the structural columns.
-    assert _expected(clinvar=True, clinvar_sv=True, clinvar_short=False) == {
-        "ClinVar_SV",
-        "ClinVar_SV_CLNSIG",
-        "ClinVar_SV_ORIGIN",
-    }
+    assert _expected(clinvar=True, clinvar_sv=True) == CLINVAR_SV_COLUMNS
+    # The two are independent now: Phenotypes brings the germline columns, the
+    # master brings the structural ones, and neither implies the other.
+    assert (
+        _expected(phenotypes=True, clinvar=True, clinvar_sv=True)
+        == CLINVAR_SHORT_COLUMNS | CLINVAR_SV_COLUMNS | {"PHENOTYPES"}
+    )
 
 
 def test_custom_builder_expects_the_combinatorial_columns():

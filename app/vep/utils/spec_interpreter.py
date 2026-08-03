@@ -11,6 +11,7 @@ over the same CSQ fixtures (see tests/test_spec_interpreter.py).
 
 import json
 import re
+from urllib.parse import unquote
 from functools import lru_cache
 from pathlib import Path
 
@@ -359,7 +360,7 @@ def _empty_value(target: TargetSpec):
     return None
 
 
-def _apply_target(csq_values, index_map, target: TargetSpec):
+def _build_target(csq_values, index_map, target: TargetSpec):
     if not _when_holds(csq_values, index_map, target.when):
         return _empty_value(target)
 
@@ -384,6 +385,33 @@ def _apply_target(csq_values, index_map, target: TargetSpec):
     if target.transform == "first":
         return _coerce(first_amp(raw, target.sep), target.type)
     raise ValueError(f"unknown transform: {target.transform}")
+
+
+def _decode_leaves(value):
+    """Percent-decode every string leaf of a produced value.
+
+    `unquote`, never `unquote_plus`: '+' is a structural separator in the
+    enriched ClinVar VCF, not an encoded space.
+    """
+    if isinstance(value, str):
+        return unquote(value)
+    if isinstance(value, list):
+        return [_decode_leaves(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _decode_leaves(v) for k, v in value.items()}
+    return value
+
+
+def _apply_target(csq_values, index_map, target: TargetSpec):
+    """One target's value, decoded if the source escapes its separators.
+
+    Decoding is the *last* step by construction: the value has already been split
+    on every delimiter, so an encoded '%2C' cannot be mistaken for one. Doing it
+    the other way round is how a comma inside a disease name becomes a field
+    boundary.
+    """
+    value = _build_target(csq_values, index_map, target)
+    return _decode_leaves(value) if target.decode else value
 
 
 def apply_plugin_spec(

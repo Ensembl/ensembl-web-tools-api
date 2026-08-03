@@ -1567,6 +1567,10 @@
               {
                 "field": "pmid",
                 "type": "string"
+              },
+              {
+                "field": "contributes",
+                "type": "string"
               }
             ],
             "item_fields": [
@@ -1584,7 +1588,8 @@
               "affected_status",
               "condition",
               "condition_id",
-              "pmid"
+              "pmid",
+              "contributes"
             ]
           },
           {
@@ -3546,7 +3551,11 @@
                               "template": "http://europepmc.org/abstract/MED/{value}"
                             }
                           }
-                        ]
+                        ],
+                        "emphasis": {
+                          "field": "contributes",
+                          "equals": "1"
+                        }
                       }
                     }
                   },
@@ -3618,7 +3627,11 @@
                               "template": "http://europepmc.org/abstract/MED/{value}"
                             }
                           }
-                        ]
+                        ],
+                        "emphasis": {
+                          "field": "contributes",
+                          "equals": "1"
+                        }
                       }
                     }
                   },

@@ -599,6 +599,20 @@ class ColumnItems(BaseModel):
         return self
 
 
+class ItemMatch(BaseModel):
+    """A test on one field of an element: does it hold this value?
+
+    Explicit rather than truthiness, because the values that need testing are
+    codes: ClinVar flags whether a submission counts toward the aggregate as
+    1/0, and "0" is a perfectly true-looking string.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    field: str
+    equals: str
+
+
 class ColumnExpand(BaseModel):
     """One line's collapsed detail: a summary that opens onto per-element lines.
 
@@ -615,6 +629,12 @@ class ColumnExpand(BaseModel):
 
     source: str = Field(alias="from")
     cells: list[ColumnItems]
+    # Which of these lines to set apart: the detail is a long list of much the
+    # same thing, and only some of it bears on the classification above. A
+    # ClinVar submission that counts toward the aggregate reads at full weight;
+    # one that does not stays quiet rather than being hidden, since it is still
+    # a real submission somebody made.
+    emphasis: ItemMatch | None = None
 
 
 ColumnItems.model_rebuild()

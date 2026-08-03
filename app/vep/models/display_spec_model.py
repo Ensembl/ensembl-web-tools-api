@@ -539,6 +539,22 @@ class ColumnItems(BaseModel):
     link_from: str | None = None
 
 
+class ColumnExpand(BaseModel):
+    """A cell's collapsed detail: a summary that opens onto per-element lines.
+
+    ClinVar's classifications column summarises what a condition's submitters
+    said ("Pathogenic (5)"); the detail is who said it. `from` names the list
+    field holding those elements, and `cells` the fields to show for each, joined
+    on one line. Collapsed by default — a condition can have dozens of
+    submitters, and the summary is the point.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    source: str = Field(alias="from")
+    cells: list[ColumnItems]
+
+
 class TableColumn(BaseModel):
     """One column of a `table` block: a header `label`.
 
@@ -577,6 +593,8 @@ class TableColumn(BaseModel):
     link_from: str | None = None
     # How to render a cell whose value is a list of objects (see ColumnItems).
     items: ColumnItems | None = None
+    # A collapsed detail beneath the cell's summary (see ColumnExpand).
+    expand: ColumnExpand | None = None
     # Which way the column's values (and its header) align.
     #
     # The house rule is by data type: text reads left, numbers read right, so a

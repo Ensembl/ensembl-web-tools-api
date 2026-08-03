@@ -1477,6 +1477,21 @@
           },
           {
             "into": "conditions",
+            "from": "submissions",
+            "left_key": "name",
+            "right_key": "condition",
+            "right_key_sep": "+",
+            "case_insensitive": true,
+            "as": "submitters",
+            "item_fields": [
+              "submitter",
+              "classification",
+              "date_last_evaluated",
+              "review_status"
+            ]
+          },
+          {
+            "into": "conditions",
             "from": "records",
             "left_key": "name",
             "right_key": "condition",
@@ -3277,6 +3292,26 @@
                       "from": "classification",
                       "format": "humanize",
                       "count_from": "count"
+                    },
+                    "expand": {
+                      "from": "submitters",
+                      "cells": [
+                        {
+                          "from": "submitter",
+                          "format": "humanize"
+                        },
+                        {
+                          "from": "classification",
+                          "format": "humanize"
+                        },
+                        {
+                          "from": "date_last_evaluated"
+                        },
+                        {
+                          "from": "review_status",
+                          "format": "humanize"
+                        }
+                      ]
                     }
                   },
                   {

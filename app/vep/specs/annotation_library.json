@@ -187,7 +187,7 @@
       },
       {
         "plugin": "clinvar",
-        "scope": "allele",
+        "scope": "transcript",
         "output": "clinvar",
         "csq_fields": [
           "ClinVar",
@@ -215,8 +215,14 @@
           "ClinVar_SCI",
           "ClinVar_SCIREVSTAT",
           "ClinVar_SCIDN",
-          "ClinVar_SCIDISDB"
+          "ClinVar_SCIDISDB",
+          "ClinVar_GENEINFO"
         ],
+        "applies_to": {
+          "column": "SYMBOL",
+          "listed_in": "ClinVar_GENEINFO",
+          "item_pattern": "^(?P<key>[^:]+)"
+        },
         "require_any_input": [
           "ClinVar_CLNSIG"
         ],

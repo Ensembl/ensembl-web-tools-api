@@ -582,6 +582,29 @@ def _apply_joins(built: dict, joins) -> None:
                 row[join.as_field] = matches
 
 
+def _row_in_scope(csq_values, index_map, scope) -> bool:
+    """Whether this CSQ row is one the plugin's annotation belongs to.
+
+    True when there is nothing to narrow by — see RowScope: a row with no value
+    of its own, or an annotation naming nothing, keeps the annotation rather
+    than losing it.
+    """
+    if scope is None:
+        return True
+    listed = _column(csq_values, scope.listed_in, index_map)
+    value = _column(csq_values, scope.column, index_map)
+    if not listed or not value:
+        return True
+    # Split on the separator first, decode after: an escaped separator inside a
+    # name must not be read as one (the house rule for this VCF).
+    names = {
+        _join_key(unquote(entry), scope.item_pattern, False)
+        for entry in listed.split(scope.sep)
+        if entry
+    }
+    return value in names
+
+
 def apply_plugin_spec(
     csq_values: list[str], index_map: dict[str, int], spec: PluginSpec
 ) -> dict | None:
@@ -592,6 +615,9 @@ def apply_plugin_spec(
     present but this record has no values in them.
     """
     if not has_any_column(index_map, *spec.csq_fields):
+        return None
+
+    if not _row_in_scope(csq_values, index_map, spec.applies_to):
         return None
 
     # Raw presence, deliberately: a literal 'NA' counts as present here, which

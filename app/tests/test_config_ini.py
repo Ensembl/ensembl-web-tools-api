@@ -924,7 +924,7 @@ def test_clinvar_line_is_assembly_specific(
         "%CLNSIGCONF%CLNSIGINCL%ONCDN%ONCDNINCL%ONCDISDB"
         "%ONCDISDBINCL%ONC%ONCINCL%ONCREVSTAT%ONCSCV%ONCCONF"
         "%CLNSUBA%CLNPMID%CLNSUBN%CLNRCV%SCI%SCIREVSTAT%SCIDN"
-        "%SCIDISDB,"
+        "%SCIDISDB%GENEINFO,"
         "format=vcf,type=exact"
     )
 

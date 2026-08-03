@@ -385,6 +385,7 @@ CLINVAR_SHORT_COLUMNS = {
     "ClinVar_SCIREVSTAT",
     "ClinVar_SCIDN",
     "ClinVar_SCIDISDB",
+    "ClinVar_GENEINFO",
 }
 
 CLINVAR_SV_COLUMNS = {"ClinVar_SV", "ClinVar_SV_CLNSIG", "ClinVar_SV_ORIGIN"}

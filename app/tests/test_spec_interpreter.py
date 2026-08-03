@@ -1851,3 +1851,69 @@ def test_a_join_must_write_exactly_one_thing():
         JoinSpec(**base)
     with pytest.raises(ValidationError, match="not both or neither"):
         JoinSpec(**base, **{"as": "records", "count_into": "n"})
+
+
+# --- narrowing a plugin to the rows it is about -----------------------------
+
+
+def _scoped(applies_to, symbol, geneinfo, sig="Pathogenic"):
+    """One plugin gated by `applies_to`, over a row with these columns."""
+    index_map = index_map_for("Allele", "SYMBOL", "Probe_SIG", "Probe_GENEINFO")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "transcript",
+                "output": "probe",
+                "csq_fields": ["Probe_SIG", "Probe_GENEINFO"],
+                "applies_to": applies_to,
+                "targets": [
+                    {
+                        "field": "significance",
+                        "from": "Probe_SIG",
+                        "transform": "scalar",
+                        "type": "string",
+                    }
+                ],
+            }
+        ]
+    )
+    return apply_plugin_spec(
+        ["A", symbol, sig, geneinfo], index_map, spec.plugin("probe")
+    )
+
+
+_GENE_SCOPE = {
+    "column": "SYMBOL",
+    "listed_in": "Probe_GENEINFO",
+    "item_pattern": "^(?P<key>[^:]+)",
+}
+
+
+def test_a_plugin_is_dropped_on_a_row_it_is_not_about():
+    """VEP repeats a custom's columns on every CSQ row of the variant, so
+    ClinVar's record for SMARCB1 was also being served under DERL3, whose
+    transcripts merely overlap the same position."""
+    assert _scoped(_GENE_SCOPE, "SMARCB1", "SMARCB1:6598") is not None
+    assert _scoped(_GENE_SCOPE, "DERL3", "SMARCB1:6598") is None
+
+
+def test_every_gene_the_annotation_names_keeps_it():
+    """A record can name several genes; each of them is one it is about."""
+    listed = "WARS2:10352&WARS2-AS1:101929147&LOC129931299:129931299"
+    assert _scoped(_GENE_SCOPE, "WARS2", listed) is not None
+    assert _scoped(_GENE_SCOPE, "WARS2-AS1", listed) is not None
+    assert _scoped(_GENE_SCOPE, "SMARCB1", listed) is None
+
+
+def test_nothing_to_narrow_by_keeps_the_annotation():
+    """Dropping here would trade a wrong attribution for a missing one: an
+    intergenic row has no symbol to match, and the annotation is still true of
+    the variant."""
+    assert _scoped(_GENE_SCOPE, "", "SMARCB1:6598") is not None
+    assert _scoped(_GENE_SCOPE, "SMARCB1", "") is not None
+
+
+def test_an_escaped_separator_is_not_read_as_one():
+    """Split before decoding: a name carrying an encoded '&' is one name."""
+    assert _scoped(_GENE_SCOPE, "A&B", "A%26B:1") is not None

@@ -880,7 +880,8 @@
               "SCI",
               "SCIREVSTAT",
               "SCIDN",
-              "SCIDISDB"
+              "SCIDISDB",
+              "GENEINFO"
             ]
           }
         }

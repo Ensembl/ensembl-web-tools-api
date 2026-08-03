@@ -510,6 +510,33 @@ class JoinSpec(BaseModel):
         return [field for field in (self.as_field, self.count_into) if field]
 
 
+class RowScope(BaseModel):
+    """Which of a variant's CSQ rows a plugin's annotation actually belongs to.
+
+    VEP repeats a custom's columns on *every* CSQ row of the variant, so an
+    annotation about one gene is served against every gene the variant touches.
+    ClinVar's record for 22:23834143 is about SMARCB1, but DERL3's transcripts
+    overlap the same position, and the classification was appearing under both.
+
+    `column` is the row's own (SYMBOL); `listed_in` is the plugin's column naming
+    what it is about (ClinVar_GENEINFO, `SMARCB1:6598&WARS2-AS1:101929147`).
+    `item_pattern` takes the comparable part of an entry via a `key` group, as a
+    join's `right_key_pattern` does.
+
+    Narrowing applies only when there is something to narrow by: a row with no
+    value of its own, or an annotation naming nothing, is left alone. Dropping
+    those would trade a wrong attribution for a missing one — an intergenic row
+    has no symbol to match, and the annotation is still true of the variant.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    column: str
+    listed_in: str
+    sep: str = "&"
+    item_pattern: str | None = None
+
+
 class PluginSpec(BaseModel):
     """How to parse one plugin's contribution to a CSQ entry.
 
@@ -531,6 +558,8 @@ class PluginSpec(BaseModel):
     # Where the result attaches on the response model, e.g. "mavedb".
     output: str
     csq_fields: list[str]
+    # Restrict this plugin to the CSQ rows it is really about (see RowScope).
+    applies_to: RowScope | None = None
     require_any_input: list[str] | None = None
     require_any_output: list[str] | None = None
     targets: list[TargetSpec]

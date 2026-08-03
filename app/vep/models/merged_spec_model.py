@@ -80,7 +80,7 @@ def _target_shape(target) -> tuple[str, ...]:
         return _scalar_shape(target.type)
     if transform == "list":
         return ("list", _scalar_shape(target.type)[1])
-    if transform in ("zip", "chunk"):
+    if transform in ("zip", "chunk", "records", "stack"):
         return ("list", "object")
     if transform == "positional":
         return ("list", "object") if target.wrap == "list" else ("object",)
@@ -101,6 +101,14 @@ def _item_field_shape(list_target, item_ref: str | None) -> tuple[str, ...] | No
     for field in list_target.as_fields or []:
         if field.field == item_ref:
             return _scalar_shape(field.type)
+    # A `stack` declares its fields per group rather than once: the same field
+    # name in every group, plus each group's constant tags (always strings).
+    for group in list_target.of or []:
+        for field in group.as_fields:
+            if field.field == item_ref:
+                return _scalar_shape(field.type)
+        if item_ref in group.const:
+            return ("scalar", "string")
     return None
 
 
@@ -109,7 +117,7 @@ def _format_suits_shape(fmt: str, shape: tuple[str, ...]) -> bool:
     `text` (and any unlisted format) only stringifies, so it suits anything."""
     if fmt == "num":
         return shape == ("scalar", "num")
-    if fmt in ("humanize", "phenotype"):
+    if fmt in ("humanize", "phenotype", "humanize_terms"):
         return shape == ("scalar", "string")
     if fmt == "join":
         return shape[0] == "list" and shape[1] in ("string", "num")
@@ -124,6 +132,7 @@ _FORMAT_NEEDS = {
     "num": "a numeric field",
     "humanize": "a string field",
     "phenotype": "a string field",
+    "humanize_terms": "a string field",
     "join": "a list of scalars",
     "humanize_join": "a list of strings",
     "count": "a list, or a delimited string",
@@ -431,6 +440,23 @@ class MergedSpec(BaseModel):
                             err = scalar_ref_error(oid, ref)
                             if err:
                                 errors.append(err)
+                        # A row that stacks a list reads that list's element
+                        # fields, exactly as a list block's item does.
+                        list_ref = row.list_ref()
+                        if list_ref is None:
+                            continue
+                        plugin, list_field = list_ref
+                        if field_error(oid, plugin, list_field):
+                            continue  # already reported by field_refs above
+                        item_fields = item_fields_by_plugin[plugin][list_field]
+                        for item_field in row.item.item_field_refs():
+                            if item_field not in item_fields:
+                                errors.append(
+                                    f"display option {oid!r} row {row.label!r} "
+                                    f"stacks {plugin}.{list_field} and references "
+                                    f"item field {item_field!r} not in its "
+                                    "target's item_fields"
+                                )
         return errors
 
     def _check_display_format_types(self) -> list[str]:

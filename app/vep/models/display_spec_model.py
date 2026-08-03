@@ -32,7 +32,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # absent (drops / dashes) when the count is zero — ProtVar's Show-all pockets /
 # interfaces counts.
 RowFormat = Literal[
-    "text", "num", "humanize", "phenotype", "join", "humanize_join", "count"
+    "text", "num", "humanize", "phenotype", "join", "humanize_join", "count",
+    "humanize_terms",
 ]
 
 # Which view a block belongs to: the default annotation view or "Show all". A
@@ -222,6 +223,11 @@ class DisplayRow(BaseModel):
     # Show a star rating in front of the value, using the named scale (see
     # RatingScale). The value itself still renders.
     stars: str | None = None
+    # A row whose `from` is a *list*: one rendered line per element, stacked as
+    # the row's value under a single label. The same element shape a list block
+    # repeats, borrowed so a stacked value needs no vocabulary of its own —
+    # ClinVar's classification is one line per classification type.
+    item: "DisplayItemSpec | None" = None
 
     @model_validator(mode="after")
     def _exactly_one_source(self) -> "DisplayRow":
@@ -245,6 +251,13 @@ class DisplayRow(BaseModel):
             return [self.source]
         return self.compose.field_refs() if self.compose else []
 
+    def list_ref(self) -> tuple[str, str] | None:
+        """The `(plugin, listField)` this row stacks, if it stacks one."""
+        if not self.item or not self.source:
+            return None
+        plugin, _, field = self.source.partition(".")
+        return plugin, field
+
 
 class CellSpec(BaseModel):
     """One cell of a repeated item (see `DisplayListBlock`).
@@ -263,6 +276,17 @@ class CellSpec(BaseModel):
     format: RowFormat | None = None
     mono: bool = False
     link: LinkSpec | None = None
+    # A star rating in front of this cell, on the scale *named by this field of
+    # the element*. Unlike a row's fixed `stars`, the scale varies per element:
+    # ClinVar reads the same review-status wording differently for a germline
+    # classification and a somatic one, so which scale applies is data.
+    stars_from: str | None = None
+    # Render the cell as "(value of <this field>)" — a count against its total,
+    # like "39 of 44" submissions. Nothing is shown when the cell's own value is
+    # zero: no submitter asserting the aggregate verbatim is a fact about
+    # wording (ClinVar derives terms like "Conflicting classifications of
+    # pathogenicity" that nobody submits), not a measure of support.
+    of_from: str | None = None
 
     def item_field_refs(self) -> Iterator[str]:
         """Every item field this cell reads: its `from` plus any `{field}`
@@ -270,6 +294,10 @@ class CellSpec(BaseModel):
         frontend builder owns its inputs)."""
         if self.source:
             yield self.source
+        if self.stars_from:
+            yield self.stars_from
+        if self.of_from:
+            yield self.of_from
         if self.link:
             yield from self.link.template_fields()
 
@@ -485,6 +513,9 @@ class GroupBy(BaseModel):
 
     field: str
     labels: dict[str, str] | None = None
+
+
+DisplayRow.model_rebuild()
 
 
 class DisplayListBlock(_GatedBlock):

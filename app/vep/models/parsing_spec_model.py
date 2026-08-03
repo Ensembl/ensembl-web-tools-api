@@ -240,6 +240,13 @@ class StackGroup(BaseModel):
     # Fields given the same value on every row this group produces.
     const: dict[str, str] = Field(default_factory=dict)
     sep: str = "&"
+    # Read each column whole rather than splitting it, so the group contributes
+    # exactly one row. For a group of scalar columns whose values may themselves
+    # contain the separator: ClinVar's aggregate germline classification is one
+    # assertion even when it reads `Conflicting_classifications_of_pathogenicity
+    # +risk_factor`, and splitting it would invent a second classification with
+    # no review status of its own.
+    split: bool = True
     align: Literal["max", "min"] = "max"
 
     @model_validator(mode="after")

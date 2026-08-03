@@ -275,6 +275,8 @@ def _apply_stack(csq_values, index_map, target: TargetSpec) -> list[dict]:
     for group in target.of:
         columns = [
             raw_amp(_column(csq_values, name, index_map), group.sep)
+            if group.split
+            else ([raw] if (raw := _column(csq_values, name, index_map)) else [])
             for name in group.source
         ]
         lengths = [len(column) for column in columns]

@@ -955,3 +955,73 @@ def test_the_payload_carries_the_scales():
     assert (
         payload.rating_scales["clinvar_aggregate"].ratings["practice guideline"] == 4
     )
+
+
+# --- a row that stacks a list ----------------------------------------------
+
+
+_LIST_PLUGIN = [
+    {
+        "plugin": "p",
+        "scope": "allele",
+        "output": "p",
+        "csq_fields": ["C"],
+        "targets": [
+            {
+                "field": "summary",
+                "from": "C",
+                "transform": "chunk",
+                "size": 2,
+                "as": [
+                    {"field": "kind", "type": "string"},
+                    {"field": "verdict", "type": "string"},
+                ],
+                "item_fields": ["kind", "verdict"],
+            }
+        ],
+    }
+]
+
+
+def _stacking_row(*cells):
+    return _doc(
+        {
+            "options": [{"option_id": "p", "blocks": [{
+                "kind": "rows",
+                "rows": [{
+                    "label": "Classification",
+                    "from": "p.summary",
+                    "item": {"cells": list(cells)},
+                }],
+            }]}]
+        },
+        plugins=_LIST_PLUGIN,
+    )
+
+
+def test_a_row_can_stack_a_list_of_items():
+    spec = MergedSpec.model_validate(
+        _stacking_row({"from": "kind"}, {"from": "verdict"})
+    )
+    row = spec.display.options[0].blocks[0].rows[0]
+    assert row.list_ref() == ("p", "summary")
+    assert [c.source for c in row.item.cells] == ["kind", "verdict"]
+
+
+def test_a_stacking_rows_item_fields_are_checked():
+    """The same check a list block's item gets — otherwise a typo'd field just
+    renders an empty line."""
+    with pytest.raises(ValidationError, match="item field 'verdcit' not in"):
+        MergedSpec.model_validate(_stacking_row({"from": "verdcit"}))
+
+
+def test_stars_from_and_of_from_are_item_refs_too():
+    """Both name a *field of the element*, so both are typo-checked."""
+    with pytest.raises(ValidationError, match="item field 'scale' not in"):
+        MergedSpec.model_validate(
+            _stacking_row({"from": "kind", "stars_from": "scale"})
+        )
+    with pytest.raises(ValidationError, match="item field 'total' not in"):
+        MergedSpec.model_validate(
+            _stacking_row({"from": "kind", "of_from": "total"})
+        )

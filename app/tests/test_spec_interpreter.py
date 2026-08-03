@@ -228,8 +228,17 @@ def test_clinvar_non_conflicting_ignores_breakdown():
         "id": "12345",
         "significance": ["Pathogenic"],
         "conflicting_breakdown": [],
-        "review_status": None,
         "conditions": [],
+        "classification_summary": [
+            {
+                "classification": "Pathogenic",
+                "review_status": None,
+                "type": "Germline",
+                "rating_scale": "clinvar_aggregate",
+                "submissions": 0,
+                "supporting": 0,
+            }
+        ],
         "submissions": [],
         "records": [],
     }
@@ -247,8 +256,17 @@ def test_clinvar_when_matches_list_membership_not_substring():
         "id": "678",
         "significance": ["Not_" + CONFLICTING],
         "conflicting_breakdown": [],
-        "review_status": None,
         "conditions": [],
+        "classification_summary": [
+            {
+                "classification": "Not_" + CONFLICTING + "",
+                "review_status": None,
+                "type": "Germline",
+                "rating_scale": "clinvar_aggregate",
+                "submissions": 0,
+                "supporting": 0,
+            }
+        ],
         "submissions": [],
         "records": [],
     }

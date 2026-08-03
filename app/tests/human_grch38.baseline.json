@@ -1314,39 +1314,87 @@
             "decode": true
           },
           {
-            "field": "review_status",
-            "from": "ClinVar_CLNREVSTAT",
-            "transform": "scalar",
-            "type": "string",
-            "decode": true
-          },
-          {
             "field": "conditions",
-            "from": [
-              "ClinVar_CLNDN",
-              "ClinVar_CLNDISDB"
-            ],
-            "transform": "zip",
-            "sep": "+",
-            "align": "max",
-            "as": [
+            "transform": "stack",
+            "of": [
               {
-                "field": "name",
-                "type": "string"
+                "from": [
+                  "ClinVar_CLNDN",
+                  "ClinVar_CLNDISDB"
+                ],
+                "as": [
+                  {
+                    "field": "name",
+                    "type": "string"
+                  },
+                  {
+                    "field": "ids",
+                    "type": "string",
+                    "null_values": [
+                      "."
+                    ]
+                  }
+                ],
+                "const": {
+                  "type": "Germline"
+                },
+                "sep": "+"
               },
               {
-                "field": "ids",
-                "type": "string",
-                "null_values": [
-                  "."
-                ]
+                "from": [
+                  "ClinVar_ONCDN",
+                  "ClinVar_ONCDISDB"
+                ],
+                "as": [
+                  {
+                    "field": "name",
+                    "type": "string"
+                  },
+                  {
+                    "field": "ids",
+                    "type": "string",
+                    "null_values": [
+                      "."
+                    ]
+                  }
+                ],
+                "const": {
+                  "type": "Oncogenicity"
+                },
+                "sep": "+"
+              },
+              {
+                "from": [
+                  "ClinVar_SCIDN",
+                  "ClinVar_SCIDISDB"
+                ],
+                "as": [
+                  {
+                    "field": "name",
+                    "type": "string"
+                  },
+                  {
+                    "field": "ids",
+                    "type": "string",
+                    "null_values": [
+                      "."
+                    ]
+                  }
+                ],
+                "const": {
+                  "type": "SomaticClinicalImpact"
+                },
+                "sep": "+"
               }
             ],
             "item_fields": [
               "name",
               "ids",
+              "type",
               "id_url",
-              "id_curie"
+              "id_curie",
+              "classifications",
+              "records"
             ],
             "decode": true,
             "post": [
@@ -1370,6 +1418,87 @@
                 }
               }
             ]
+          },
+          {
+            "field": "classification_summary",
+            "transform": "stack",
+            "of": [
+              {
+                "from": [
+                  "ClinVar_CLNSIG",
+                  "ClinVar_CLNREVSTAT"
+                ],
+                "as": [
+                  {
+                    "field": "classification",
+                    "type": "string"
+                  },
+                  {
+                    "field": "review_status",
+                    "type": "string"
+                  }
+                ],
+                "const": {
+                  "type": "Germline",
+                  "rating_scale": "clinvar_aggregate"
+                },
+                "split": false
+              },
+              {
+                "from": [
+                  "ClinVar_ONC",
+                  "ClinVar_ONCREVSTAT"
+                ],
+                "as": [
+                  {
+                    "field": "classification",
+                    "type": "string"
+                  },
+                  {
+                    "field": "review_status",
+                    "type": "string"
+                  }
+                ],
+                "const": {
+                  "type": "Oncogenicity",
+                  "rating_scale": "clinvar_aggregate"
+                },
+                "split": false
+              },
+              {
+                "from": [
+                  "ClinVar_SCI",
+                  "ClinVar_SCIREVSTAT"
+                ],
+                "as": [
+                  {
+                    "field": "classification",
+                    "type": "string"
+                  },
+                  {
+                    "field": "review_status",
+                    "type": "string"
+                  }
+                ],
+                "const": {
+                  "type": "SomaticClinicalImpact",
+                  "rating_scale": "clinvar_somatic"
+                },
+                "split": false
+              }
+            ],
+            "drop_when": {
+              "all_null": true
+            },
+            "item_fields": [
+              "type",
+              "classification",
+              "review_status",
+              "rating_scale",
+              "supporting",
+              "submissions"
+            ],
+            "decode": true
           },
           {
             "field": "submissions",
@@ -1502,7 +1631,11 @@
             "from": "submissions",
             "left_key": "name",
             "right_key": "condition",
+            "right_key_sep": "+",
             "case_insensitive": true,
+            "also_match": {
+              "type": "classification_type"
+            },
             "as": "classifications",
             "count_by": "classification",
             "nest_as": "submitters",
@@ -1510,8 +1643,7 @@
               "classification",
               "count",
               "submitters"
-            ],
-            "right_key_sep": "+"
+            ]
           },
           {
             "into": "conditions",
@@ -1519,14 +1651,34 @@
             "left_key": "name",
             "right_key": "condition",
             "right_key_pattern": "^(?:[^:]+:[^:]+:)?(?P<key>.*)$",
+            "right_key_sep": "+",
             "case_insensitive": true,
+            "also_match": {
+              "type": "classification_type"
+            },
             "as": "records",
             "item_fields": [
               "rcv",
               "classification",
               "review_status"
-            ],
-            "right_key_sep": "+"
+            ]
+          },
+          {
+            "into": "classification_summary",
+            "from": "submissions",
+            "left_key": "type",
+            "right_key": "classification_type",
+            "count_into": "submissions"
+          },
+          {
+            "into": "classification_summary",
+            "from": "submissions",
+            "left_key": "type",
+            "right_key": "classification_type",
+            "also_match": {
+              "classification": "classification"
+            },
+            "count_into": "supporting"
           }
         ]
       },
@@ -2865,6 +3017,18 @@
           "no assertion criteria provided": 0,
           "no classification provided": 0
         }
+      },
+      "clinvar_somatic": {
+        "out_of": 4,
+        "ratings": {
+          "practice guideline": 4,
+          "reviewed by expert panel": 3,
+          "criteria provided, multiple submitters": 2,
+          "criteria provided, single submitter": 1,
+          "no assertion criteria provided": 0,
+          "no classification provided": 0,
+          "no classification for the individual variant": 0
+        }
       }
     },
     "options": [
@@ -3302,14 +3466,27 @@
                   },
                   {
                     "label": "Classification",
-                    "from": "clinvar.significance",
-                    "format": "humanize_join"
-                  },
-                  {
-                    "label": "Review status",
-                    "from": "clinvar.review_status",
-                    "format": "humanize",
-                    "stars": "clinvar_aggregate",
+                    "from": "clinvar.classification_summary",
+                    "item": {
+                      "cells": [
+                        {
+                          "from": "type"
+                        },
+                        {
+                          "from": "classification",
+                          "format": "humanize_terms",
+                          "stars_from": "rating_scale"
+                        },
+                        {
+                          "from": "review_status",
+                          "format": "humanize"
+                        },
+                        {
+                          "from": "supporting",
+                          "of_from": "submissions"
+                        }
+                      ]
+                    },
                     "help": "For more detail regarding ClinVar's calculation of review status see",
                     "help_link": {
                       "href": "https://www.ncbi.nlm.nih.gov/clinvar/docs/review_status/",
@@ -3375,7 +3552,76 @@
                       }
                     }
                   }
-                ]
+                ],
+                "heading": "Germline",
+                "where": {
+                  "field": "type",
+                  "equals": "Germline"
+                }
+              },
+              {
+                "kind": "table",
+                "when": {
+                  "present": "clinvar.conditions"
+                },
+                "from": "clinvar.conditions",
+                "truncate": {
+                  "visible_count": 3
+                },
+                "columns": [
+                  {
+                    "label": "Condition",
+                    "from": "name",
+                    "format": "phenotype",
+                    "link": {
+                      "kind": "external",
+                      "template": "{value}"
+                    },
+                    "link_from": "id_url"
+                  },
+                  {
+                    "label": "Classification (expand for - submitter, last evaluation date, review status)",
+                    "from": "classifications",
+                    "items": {
+                      "from": "classification",
+                      "format": "humanize",
+                      "count_from": "count",
+                      "expand": {
+                        "from": "submitters",
+                        "cells": [
+                          {
+                            "from": "submitter",
+                            "format": "humanize"
+                          },
+                          {
+                            "from": "date_last_evaluated"
+                          },
+                          {
+                            "from": "review_status",
+                            "format": "humanize",
+                            "stars": "clinvar_submission"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "label": "ClinVar record",
+                    "from": "records",
+                    "items": {
+                      "from": "rcv",
+                      "link": {
+                        "kind": "external",
+                        "template": "https://www.ncbi.nlm.nih.gov/clinvar/{value}/"
+                      }
+                    }
+                  }
+                ],
+                "heading": "Somatic",
+                "where": {
+                  "field": "type",
+                  "not_equals": "Germline"
+                }
               }
             ]
           }

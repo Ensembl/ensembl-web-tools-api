@@ -1545,6 +1545,10 @@
               {
                 "field": "contributes",
                 "type": "int"
+              },
+              {
+                "field": "rcv",
+                "type": "string"
               }
             ],
             "item_fields": [
@@ -1563,7 +1567,8 @@
               "condition",
               "condition_id",
               "pmid",
-              "contributes"
+              "contributes",
+              "rcv"
             ],
             "post": [
               {
@@ -1617,20 +1622,6 @@
         "joins": [
           {
             "into": "conditions",
-            "from": "submissions",
-            "left_key": "name",
-            "right_key": "condition",
-            "right_key_sep": "+",
-            "case_insensitive": true,
-            "also_match": {
-              "type": "classification_type"
-            },
-            "as": "classifications",
-            "count_by": "classification",
-            "nest_as": "submitters"
-          },
-          {
-            "into": "conditions",
             "from": "records",
             "left_key": "name",
             "right_key": "condition",
@@ -1641,6 +1632,18 @@
               "type": "classification_type"
             },
             "as": "records"
+          },
+          {
+            "into": "conditions",
+            "from": "submissions",
+            "left_key": "records.rcv",
+            "right_key": "rcv",
+            "as": "classifications",
+            "count_by": "classification",
+            "nest_as": "submitters",
+            "also_match": {
+              "type": "classification_type"
+            }
           },
           {
             "into": "classification_summary",
@@ -1663,18 +1666,16 @@
           {
             "into": "conditions",
             "from": "submissions",
-            "left_key": "name",
-            "right_key": "condition",
-            "right_key_sep": "+",
-            "case_insensitive": true,
-            "also_match": {
-              "type": "classification_type"
-            },
+            "left_key": "records.rcv",
+            "right_key": "rcv",
             "where": {
               "field": "contributes",
               "equals": "1"
             },
-            "count_into": "contributing"
+            "count_into": "contributing",
+            "also_match": {
+              "type": "classification_type"
+            }
           }
         ],
         "post_joins": [

@@ -600,6 +600,32 @@ def _join_key(value, pattern, case_insensitive: bool) -> str | None:
     return key.casefold() if case_insensitive else key
 
 
+def _left_keys(row: dict, left_key: str, case_insensitive: bool) -> list[str]:
+    """The key(s) a left row joins on.
+
+    Normally one, read straight off the row. A dotted `left_key` reads a
+    subfield of a list the row already carries, so the row matches on *any* of
+    several: a ClinVar condition holds one RCV record per aggregate it belongs
+    to, and a submission names the one it was filed under, so `records.rcv` is
+    what relates them. That relation is ClinVar's own; the condition *name* it
+    replaced was never reliable, because the aggregate and the submitter word
+    the same condition differently.
+    """
+    field, _, sub = left_key.partition(".")
+    value = row.get(field)
+    values = (
+        [item.get(sub) for item in value or [] if isinstance(item, dict)]
+        if sub
+        else [value]
+    )
+    keys = []
+    for raw in values:
+        key = _join_key(raw, None, case_insensitive)
+        if key is not None and key not in keys:
+            keys.append(key)
+    return keys
+
+
 def _apply_joins(built: dict, joins) -> None:
     """Stitch the plugin's lists together in place (see JoinSpec)."""
     for join in joins or []:
@@ -620,8 +646,12 @@ def _apply_joins(built: dict, joins) -> None:
                 if key is not None:
                     buckets.setdefault(key, []).append(row)
         for row in left:
-            key = _join_key(row.get(join.left_key), None, join.case_insensitive)
-            matches = buckets.get(key, []) if key is not None else []
+            matches = []
+            for key in _left_keys(row, join.left_key, join.case_insensitive):
+                for candidate in buckets.get(key, []):
+                    # A row reachable by two keys is still one match.
+                    if not any(candidate is seen for seen in matches):
+                        matches.append(candidate)
             # A key can be ambiguous on its own (one condition name under two
             # classification types); the extra equalities disambiguate it.
             for left_field, right_field in (join.also_match or {}).items():

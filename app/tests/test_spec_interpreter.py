@@ -223,8 +223,6 @@ def test_clinvar_non_conflicting_ignores_breakdown():
                 "supporting": None,
             }
         ],
-        "submissions": [],
-        "records": [],
     }
 
 
@@ -250,8 +248,6 @@ def test_clinvar_when_matches_list_membership_not_substring():
                 "supporting": None,
             }
         ],
-        "submissions": [],
-        "records": [],
     }
 
 
@@ -1420,6 +1416,7 @@ def _joined(joins, **columns):
                         "sep": "&",
                         "item_sep": "~",
                         "decode": True,
+                        "join_source": columns.get("join_source", False),
                         "as": [
                             {"field": "acc", "type": "string"},
                             {"field": "verdict", "type": "string"},
@@ -1525,6 +1522,40 @@ def test_join_nest_as_keeps_each_group_beside_its_count():
         ["R3"],
     ]
     assert [g["count"] for g in groups] == [2, 1]
+
+
+def test_a_join_source_is_dropped_once_it_has_been_joined():
+    """The joined rows *are* the source rows -- the same objects -- so leaving
+    the flat list in place ships every one of them twice. ClinVar's submissions
+    were 40% of its payload on that account."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "matches"}],
+        names="Disease_one",
+        recs="R1~Pathogenic~Disease_one",
+        join_source=True,
+    )
+    assert "records" not in result
+    # ...and the rows are still there, where they are read from.
+    assert [r["acc"] for r in result["conditions"][0]["matches"]] == ["R1"]
+
+
+def test_a_display_ref_to_a_join_source_fails_at_load():
+    from pydantic import ValidationError
+
+    from app.vep.models.merged_spec_model import MergedSpec
+    from app.tests.test_merged_spec import _assembled
+
+    doc = _assembled()
+    for option in doc["display"]["options"]:
+        if option["option_id"] == "phenotypes":
+            option["blocks"].append(
+                {"kind": "rows", "rows": [
+                    {"label": "Submissions", "from": "clinvar.submissions"}
+                ]}
+            )
+    with pytest.raises(ValidationError, match="join source"):
+        MergedSpec.model_validate(doc)
 
 
 def test_join_nest_as_needs_a_grouping_to_nest_under():

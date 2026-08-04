@@ -358,6 +358,14 @@ class TargetSpec(BaseModel):
     # (e.g. a MaveDB assay's `urn`/`score`) and have those refs validated at load
     # time, the list-item analogue of the top-level `field` refs.
     item_fields: list[str] | None = None
+    # Built for the joins to draw from, and dropped once they have run.
+    #
+    # ClinVar's submissions and RCV records are parsed as their own lists so a
+    # join can file each one under the condition it belongs to. Nothing displays
+    # them at that level -- they are read through the conditions -- and
+    # `_apply_joins` attaches the very same objects, so leaving them in place
+    # shipped every submission twice. That was 40% of ClinVar's payload.
+    join_source: bool = False
 
     @model_validator(mode="after")
     def _check_transform_shape(self) -> "TargetSpec":

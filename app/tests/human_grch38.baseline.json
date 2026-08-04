@@ -1578,7 +1578,8 @@
                 "desc": true,
                 "nulls": "last"
               }
-            ]
+            ],
+            "join_source": true
           },
           {
             "field": "records",
@@ -1615,7 +1616,8 @@
               "review_status",
               "classification",
               "condition"
-            ]
+            ],
+            "join_source": true
           }
         ],
         "joins": [

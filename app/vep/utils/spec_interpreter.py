@@ -712,6 +712,16 @@ def apply_plugin_spec(
     ):
         output = None
 
+    # The join sources have done their work. `_apply_joins` attached the very
+    # same row objects where they are actually read -- a submission under the
+    # condition it was filed against -- so keeping the flat lists as well
+    # shipped every submission twice, 40% of ClinVar's payload. Dropped last, so
+    # decoding and `require_any_output` still see them.
+    if output is not None:
+        for target in spec.targets:
+            if target.join_source:
+                output.pop(target.field, None)
+
     if key is not None:
         cache[key] = output
     return output

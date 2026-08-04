@@ -433,6 +433,12 @@ class MergedSpec(BaseModel):
                     f"display option {option_id!r} references field {field!r} "
                     f"that parse plugin {plugin!r} does not produce"
                 )
+            if targets_by_plugin[plugin][field].join_source:
+                return (
+                    f"display option {option_id!r} references {plugin}.{field}, "
+                    "which is a join source and is dropped from the output; read "
+                    "it through the list it was joined into"
+                )
             return None
 
         def scalar_ref_error(option_id: str, ref: str) -> str | None:

@@ -449,9 +449,10 @@ class ConfigIniParams(BaseModel):
     gnomad_cnv_sf_nfe: bool = False
     gnomad_cnv_sf_sas: bool = False
     gnomad_cnv_sf_remaining: bool = False
-    # ClinVar. `clinvar` is the master toggle for the structural custom only —
-    # `clinvar_sv` is the ClinVar_SV custom and requires it.
-    clinvar: bool = False
+    # ClinVar. There is no `clinvar` master any more: once the germline data
+    # moved to Phenotypes it gated nothing but the structural custom, so
+    # `clinvar_sv` is a top-level option. A stored submission from before that
+    # still carries `clinvar`, which pydantic ignores as it does any extra.
     # `clinvar_short` (the germline CLNSIG custom) has no form control: it is
     # served under Phenotypes, whose config entry `forces_on` it. Hence the
     # default is off — the only thing that turns it on is that force, and its

@@ -486,13 +486,17 @@ def test_allofus_absent_below_grch38():
 def _clinvar_option(assembly):
     panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name=assembly)
     va = next(p for p in panels if p["id"] == "phenotype_and_disease_associations")
-    return next(o for o in va["options"] if o["id"] == "clinvar")
+    return next(o for o in va["options"] if o["id"] == "clinvar_sv")
 
 
-def test_clinvar_in_phenotype_and_disease_associations_for_grch37_and_grch38():
+def test_clinvar_structural_is_its_own_option_not_a_master_and_a_child():
+    """It used to sit under a "Clinical Significance (ClinVar)" master. Once the
+    germline data moved to Phenotypes, that master gated nothing else and
+    ticking it ran nothing, so the one real control stands on its own."""
     for assembly in ("GRCh37.p13", "GRCh38.p14"):
-        clinvar = _clinvar_option(assembly)
-        assert clinvar["label"] == "Clinical Significance (ClinVar)"
+        assert _clinvar_option(assembly)["label"] == "ClinVar structural variants"
+        panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name=assembly)
+        assert "clinvar" not in option_ids(panels)
 
 
 def test_clinvar_germline_has_no_form_control():
@@ -504,12 +508,9 @@ def test_clinvar_germline_has_no_form_control():
         assert "clinvar_short" not in option_ids(panels)
 
 
-def test_clinvar_structural_sub_option_available_for_both_human_assemblies():
-    # "Structural variants" (ClinVar_SV) exists for GRCh37 and GRCh38, and is now
-    # the only thing the master gates.
+def test_clinvar_structural_available_for_both_human_assemblies():
     for assembly in ("GRCh38.p14", "GRCh37.p13"):
-        subs = [s["id"] for s in _clinvar_option(assembly)["sub_options"]]
-        assert subs == ["clinvar_sv"]
+        assert "sub_options" not in _clinvar_option(assembly)
 
 
 def test_clinvar_absent_for_non_human():

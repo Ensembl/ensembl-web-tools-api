@@ -166,18 +166,6 @@ _HUMAN_37_38_PANELS: list[dict] = [
         "label": "Phenotype & disease associations",
         "options": [
             {"id": "geno2mp", "label": "Geno2MP", "type": "boolean", "default": False},
-            # ClinVar master: two independent sub-option toggles. "Short variants"
-            # "Structural variants" (the ClinVar_SV custom) is appended in
-            # _add_human_grch37/38_options, and is the only thing this master
-            # gates now: ClinVar's germline data has no control of its own, and
-            # is served under Phenotypes, which turns its custom on behind the
-            # scenes (`forces_on: ["clinvar_short"]`).
-            {
-                "id": "clinvar",
-                "label": "Clinical Significance (ClinVar)",
-                "type": "boolean",
-                "default": False,
-            },
         ],
     },
 ]
@@ -688,16 +676,15 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
             {"id": "phenotypes", "label": "Phenotypes", "type": "boolean", "default": False},
             {"id": "opentargets", "label": "OpenTargets", "type": "boolean", "default": False},
         ])
-        # ClinVar's "Structural variants" sub-option (the ClinVar_SV custom) —
-        # GRCh38-only, so it joins the master's sub-options only here.
-        clinvar = next(
-            (o for o in by_id["phenotype_and_disease_associations"]["options"] if o["id"] == "clinvar"),
-            None,
+        # ClinVar's structural variants (the ClinVar_SV custom), human-only so
+        # it is added here rather than in the base panel. Its own top-level
+        # option: it used to hang under a "Clinical Significance (ClinVar)"
+        # master, but once the germline data moved to Phenotypes that master
+        # gated nothing else and ticking it ran nothing.
+        by_id["phenotype_and_disease_associations"]["options"].append(
+            {"id": "clinvar_sv", "label": "ClinVar structural variants",
+             "type": "boolean", "default": False}
         )
-        if clinvar is not None:
-            clinvar.setdefault("sub_options", []).append(
-                {"id": "clinvar_sv", "label": "Structural variants", "type": "boolean", "default": False}
-            )
 
     # Regulatory: GENCODE promoter windows (a gff-overlap custom annotation).
     panels.append({
@@ -901,14 +888,10 @@ def _add_human_grch37_options(panels: list[dict]) -> None:
         by_id["phenotype_and_disease_associations"]["options"].append(
             {"id": "phenotypes", "label": "Phenotypes", "type": "boolean", "default": False}
         )
-        clinvar = next(
-            (o for o in by_id["phenotype_and_disease_associations"]["options"] if o["id"] == "clinvar"),
-            None,
+        by_id["phenotype_and_disease_associations"]["options"].append(
+            {"id": "clinvar_sv", "label": "ClinVar structural variants",
+             "type": "boolean", "default": False}
         )
-        if clinvar is not None:
-            clinvar.setdefault("sub_options", []).append(
-                {"id": "clinvar_sv", "label": "Structural variants", "type": "boolean", "default": False}
-            )
 
     # Allele frequencies: gnomAD exomes/genomes/SV v2 (the GRCh37 shape).
     panels.append({

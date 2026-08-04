@@ -404,15 +404,16 @@ def test_clinvar_short_expects_nothing_without_phenotypes():
     assert _expected(clinvar_short=True) == set()
 
 
-def test_clinvar_sv_still_requires_its_master():
-    # The structural custom is unchanged: it belongs to the `clinvar` master and
-    # expects nothing without it.
-    assert _expected(clinvar_sv=True) == set()
-    assert _expected(clinvar=True, clinvar_sv=True) == CLINVAR_SV_COLUMNS
-    # The two are independent now: Phenotypes brings the germline columns, the
-    # master brings the structural ones, and neither implies the other.
+def test_clinvar_structural_stands_on_its_own():
+    # It used to need a `clinvar` master that, once the germline data moved to
+    # Phenotypes, gated nothing else -- so ticking the one control that means
+    # something now brings the structural columns by itself.
+    assert _expected(clinvar_sv=True) == CLINVAR_SV_COLUMNS
+    # The two ClinVar sources stay independent: Phenotypes brings the germline
+    # columns, this brings the structural ones, and neither implies the other.
+    assert _expected(phenotypes=True) == CLINVAR_SHORT_COLUMNS | {"PHENOTYPES"}
     assert (
-        _expected(phenotypes=True, clinvar=True, clinvar_sv=True)
+        _expected(phenotypes=True, clinvar_sv=True)
         == CLINVAR_SHORT_COLUMNS | CLINVAR_SV_COLUMNS | {"PHENOTYPES"}
     )
 

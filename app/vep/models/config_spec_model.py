@@ -383,12 +383,12 @@ class ConfigEntry(BaseModel):
     # row's display on, so the value is computed without showing the row.
     forces_on: list[str] = []
     # Other option ids that must ALSO be selected for this entry to emit — a
-    # parent-gate for independent sub-options. The ClinVar master (`clinvar`)
-    # reveals two independent toggles (`clinvar_short` / `clinvar_sv`), each
-    # gating its own custom line; `requires: ["clinvar"]` keeps a sub-option from
-    # emitting when the master is off (e.g. a stale sub-option value restored by
-    # edit/rerun after the master was unchecked). Unlike `forces_on` this only
-    # gates emission; it never turns another option on.
+    # parent-gate for an entry that has no control of its own, or whose control
+    # is only meaningful under another. `clinvar_short` has no form control at
+    # all -- Phenotypes `forces_on` it -- and additionally
+    # `requires: ["phenotypes"]`, so a stale True restored by an edit/rerun
+    # cannot emit the custom on its own. Unlike `forces_on` this only gates
+    # emission; it never turns another option on.
     requires: list[str] = []
     config: ConfigEmitter
 

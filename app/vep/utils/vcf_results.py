@@ -284,6 +284,46 @@ def _spec_annotations(
     return annotations
 
 
+def _pool_annotations(variant: model.Variant) -> None:
+    """Move this variant's annotations into one pool, referenced by index.
+
+    VEP repeats a plugin's value on every CSQ row it applies to, so the same
+    payload was serialised once per transcript consequence: on a 50-variant
+    page ClinVar alone was 421 copies of 14 distinct values, 72% of the whole
+    response. The payload therefore grew with annotations *times* transcripts,
+    which is a multiplier rather than a constant — this removes it.
+
+    Identity is the serialised payload, not the plugin: `hgvs` is genuinely
+    different per transcript (744 distinct of 864), so deduplicating by plugin
+    would lose data. Equal payloads collapse; different ones stay.
+
+    Mutates in place, after the variant is built, so nothing upstream has to
+    know about pooling.
+    """
+    pool: list[model.Annotation] = []
+    seen: dict[str, int] = {}
+
+    def refs(annotations: list[model.Annotation]) -> list[int]:
+        out = []
+        for annotation in annotations:
+            key = annotation.model_dump_json()
+            index = seen.get(key)
+            if index is None:
+                index = len(pool)
+                seen[key] = index
+                pool.append(annotation)
+            out.append(index)
+        return out
+
+    for allele in variant.alternative_alleles:
+        allele.annotation_refs = refs(allele.annotations)
+        for consequence in allele.predicted_molecular_consequences:
+            # An intergenic consequence is a different model and carries none.
+            if hasattr(consequence, "annotations"):
+                consequence.annotation_refs = refs(consequence.annotations)
+    variant.annotation_pool = pool
+
+
 def _get_alt_allele_details(
     ref: str,
     alt: str,
@@ -1245,21 +1285,22 @@ def _get_results_from_vcfpy(
 
             longest_alt = max((_alt_value(a) for a in record.ALT), key=len)
 
-            variants.append(
-                model.Variant(
-                    name=";".join(record.ID) if len(record.ID) > 0 else ".",
-                    location=location,
-                    reference_allele=model.ReferenceVariantAllele(
-                        allele_sequence=record.REF
-                    ),
-                    alternative_alleles=alt_alleles,
-                    allele_type=(
-                        sv["type_word"]
-                        if sv
-                        else _get_variant_type(record.REF, longest_alt)
-                    ),
-                )
+            variant = model.Variant(
+                name=";".join(record.ID) if len(record.ID) > 0 else ".",
+                location=location,
+                reference_allele=model.ReferenceVariantAllele(
+                    allele_sequence=record.REF
+                ),
+                alternative_alleles=alt_alleles,
+                allele_type=(
+                    sv["type_word"]
+                    if sv
+                    else _get_variant_type(record.REF, longest_alt)
+                ),
             )
+            # One pool per variant, once it holds every allele and consequence.
+            _pool_annotations(variant)
+            variants.append(variant)
 
     available_af_sources = [
         model.AfSource(**descriptor)

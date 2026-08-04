@@ -32,6 +32,34 @@ def run(plugin: str, csq_values, index_map=INDEX_MAP):
     return apply_plugin_spec(csq_values, index_map, spec)
 
 
+def probe(csq_fields: list[str], *targets, scope: str = "allele", **plugin):
+    """A one-plugin `ParsingSpec` over `targets`, for exercising a transform.
+
+    The plugin around a target is never what these tests are about, and it had
+    been written out longhand seventeen times -- the same four keys each time,
+    which is four chances to typo something the test would then quietly not be
+    checking. Anything else a plugin can carry (`joins`, `applies_to`,
+    `require_any_output`) passes straight through as a keyword.
+    """
+    return ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": scope,
+                "output": "probe",
+                "csq_fields": csq_fields,
+                "targets": list(targets),
+                **plugin,
+            }
+        ]
+    )
+
+
+def probe_plugin(csq_fields: list[str], *targets, scope: str = "allele", **plugin):
+    """The same, already resolved to the single `PluginSpec` most callers want."""
+    return probe(csq_fields, *targets, scope=scope, **plugin).plugin("probe")
+
+
 # --- the spec document itself ------------------------------------------------
 
 
@@ -1211,24 +1239,10 @@ def test_target_sep_splits_on_a_delimiter_vep_leaves_alone():
     does not touch. The enriched ClinVar VCF uses '+' between repeats; `sep`
     is what lets a target read it."""
     index_map = index_map_for("Allele", "Thing")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "allele",
-                "output": "probe",
-                "csq_fields": ["Thing"],
-                "require_any_output": ["items"],
-                "targets": [
-                    {
-                        "field": "items",
-                        "from": "Thing",
-                        "transform": "list",
-                        "sep": "+",
-                    }
-                ],
-            }
-        ]
+    spec = probe(
+        ["Thing"],
+        {"field": "items", "from": "Thing", "transform": "list", "sep": "+"},
+        require_any_output=["items"],
     )
     plugin = spec.plugin("probe")
     assert apply_plugin_spec(["A", "one+two+three"], index_map, plugin) == {
@@ -1242,19 +1256,10 @@ def test_target_sep_splits_on_a_delimiter_vep_leaves_alone():
 
 def test_target_sep_defaults_to_amp():
     index_map = index_map_for("Allele", "Thing")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "allele",
-                "output": "probe",
-                "csq_fields": ["Thing"],
-                "require_any_output": ["items"],
-                "targets": [
-                    {"field": "items", "from": "Thing", "transform": "list"}
-                ],
-            }
-        ]
+    spec = probe(
+        ["Thing"],
+        {"field": "items", "from": "Thing", "transform": "list"},
+        require_any_output=["items"],
     )
     assert apply_plugin_spec(["A", "one&two"], index_map, spec.plugin("probe")) == {
         "items": ["one", "two"]
@@ -1266,33 +1271,20 @@ def test_field_null_values_blank_a_placeholder_token():
     absent, but only where it is declared: '.' is a real value in other fields,
     so this is per-field rather than global."""
     index_map = index_map_for("Allele", "Names", "Ids")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "allele",
-                "output": "probe",
-                "csq_fields": ["Names", "Ids"],
-                "require_any_output": ["conditions"],
-                "targets": [
-                    {
-                        "field": "conditions",
-                        "from": ["Names", "Ids"],
-                        "transform": "zip",
-                        "sep": "+",
-                        "align": "max",
-                        "as": [
-                            {"field": "name", "type": "string"},
-                            {
-                                "field": "ids",
-                                "type": "string",
-                                "null_values": ["."],
-                            },
-                        ],
-                    }
-                ],
-            }
-        ]
+    spec = probe(
+        ["Names", "Ids"],
+        {
+            "field": "conditions",
+            "from": ["Names", "Ids"],
+            "transform": "zip",
+            "sep": "+",
+            "align": "max",
+            "as": [
+                {"field": "name", "type": "string"},
+                {"field": "ids", "type": "string", "null_values": ["."]},
+            ],
+        },
+        require_any_output=["conditions"],
     )
     result = apply_plugin_spec(
         ["A", "Disease_one+Disease_two", "MeSH:D1,MedGen:C1+."],
@@ -1316,29 +1308,20 @@ def test_decode_happens_after_every_split():
     interpreter does, keeps it inside the value it belongs to.
     """
     index_map = index_map_for("Allele", "Names", "Ids")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "allele",
-                "output": "probe",
-                "csq_fields": ["Names", "Ids"],
-                "require_any_output": ["conditions"],
-                "targets": [
-                    {
-                        "field": "conditions",
-                        "from": ["Names", "Ids"],
-                        "transform": "zip",
-                        "sep": "+",
-                        "decode": True,
-                        "as": [
-                            {"field": "name", "type": "string"},
-                            {"field": "ids", "type": "string", "null_values": ["."]},
-                        ],
-                    }
-                ],
-            }
-        ]
+    spec = probe(
+        ["Names", "Ids"],
+        {
+            "field": "conditions",
+            "from": ["Names", "Ids"],
+            "transform": "zip",
+            "sep": "+",
+            "decode": True,
+            "as": [
+                {"field": "name", "type": "string"},
+                {"field": "ids", "type": "string", "null_values": ["."]},
+            ],
+        },
+        require_any_output=["conditions"],
     )
     result = apply_plugin_spec(
         [
@@ -1364,19 +1347,10 @@ def test_decode_happens_after_every_split():
 def test_decode_is_off_by_default():
     """A '%' that is genuinely part of a value must not be mangled."""
     index_map = index_map_for("Allele", "Thing")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "allele",
-                "output": "probe",
-                "csq_fields": ["Thing"],
-                "require_any_output": ["value"],
-                "targets": [
-                    {"field": "value", "from": "Thing", "transform": "scalar"}
-                ],
-            }
-        ]
+    spec = probe(
+        ["Thing"],
+        {"field": "value", "from": "Thing", "transform": "scalar"},
+        require_any_output=["value"],
     )
     assert apply_plugin_spec(["A", "100%2C"], index_map, spec.plugin("probe")) == {
         "value": "100%2C"
@@ -1386,15 +1360,9 @@ def test_decode_is_off_by_default():
 def _joined(joins, **columns):
     """A two-list plugin with `joins` applied, over the given raw columns."""
     index_map = index_map_for("Allele", "Names", "Recs")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "allele",
-                "output": "probe",
-                "csq_fields": ["Names", "Recs"],
-                "require_any_output": ["conditions"],
-                "targets": [
+    spec = probe_plugin(
+        ["Names", "Recs"],
+        *[
                     {
                         "field": "conditions",
                         "from": "Names",
@@ -1423,13 +1391,12 @@ def _joined(joins, **columns):
                             {"field": "condition", "type": "string"},
                         ],
                     },
-                ],
-                "joins": joins,
-            }
-        ]
+        ],
+        joins=joins,
+        require_any_output=["conditions"],
     )
     return apply_plugin_spec(
-        ["A", columns["names"], columns["recs"]], index_map, spec.plugin("probe")
+        ["A", columns["names"], columns["recs"]], index_map, spec
     )
 
 
@@ -1593,26 +1560,20 @@ def _curie_link(ids, **overrides):
         },
         **overrides,
     }
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe", "scope": "allele", "output": "probe",
-                "csq_fields": ["Names", "Ids"], "require_any_output": ["conditions"],
-                "targets": [
-                    {
-                        "field": "conditions", "from": ["Names", "Ids"],
-                        "transform": "zip", "sep": "+", "decode": True,
-                        "as": [
-                            {"field": "name", "type": "string"},
-                            {"field": "ids", "type": "string", "null_values": ["."]},
-                        ],
-                        "post": [post],
-                    }
-                ],
-            }
-        ]
+    spec = probe_plugin(
+        ["Names", "Ids"],
+        {
+            "field": "conditions", "from": ["Names", "Ids"],
+            "transform": "zip", "sep": "+", "decode": True,
+            "as": [
+                {"field": "name", "type": "string"},
+                {"field": "ids", "type": "string", "null_values": ["."]},
+            ],
+            "post": [post],
+        },
+        require_any_output=["conditions"],
     )
-    out = apply_plugin_spec(["A", "Disease", ids], index_map, spec.plugin("probe"))
+    out = apply_plugin_spec(["A", "Disease", ids], index_map, spec)
     return out["conditions"][0]
 
 
@@ -1658,23 +1619,14 @@ def test_curie_link_ignores_a_source_it_has_no_template_for():
 def _stacked(groups, **columns):
     """A one-target plugin whose target stacks `groups` over the given columns."""
     index_map = index_map_for("Allele", "GermDN", "GermIDs", "SomDN", "SomIDs")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "allele",
-                "output": "probe",
-                "csq_fields": ["GermDN", "SomDN"],
-                "targets": [
-                    {
-                        "field": "conditions",
-                        "transform": "stack",
-                        "of": groups,
-                        "item_fields": ["name", "ids", "type"],
-                    }
-                ],
-            }
-        ]
+    spec = probe_plugin(
+        ["GermDN", "SomDN"],
+        {
+            "field": "conditions",
+            "transform": "stack",
+            "of": groups,
+            "item_fields": ["name", "ids", "type"],
+        },
     )
     return apply_plugin_spec(
         [
@@ -1685,7 +1637,7 @@ def _stacked(groups, **columns):
             columns.get("som_ids", ""),
         ],
         index_map,
-        spec.plugin("probe"),
+        spec,
     )
 
 
@@ -1900,28 +1852,18 @@ def test_a_join_must_write_exactly_one_thing():
 def _scoped(applies_to, symbol, geneinfo, sig="Pathogenic"):
     """One plugin gated by `applies_to`, over a row with these columns."""
     index_map = index_map_for("Allele", "SYMBOL", "Probe_SIG", "Probe_GENEINFO")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "transcript",
-                "output": "probe",
-                "csq_fields": ["Probe_SIG", "Probe_GENEINFO"],
-                "applies_to": applies_to,
-                "targets": [
-                    {
-                        "field": "significance",
-                        "from": "Probe_SIG",
-                        "transform": "scalar",
-                        "type": "string",
-                    }
-                ],
-            }
-        ]
+    spec = probe_plugin(
+        ["Probe_SIG", "Probe_GENEINFO"],
+        {
+            "field": "significance",
+            "from": "Probe_SIG",
+            "transform": "scalar",
+            "type": "string",
+        },
+        scope="transcript",
+        applies_to=applies_to,
     )
-    return apply_plugin_spec(
-        ["A", symbol, sig, geneinfo], index_map, spec.plugin("probe")
-    )
+    return apply_plugin_spec(["A", symbol, sig, geneinfo], index_map, spec)
 
 
 _GENE_SCOPE = {
@@ -1965,35 +1907,26 @@ def test_post_joins_can_order_by_what_a_join_added():
     value needs the later pass: whether a condition has a submission behind the
     aggregate is only known once the submissions have been matched to it."""
     index_map = index_map_for("Allele", "Names", "Recs")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "allele",
-                "output": "probe",
-                "csq_fields": ["Names", "Recs"],
-                "targets": [
-                    {"field": "conditions", "from": "Names", "transform": "records",
-                     "sep": "+", "item_sep": "~",
-                     "as": [{"field": "name", "type": "string"}]},
-                    {"field": "records", "from": "Recs", "transform": "records",
-                     "sep": "&", "item_sep": "~",
-                     "as": [{"field": "acc", "type": "string"},
-                            {"field": "verdict", "type": "string"},
-                            {"field": "condition", "type": "string"}]},
-                ],
-                "joins": [
-                    {"into": "conditions", "from": "records", "left_key": "name",
-                     "right_key": "condition",
-                     "where": {"field": "verdict", "equals": "1"},
-                     "count_into": "counted"}
-                ],
-                "post_joins": [
-                    {"target": "conditions", "op": "sort", "by": "counted",
-                     "desc": True, "nulls": "last"}
-                ],
-            }
-        ]
+    spec = probe(
+        ["Names", "Recs"],
+        {"field": "conditions", "from": "Names", "transform": "records",
+         "sep": "+", "item_sep": "~",
+         "as": [{"field": "name", "type": "string"}]},
+        {"field": "records", "from": "Recs", "transform": "records",
+         "sep": "&", "item_sep": "~",
+         "as": [{"field": "acc", "type": "string"},
+                {"field": "verdict", "type": "string"},
+                {"field": "condition", "type": "string"}]},
+        joins=[
+            {"into": "conditions", "from": "records", "left_key": "name",
+             "right_key": "condition",
+             "where": {"field": "verdict", "equals": "1"},
+             "count_into": "counted"}
+        ],
+        post_joins=[
+            {"target": "conditions", "op": "sort", "by": "counted",
+             "desc": True, "nulls": "last"}
+        ],
     )
     result = apply_plugin_spec(
         ["A", "Quiet_one+Loud_one+Other_quiet", "R1~1~Loud_one&R2~0~Quiet_one"],
@@ -2014,18 +1947,15 @@ def test_a_gated_out_list_transform_yields_a_list():
     skips every join into that target -- and a `post_joins` sort by a field the
     join was meant to write then has nothing to sort by."""
     index_map = index_map_for("Allele", "Flag", "Recs")
-    spec = ParsingSpec(plugins=[{
-        "plugin": "probe", "scope": "allele", "output": "probe",
-        "csq_fields": ["Recs"],
-        "targets": [
-            {"field": "recs", "from": "Recs", "transform": "records",
-             "item_sep": "~", "as": [{"field": "a", "type": "string"}],
-             "when": {"field": "Flag", "includes": "on"}},
-            {"field": "stacked", "transform": "stack",
-             "of": [{"from": ["Recs"], "as": [{"field": "a", "type": "string"}]}],
-             "when": {"field": "Flag", "includes": "on"}},
-        ],
-    }])
+    spec = probe(
+        ["Recs"],
+        {"field": "recs", "from": "Recs", "transform": "records",
+         "item_sep": "~", "as": [{"field": "a", "type": "string"}],
+         "when": {"field": "Flag", "includes": "on"}},
+        {"field": "stacked", "transform": "stack",
+         "of": [{"from": ["Recs"], "as": [{"field": "a", "type": "string"}]}],
+         "when": {"field": "Flag", "includes": "on"}},
+    )
     off = apply_plugin_spec(["A", "off", "x"], index_map, spec.plugin("probe"))
     assert off == {"recs": [], "stacked": []}
 
@@ -2035,17 +1965,16 @@ def test_sort_survives_a_row_that_lacks_the_key():
     raised KeyError and a string column with one null raised TypeError — both at
     request time, on data no spec could forbid."""
     index_map = index_map_for("Allele", "Recs")
-    spec = ParsingSpec(plugins=[{
-        "plugin": "probe", "scope": "allele", "output": "probe",
-        "csq_fields": ["Recs"],
-        "targets": [{
+    spec = probe(
+        ["Recs"],
+        {
             "field": "rows", "from": "Recs", "transform": "records",
             "item_sep": "~",
             "as": [{"field": "name", "type": "string"},
                    {"field": "rank", "type": "string"}],
             "post": [{"op": "sort", "by": "rank", "desc": True, "nulls": "last"}],
-        }],
-    }])
+        },
+    )
     # "Bare" has no second field at all, so `rank` comes out null.
     result = apply_plugin_spec(["A", "Low~a&Bare&High~b"], index_map, spec.plugin("probe"))
     assert [r["name"] for r in result["rows"]] == ["High", "Low", "Bare"]
@@ -2055,20 +1984,17 @@ def test_dedup_survives_a_row_holding_a_list():
     """A tuple containing a list is unhashable, so `dedup` in `post_joins` —
     where every row may carry joined-in rows — raised at request time."""
     index_map = index_map_for("Allele", "Names", "Recs")
-    spec = ParsingSpec(plugins=[{
-        "plugin": "probe", "scope": "allele", "output": "probe",
-        "csq_fields": ["Names", "Recs"],
-        "targets": [
-            {"field": "conditions", "from": "Names", "transform": "records",
-             "sep": "+", "item_sep": "~", "as": [{"field": "name", "type": "string"}]},
-            {"field": "recs", "from": "Recs", "transform": "records",
-             "item_sep": "~", "as": [{"field": "acc", "type": "string"},
-                                     {"field": "cond", "type": "string"}]},
-        ],
-        "joins": [{"into": "conditions", "from": "recs", "left_key": "name",
-                   "right_key": "cond", "as": "hits"}],
-        "post_joins": [{"target": "conditions", "op": "dedup"}],
-    }])
+    spec = probe(
+        ["Names", "Recs"],
+        {"field": "conditions", "from": "Names", "transform": "records",
+         "sep": "+", "item_sep": "~", "as": [{"field": "name", "type": "string"}]},
+        {"field": "recs", "from": "Recs", "transform": "records",
+         "item_sep": "~", "as": [{"field": "acc", "type": "string"},
+                                 {"field": "cond", "type": "string"}]},
+        joins=[{"into": "conditions", "from": "recs", "left_key": "name",
+                "right_key": "cond", "as": "hits"}],
+        post_joins=[{"target": "conditions", "op": "dedup"}],
+    )
     result = apply_plugin_spec(
         ["A", "One+One+Two", "R1~One"], index_map, spec.plugin("probe")
     )
@@ -2114,12 +2040,12 @@ def test_a_cache_makes_a_plugin_parse_once_for_identical_columns():
     Keyed on the columns the plugin *reads*, so rows differing only in the ones
     it ignores share the work."""
     index_map = index_map_for("Allele", "SYMBOL", "Probe_SIG")
-    spec = ParsingSpec(plugins=[{
-        "plugin": "probe", "scope": "transcript", "output": "probe",
-        "csq_fields": ["Probe_SIG"],
-        "targets": [{"field": "significance", "from": "Probe_SIG",
-                     "transform": "scalar", "type": "string"}],
-    }])
+    spec = probe(
+        ["Probe_SIG"],
+        {"field": "significance", "from": "Probe_SIG",
+         "transform": "scalar", "type": "string"},
+        scope="transcript",
+    )
     plugin = spec.plugin("probe")
     cache: dict = {}
     first = apply_plugin_spec(["A", "BRCA2", "Pathogenic"], index_map, plugin, cache)
@@ -2141,14 +2067,14 @@ def test_the_row_gate_runs_even_when_the_parse_is_cached():
     so it must stay outside the reuse — otherwise caching would hand the second
     gene the first one's annotation."""
     index_map = index_map_for("Allele", "SYMBOL", "Probe_SIG", "Probe_GENEINFO")
-    spec = ParsingSpec(plugins=[{
-        "plugin": "probe", "scope": "transcript", "output": "probe",
-        "csq_fields": ["Probe_SIG", "Probe_GENEINFO"],
-        "applies_to": {"column": "SYMBOL", "listed_in": "Probe_GENEINFO",
-                       "item_pattern": "^(?P<key>[^:]+)"},
-        "targets": [{"field": "significance", "from": "Probe_SIG",
-                     "transform": "scalar", "type": "string"}],
-    }])
+    spec = probe(
+        ["Probe_SIG", "Probe_GENEINFO"],
+        {"field": "significance", "from": "Probe_SIG",
+         "transform": "scalar", "type": "string"},
+        scope="transcript",
+        applies_to={"column": "SYMBOL", "listed_in": "Probe_GENEINFO",
+                    "item_pattern": "^(?P<key>[^:]+)"},
+    )
     plugin = spec.plugin("probe")
     cache: dict = {}
     row = ["A", "SMARCB1", "Pathogenic", "SMARCB1:6598"]
@@ -2163,34 +2089,23 @@ def test_the_row_gate_runs_even_when_the_parse_is_cached():
 def _drop_probe(drop_when, **columns):
     """A one-target plugin whose elements are filtered by `drop_when`."""
     index_map = index_map_for("Allele", "Recs")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "allele",
-                "output": "probe",
-                "csq_fields": ["Recs"],
-                "targets": [
-                    {
-                        "field": "rows",
-                        "from": "Recs",
-                        "transform": "records",
-                        "sep": "&",
-                        "item_sep": "~",
-                        "as": [
-                            {"field": "kind", "type": "string"},
-                            {"field": "flag", "type": "int"},
-                            {"field": "allele", "type": "string"},
-                        ],
-                        "drop_when": drop_when,
-                    }
-                ],
-            }
-        ]
+    spec = probe_plugin(
+        ["Recs"],
+        {
+            "field": "rows",
+            "from": "Recs",
+            "transform": "records",
+            "sep": "&",
+            "item_sep": "~",
+            "as": [
+                {"field": "kind", "type": "string"},
+                {"field": "flag", "type": "int"},
+                {"field": "allele", "type": "string"},
+            ],
+            "drop_when": drop_when,
+        },
     )
-    out = apply_plugin_spec(
-        [columns["allele"], columns["recs"]], index_map, spec.plugin("probe")
-    )
+    out = apply_plugin_spec([columns["allele"], columns["recs"]], index_map, spec)
     return out["rows"] if out else []
 
 
@@ -2232,24 +2147,15 @@ def test_a_when_can_test_a_column_that_is_not_amp_separated():
     them had grown a separator -- so a `when` against a '+'-separated column
     could not be written, and would have quietly found nothing."""
     index_map = index_map_for("Sig", "Val")
-    spec = ParsingSpec(
-        plugins=[
-            {
-                "plugin": "probe",
-                "scope": "allele",
-                "output": "probe",
-                "csq_fields": ["Sig", "Val"],
-                "targets": [
-                    {
-                        "field": "value",
-                        "from": "Val",
-                        "transform": "scalar",
-                        "type": "string",
-                        "when": {"field": "Sig", "includes": "Conflicting", "sep": "+"},
-                    }
-                ],
-            }
-        ]
+    spec = probe(
+        ["Sig", "Val"],
+        {
+            "field": "value",
+            "from": "Val",
+            "transform": "scalar",
+            "type": "string",
+            "when": {"field": "Sig", "includes": "Conflicting", "sep": "+"},
+        },
     )
     got = apply_plugin_spec(["Benign+Conflicting", "v"], index_map, spec.plugin("probe"))
     assert got["value"] == "v"

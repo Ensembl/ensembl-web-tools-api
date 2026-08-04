@@ -290,8 +290,14 @@ class ValuePiece(BaseModel):
     link_from: str | None = None
     # One value packing several, each rendered and linked in its own right — a
     # ClinVar submission cites its publications as one '+'-joined list of PMIDs,
-    # and each is its own paper.
+    # and each is its own paper. IntAct joins interaction participants the same
+    # way, with `_and_`.
     split: str | None = None
+    # Only link a value that carries this prefix, and strip it before filling
+    # the template: IntAct writes `uniprotkb:P37840`, and UniProt's URL wants
+    # the bare accession. A value without the prefix is not an accession at all,
+    # so it renders as plain text rather than becoming a broken link.
+    link_prefix: str | None = None
     # A star rating in front of the value, on the scale named here...
     stars: str | None = None
     # ...or on the scale *named by this field of the element*, so sibling lines
@@ -322,13 +328,15 @@ class ValuePiece(BaseModel):
     nowrap: bool = False
 
     @model_validator(mode="after")
-    def _split_needs_a_link(self) -> "ValuePiece":
+    def _prefix_and_split_need_a_link(self) -> "ValuePiece":
         # Splitting a value only changes what the reader sees if each part
         # becomes its own link; without one the parts would run together
-        # exactly as the unsplit string does.
-        if self.split and self.link is None:
+        # exactly as the unsplit string does. A prefix is likewise only ever
+        # stripped on the way into a template.
+        if (self.split or self.link_prefix) and self.link is None:
             raise ValueError(
-                f"`split` only applies to a linked value; {self.source!r} has no link"
+                "`split`/`link_prefix` only apply to a linked value; "
+                f"{self.source!r} has neither a link nor a reason for them"
             )
         return self
 
@@ -690,44 +698,29 @@ class ColumnNote(BaseModel):
     muted: bool = False
 
 
-class TableColumn(BaseModel):
-    """One column of a `table` block: a header `label`.
+class TableColumn(ValuePiece):
+    """One column of a `table` block: a header `label` over a rendered value.
 
     In list mode the value comes from the list element's `from` field. In fixed
     (matrix) mode the columns are headers only — the first names the row-label
     column, the rest are value columns filled from each `TableMatrixRow.values`,
-    with this column's `format` applied to that value."""
+    with this column's `format` applied to that value.
 
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    A column *is* a value, so it is a `ValuePiece`: it had its own copies of
+    `from`/`format`/`mono`/`link`/`split`/`link_prefix`/`link_from`, which is
+    how it came to be the only one of the three that could strip a link prefix
+    and the only one that could not carry a rating. What stays here is what a
+    column has and a value does not — a heading, and how the column behaves
+    within its table.
+    """
 
+    # The heading over the column.
     label: str
-    # `from` is a Python keyword, hence the alias. Omit for a scalar list whose
-    # elements are the value themselves (list mode), or in fixed mode (headers).
-    source: str | None = Field(default=None, alias="from")
-    format: RowFormat | None = None
-    mono: bool = False
+    # Further heading lines beneath it (see ColumnNote).
+    notes: list[ColumnNote] | None = None
     # A column present only when its sub-option ran, so a table's width follows
     # what the user selected. Same gate the rows use.
     sub_option: SubOption | None = None
-    # Link the cell value out. `{value}` in the template is the cell's own text
-    # (after `split` and `link_prefix` have been applied).
-    link: LinkSpec | None = None
-    # Some sources pack several values into one column — IntAct joins interaction
-    # participants with `_and_`. Splitting here renders them as separate items,
-    # each linked in its own right, rather than one link over the whole string.
-    split: str | None = None
-    # Only link a value that carries this prefix, and strip it before filling the
-    # template: IntAct writes `uniprotkb:P37840`, and UniProt's URL wants the bare
-    # accession. A value without the prefix is not a UniProt accession at all, so
-    # it renders as plain text rather than becoming a broken link.
-    link_prefix: str | None = None
-    # Build the link from a *sibling* field of the same element rather than from
-    # the cell's own text. A condition's URL is resolved in the parse (see the
-    # `curie_link` post-op) and lands beside the name, so the name is what the
-    # reader sees and the resolved URL is what it points at.
-    link_from: str | None = None
-    # Further heading lines beneath the label (see ColumnNote).
-    notes: list[ColumnNote] | None = None
     # How to render a cell whose value is a list of objects (see ColumnItems).
     items: ColumnItems | None = None
     # Which way the column's values (and its header) align.
@@ -747,15 +740,6 @@ class TableColumn(BaseModel):
     # a variant takes part in — a column of ten identical values costs width the
     # columns that do vary need. If the value does vary, it stays a column.
     lift_when_invariant: bool = False
-
-    @model_validator(mode="after")
-    def _prefix_and_split_need_a_link(self) -> "TableColumn":
-        if (self.split or self.link_prefix) and self.link is None:
-            raise ValueError(
-                "`split`/`link_prefix` only apply to a linked column; "
-                f"column {self.label!r} has neither a link nor a reason for them"
-            )
-        return self
 
     def item_field_refs(self) -> Iterator[str]:
         """Fields this column reads from the element that is one table row.

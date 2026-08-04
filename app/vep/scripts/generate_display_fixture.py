@@ -44,8 +44,18 @@ def regenerate(fixture: Path) -> None:
     if payload is None:
         raise SystemExit(f"{GENOME} spec has no display section")
 
+    # `exclude_none` so the fixture carries what the spec *says*. Without it
+    # every value wrote out every field it could have, so a three-key cell
+    # became eleven keys of mostly null — and adding a field to a model churned
+    # the fixture everywhere, a frontend diff for a change no frontend can see.
+    #
+    # Not `exclude_defaults`, which also drops defaults that are *not* None and
+    # that the frontend has no way to reconstruct: the house truncation
+    # (`visible_count: 3`) is a backend default, and dropping it silently
+    # stopped every long list truncating. An omitted key and a null read the
+    # same to the frontend; an omitted key and a 3 do not.
     body = json.dumps(
-        payload.model_dump(mode="json", by_alias=True),
+        payload.model_dump(mode="json", by_alias=True, exclude_none=True),
         indent=2,
         ensure_ascii=False,
     )

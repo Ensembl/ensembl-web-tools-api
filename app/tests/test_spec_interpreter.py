@@ -2155,3 +2155,104 @@ def test_the_row_gate_runs_even_when_the_parse_is_cached():
     assert apply_plugin_spec(row, index_map, plugin, cache) is not None
     neighbour = ["A", "DERL3", "Pathogenic", "SMARCB1:6598"]
     assert apply_plugin_spec(neighbour, index_map, plugin, cache) is None
+
+
+# --- one equality, spelled once ------------------------------------------- #
+
+
+def _drop_probe(drop_when, **columns):
+    """A one-target plugin whose elements are filtered by `drop_when`."""
+    index_map = index_map_for("Allele", "Recs")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Recs"],
+                "targets": [
+                    {
+                        "field": "rows",
+                        "from": "Recs",
+                        "transform": "records",
+                        "sep": "&",
+                        "item_sep": "~",
+                        "as": [
+                            {"field": "kind", "type": "string"},
+                            {"field": "flag", "type": "int"},
+                            {"field": "allele", "type": "string"},
+                        ],
+                        "drop_when": drop_when,
+                    }
+                ],
+            }
+        ]
+    )
+    out = apply_plugin_spec(
+        [columns["allele"], columns["recs"]], index_map, spec.plugin("probe")
+    )
+    return out["rows"] if out else []
+
+
+def test_a_literal_match_reads_a_number_as_the_spec_wrote_it():
+    """A spec states its right-hand side in JSON and cannot know which Python
+    type the transform coerced the field to. `only_if` used to compare the raw
+    values, so `equals: "1"` against an int field matched nothing and the rule
+    it guarded silently never applied -- while the identical predicate on a
+    join's `where` worked, because that one stringified."""
+    rows = _drop_probe(
+        {"null": "kind", "only_if": {"field": "flag", "equals": "1"}},
+        allele="A",
+        recs="~1~A&keep~0~A",
+    )
+    # The flagged row has a null `kind` and the rule applies to it, so it goes.
+    # The unflagged one keeps its null `kind`, because the rule is not for it.
+    assert [r["flag"] for r in rows] == [0]
+
+
+def test_a_column_match_never_matches_an_absent_field():
+    """Absent is not equal to anything -- including an absent column."""
+    rows = _drop_probe(
+        {"unless_matches": {"field": "allele", "equals_column": "Allele"}},
+        allele="",
+        recs="keep~1~A",
+    )
+    assert rows == []
+    # ...and where the column does have a value, the matching row stays.
+    rows = _drop_probe(
+        {"unless_matches": {"field": "allele", "equals_column": "Allele"}},
+        allele="A",
+        recs="keep~1~A&drop~1~T",
+    )
+    assert [r["kind"] for r in rows] == ["keep"]
+
+
+def test_a_when_can_test_a_column_that_is_not_amp_separated():
+    """`when` and `applies_to` are the same membership test, but only one of
+    them had grown a separator -- so a `when` against a '+'-separated column
+    could not be written, and would have quietly found nothing."""
+    index_map = index_map_for("Sig", "Val")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Sig", "Val"],
+                "targets": [
+                    {
+                        "field": "value",
+                        "from": "Val",
+                        "transform": "scalar",
+                        "type": "string",
+                        "when": {"field": "Sig", "includes": "Conflicting", "sep": "+"},
+                    }
+                ],
+            }
+        ]
+    )
+    got = apply_plugin_spec(["Benign+Conflicting", "v"], index_map, spec.plugin("probe"))
+    assert got["value"] == "v"
+    # ...and it is membership, not a substring: the whole entry must match.
+    got = apply_plugin_spec(["Conflicting_more", "v"], index_map, spec.plugin("probe"))
+    assert got is None or got.get("value") is None

@@ -52,22 +52,36 @@ class FieldSpec(BaseModel):
     null_values: list[str] | None = None
 
 
-class ItemCondition(BaseModel):
-    """A condition on another field of the same produced element."""
+class Match(BaseModel):
+    """One equality on a field of a produced element.
 
-    model_config = ConfigDict(extra="forbid")
+    The right-hand side is either a literal (`equals`) or the value of a CSQ
+    column (`equals_column`). It is the same predicate either way, so it is
+    compared the same way either way -- which it had not been: this was two
+    models with two comparators, and they disagreed. `only_if` compared the raw
+    values with `!=` while a join's `where` stringified first, so `equals: "1"`
+    against an int-typed field worked in one and was silently inert in the
+    other. See `_same` in spec_interpreter for the comparator they now share.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     field: str
-    equals: str
+    equals: str | None = None
+    # `column` was this field's whole name back when it was `ColumnMatch`, and a
+    # spec pinned to a job before the merge still spells it that way. Accepted
+    # as an alias so those keep loading -- see the sidecar compatibility tests.
+    equals_column: str | None = Field(default=None, alias="column")
 
-
-class ColumnMatch(BaseModel):
-    """An element field that must equal the value of a CSQ column."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    field: str
-    column: str
+    @model_validator(mode="after")
+    def _one_right_hand_side(self) -> "Match":
+        if (self.equals is None) == (self.equals_column is None):
+            raise ValueError(
+                "a match compares against either a literal (`equals`) or a CSQ "
+                f"column (`equals_column`), not both or neither; field "
+                f"{self.field!r}"
+            )
+        return self
 
 
 class DropWhen(BaseModel):
@@ -95,8 +109,8 @@ class DropWhen(BaseModel):
 
     all_null: bool = False
     null: str | None = None
-    unless_matches: ColumnMatch | None = None
-    only_if: ItemCondition | None = None
+    unless_matches: Match | None = None
+    only_if: Match | None = None
 
     @model_validator(mode="after")
     def _exactly_one_mode(self) -> "DropWhen":
@@ -218,6 +232,12 @@ class WhenSpec(BaseModel):
 
     field: str
     includes: str
+    # The separator and key-extraction `RowScope` grew and this did not, though
+    # both are the same membership test. Without them a `when` could only be
+    # written against an '&'-separated column of bare values -- the enriched
+    # ClinVar columns are '+'-separated, and some carry decorated entries.
+    sep: str = "&"
+    item_pattern: str | None = None
 
 
 class StackGroup(BaseModel):
@@ -477,7 +497,7 @@ class JoinSpec(BaseModel):
     # which submissions produced the aggregate classification, and no rule we
     # could write over the terms would agree with it — an expert-panel review
     # makes one submission the aggregate and the other 43 not.
-    where: ItemCondition | None = None
+    where: Match | None = None
     # Further equalities a match must satisfy, as {left field: right field}.
     #
     # A single key is not always enough to identify a row: ClinVar lists the
@@ -514,6 +534,14 @@ class JoinSpec(BaseModel):
                 f"were (`count_into`), not both or neither; join into {self.into!r}"
             )
         return self
+
+    # Deleted as a concept -- it was write-only, and both declarations had
+    # drifted from the targets they described (what a joined-in row carries is
+    # derived now, see `MergedSpec._list_element_fields`). Still *accepted*,
+    # because a spec pinned to a job before that change carries it, and
+    # `extra="forbid"` would otherwise reject the whole sidecar and leave that
+    # job with no annotations at all. Never read.
+    item_fields: list[str] | None = None
 
     def produced_fields(self) -> list[str]:
         """The fields this join adds to each row of `into`."""

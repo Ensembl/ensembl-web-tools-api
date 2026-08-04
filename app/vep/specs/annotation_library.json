@@ -1372,7 +1372,7 @@
             "drop_when": {
               "unless_matches": {
                 "field": "risk_allele",
-                "column": "Allele"
+                "equals_column": "Allele"
               },
               "only_if": {
                 "field": "type",
@@ -1436,7 +1436,7 @@
             "drop_when": {
               "unless_matches": {
                 "field": "risk_allele",
-                "column": "Allele"
+                "equals_column": "Allele"
               },
               "only_if": {
                 "field": "type",

@@ -69,26 +69,45 @@ def _column(csq_values: list[str], name: str, index_map: dict[str, int]) -> str 
     return get_csq_value(csq_values, name, None, index_map)
 
 
+def _same(value, expected) -> bool:
+    """The one equality every predicate in a parsing spec is built from.
+
+    Compared as text, so `equals: "1"` finds an int 1 -- a spec states its
+    right-hand side in JSON and cannot say which Python type the transform will
+    have coerced the field to. Absent on either side never matches: a field that
+    is not there is not equal to anything, including a column the output does
+    not carry.
+    """
+    if value is None or expected is None or expected == "":
+        return False
+    return str(value) == str(expected)
+
+
+def _matches(row: dict, match, csq_values=None, index_map=None) -> bool:
+    """Whether a produced element satisfies one `Match` (see the model)."""
+    if match.equals_column is not None:
+        expected = (
+            _column(csq_values, match.equals_column, index_map)
+            if csq_values is not None and index_map is not None
+            else None
+        )
+    else:
+        expected = match.equals
+    return _same(row.get(match.field), expected)
+
+
 def _should_drop(row: dict, drop_when, csq_values=None, index_map=None) -> bool:
     if drop_when is None:
         return False
     # A conditional rule only applies to elements it names (the allele rule is
     # for a "Variation" phenotype, not a "Gene" one).
     condition = drop_when.only_if
-    if condition is not None and row.get(condition.field) != condition.equals:
+    if condition is not None and not _matches(row, condition, csq_values, index_map):
         return False
     if drop_when.all_null:
         return all(value is None for value in row.values())
     if drop_when.unless_matches is not None:
-        match = drop_when.unless_matches
-        # None (an absent field, or a column this output doesn't carry) never
-        # matches, so the element drops.
-        column_value = (
-            _column(csq_values, match.column, index_map)
-            if csq_values is not None and index_map is not None
-            else None
-        )
-        return row.get(match.field) != column_value or column_value in (None, "")
+        return not _matches(row, drop_when.unless_matches, csq_values, index_map)
     return row.get(drop_when.null) is None
 
 
@@ -451,7 +470,9 @@ def _apply_key_value(csq_values, index_map, target: TargetSpec) -> dict:
 def _when_holds(csq_values, index_map, when: WhenSpec | None) -> bool:
     if when is None:
         return True
-    return when.includes in split_amp(_column(csq_values, when.field, index_map))
+    return when.includes in _listed_keys(
+        _column(csq_values, when.field, index_map), when.sep, when.item_pattern
+    )
 
 
 def _empty_value(target: TargetSpec):
@@ -598,7 +619,7 @@ def _apply_joins(built: dict, joins) -> None:
                 matches = [
                     match
                     for match in matches
-                    if str(match.get(join.where.field)) == join.where.equals
+                    if _matches(match, join.where)
                 ]
             if join.count_into:
                 # No candidates at all means there is nothing to report, not a
@@ -625,6 +646,27 @@ def _apply_joins(built: dict, joins) -> None:
                 row[join.as_field] = matches
 
 
+def _listed_keys(listed: str | None, sep: str, item_pattern: str | None) -> set[str]:
+    """The comparable entries of a column that packs a list.
+
+    Split on the separator first, decode after: an escaped separator inside a
+    name must not be read as one (the house rule for this VCF). `item_pattern`
+    takes the comparable part of each entry via a `key` group, as a join's
+    `right_key_pattern` does.
+
+    Shared by `applies_to` and a target's `when`, which are the same membership
+    test asked in two places -- and were two implementations, which is how
+    `when` came to be missing the separator and pattern that `applies_to` grew.
+    """
+    if not listed:
+        return set()
+    return {
+        _join_key(unquote(entry), item_pattern, False)
+        for entry in listed.split(sep)
+        if entry
+    }
+
+
 def _row_in_scope(csq_values, index_map, scope) -> bool:
     """Whether this CSQ row is one the plugin's annotation belongs to.
 
@@ -638,14 +680,7 @@ def _row_in_scope(csq_values, index_map, scope) -> bool:
     value = _column(csq_values, scope.column, index_map)
     if not listed or not value:
         return True
-    # Split on the separator first, decode after: an escaped separator inside a
-    # name must not be read as one (the house rule for this VCF).
-    names = {
-        _join_key(unquote(entry), scope.item_pattern, False)
-        for entry in listed.split(scope.sep)
-        if entry
-    }
-    return value in names
+    return value in _listed_keys(listed, scope.sep, scope.item_pattern)
 
 
 def apply_plugin_spec(

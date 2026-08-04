@@ -2612,9 +2612,6 @@
                     },
                     "notes": [
                       {
-                        "text": "Expand for: submitter, last evaluation date, review status and associated publications"
-                      },
-                      {
                         "text": "Submissions not contributing to the aggregate classification shown in light text",
                         "muted": true
                       }
@@ -2735,9 +2732,6 @@
                       }
                     },
                     "notes": [
-                      {
-                        "text": "Expand for: submitter, last evaluation date, review status and associated publications"
-                      },
                       {
                         "text": "Submissions not contributing to the aggregate classification shown in light text",
                         "muted": true

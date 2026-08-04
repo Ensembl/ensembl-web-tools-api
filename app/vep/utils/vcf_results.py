@@ -13,7 +13,6 @@ import re
 import subprocess
 from pathlib import Path
 from pydantic import FilePath
-import vcfpy
 from vep.models import vcf_results_model as model
 from vep.form_panels import af_max_subpopulation_label
 from vep.utils import results_filters
@@ -27,6 +26,7 @@ from vep.utils.csq import (
     to_float,
 )
 from vep.utils.vcf_meta import _get_vcf_meta
+from vep.utils.vcf_reader import read_records
 from vep.utils.spec_loader import (
     load_display_panels_sidecar,
     load_expected_columns_sidecar,
@@ -1214,26 +1214,32 @@ def get_results_from_stream(
     page_size: int, page: int, total: int, vcf_stream: StringIO,
     presliced: bool = False, spec: ParsingSpec | None = None,
 ) -> model.VepResultsResponse:
-    """Helper method to convert a filestream to VCF records for _get_results_from_vcfpy"""
+    """Helper method to split a filestream into header and records.
 
-    # Load vcf
-    vcf_records = vcfpy.Reader.from_stream(vcf_stream)
-    return _get_results_from_vcfpy(page_size, page, total, vcf_records, presliced, spec)
+    The header is kept as raw lines: the only thing read from it is the CSQ
+    column list, which `csq_index_map_from_header` takes straight out of the
+    `##INFO=<ID=CSQ` line."""
+    header_lines: list[str] = []
+    data_lines: list[str] = []
+    for line in vcf_stream:
+        (header_lines if line.startswith("#") else data_lines).append(line)
+    return _get_results_from_records(
+        page_size, page, total, header_lines, data_lines, presliced, spec
+    )
 
 
-def _get_results_from_vcfpy(
-    page_size: int, page: int, total: int, vcf_records: vcfpy.Reader,
+def _get_results_from_records(
+    page_size: int, page: int, total: int,
+    header_lines: list[str], data_lines: list[str],
     presliced: bool = False, spec: ParsingSpec | None = None,
 ) -> model.VepResultsResponse:
     """Generates a page of VCF data in the format described in
     APISpecification.yaml for a given VCFPY reader"""
 
     # Parse csq header
-    csq_header = vcf_records.header.get_info_field_info("CSQ").description
-    if not csq_header:
+    prediction_index_map = csq_index_map_from_header(header_lines)
+    if not prediction_index_map:
         raise Exception("CSQ header missing")
-
-    prediction_index_map = get_prediction_index_map(csq_header)
     # Required CSQ column (the rest use fallback values)
     if "Allele" not in prediction_index_map:
         raise Exception("Allele column missing from CSQ header")
@@ -1255,9 +1261,7 @@ def _get_results_from_vcfpy(
     # 21 records at 5 a page served four pages and lost the 21st. It is the
     # first record that decides whether a page exists at all.
     if presliced or (page - 1) * page_size < total:
-        for record in vcf_records:
-            if record is None:
-                break
+        for record in read_records(data_lines):
             if record.CHROM.startswith("chr"):
                 record.CHROM = record.CHROM[3:]
 

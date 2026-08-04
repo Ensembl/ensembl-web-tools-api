@@ -111,7 +111,12 @@ class PredictedTranscriptConsequence(BaseModel):
     polyphen: PredictionWithScore | None = None
     # Generic spec-driven annotations for this transcript consequence (scope
     # "transcript"). The only source of annotation data beside the tail above.
-    annotations: list[Annotation] = []
+    # Built here and read by the results code and its tests, but never sent:
+    # the same payload repeats across every transcript it applies to (ClinVar
+    # was 421 copies of 14 distinct values on a 50-variant page), so what goes
+    # on the wire is `annotation_refs` into the variant's pool.
+    annotations: list[Annotation] = Field(default_factory=list, exclude=True)
+    annotation_refs: list[int] = []
 
 
 class ReferenceVariantAllele(BaseModel):
@@ -195,7 +200,12 @@ class AlternativeVariantAllele(BaseModel):
     # Generic spec-driven annotations for this allele (scope "allele"). Same
     # across all of this allele's transcripts, and the only annotations
     # available for intergenic variants (which have no transcript rows).
-    annotations: list[Annotation] = []
+    # Built here and read by the results code and its tests, but never sent:
+    # the same payload repeats across every transcript it applies to (ClinVar
+    # was 421 copies of 14 distinct values on a 50-variant page), so what goes
+    # on the wire is `annotation_refs` into the variant's pool.
+    annotations: list[Annotation] = Field(default_factory=list, exclude=True)
+    annotation_refs: list[int] = []
     predicted_molecular_consequences: list[
         PredictedTranscriptConsequence | PredictedIntergenicConsequence
     ]
@@ -210,6 +220,12 @@ class Variant(BaseModel):
     location: Location
     reference_allele: ReferenceVariantAllele
     alternative_alleles: list[AlternativeVariantAllele]
+    # Every distinct annotation payload on this variant, once. The alleles and
+    # consequences below point into it by index (`annotation_refs`) rather than
+    # each carrying its own copy. Pooled per variant rather than per response:
+    # measured, a response-wide pool saved a further 0.04 MB of 1.15 MB, which
+    # is not worth making a variant depend on its neighbours.
+    annotation_pool: list[Annotation] = []
 
 
 class VepResultsResponse(BaseModel):

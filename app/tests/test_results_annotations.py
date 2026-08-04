@@ -8,6 +8,7 @@ response; apply_plugin_spec's own correctness is covered by
 test_spec_interpreter.
 """
 
+import json
 import os
 
 from pydantic import FilePath
@@ -231,3 +232,90 @@ def test_an_unreadable_sidecar_is_not_cached(tmp_path):
     assert vcf_results._load_pinned_merged_spec(path) is None
     write_spec_sidecar(tmp_path, load_merged_spec("human_grch38"))
     assert vcf_results._load_pinned_merged_spec(path) is not None
+
+
+# --- annotations are pooled per variant ---------------------------------------
+#
+# VEP repeats a plugin's value on every CSQ row it applies to, so the same
+# payload was serialised once per transcript consequence. What goes on the wire
+# is one pool per variant plus indices into it.
+
+
+def _variant_with(alleles):
+    return vcf_results.model.Variant(
+        name=".", allele_type="SNV",
+        location=vcf_results.model.Location(region_name="1", start=1, end=2),
+        reference_allele=vcf_results.model.ReferenceVariantAllele(allele_sequence="A"),
+        alternative_alleles=alleles,
+    )
+
+
+def _annotation(plugin, value):
+    return vcf_results.model.Annotation(
+        plugin=plugin, scope="transcript", data={"v": value}
+    )
+
+
+def test_equal_payloads_collapse_to_one_pool_entry():
+    """The case this exists for: ClinVar was 421 copies of 14 distinct values on
+    a 50-variant page, 72% of the whole response."""
+    allele = _get_alt_allele_details("A", "T", [ROW], INDEX_MAP, None)
+    template = allele.predicted_molecular_consequences[0]
+    allele.predicted_molecular_consequences = [
+        template.model_copy(update={"stable_id": f"ENST{i}",
+                                    "annotations": [_annotation("clinvar", 1)]})
+        for i in range(5)
+    ]
+    variant = _variant_with([allele])
+    vcf_results._pool_annotations(variant)
+
+    assert len(variant.annotation_pool) == 1
+    assert [c.annotation_refs for c in variant.alternative_alleles[0]
+            .predicted_molecular_consequences] == [[0]] * 5
+
+
+def test_different_payloads_keep_their_own_entries():
+    """Deduplicating by plugin would lose data: `hgvs` is genuinely different
+    per transcript (744 distinct of 864 on the same page)."""
+    allele = _get_alt_allele_details("A", "T", [ROW], INDEX_MAP, None)
+    template = allele.predicted_molecular_consequences[0]
+    allele.predicted_molecular_consequences = [
+        template.model_copy(update={"stable_id": f"ENST{i}",
+                                    "annotations": [_annotation("hgvs", i)]})
+        for i in range(4)
+    ]
+    variant = _variant_with([allele])
+    vcf_results._pool_annotations(variant)
+
+    assert len(variant.annotation_pool) == 4
+    assert [c.annotation_refs for c in variant.alternative_alleles[0]
+            .predicted_molecular_consequences] == [[0], [1], [2], [3]]
+
+
+def test_the_pool_reconstructs_what_was_there_before():
+    """The refs are only worth anything if they rebuild the original exactly."""
+    allele = _get_alt_allele_details("A", "T", [ROW, OTHER_GENE_ROW], INDEX_MAP, SPEC)
+    before = [list(c.annotations) for c in allele.predicted_molecular_consequences]
+    allele_before = list(allele.annotations)
+
+    variant = _variant_with([allele])
+    vcf_results._pool_annotations(variant)
+    pool = variant.annotation_pool
+
+    rebuilt = [[pool[i] for i in c.annotation_refs]
+               for c in allele.predicted_molecular_consequences]
+    assert rebuilt == before
+    assert [pool[i] for i in allele.annotation_refs] == allele_before
+
+
+def test_the_pool_is_what_ships_and_the_copies_are_not():
+    """`annotations` stays on the model for the results code and these tests,
+    but must never reach the wire — that is the whole saving."""
+    allele = _get_alt_allele_details("A", "T", [ROW], INDEX_MAP, SPEC)
+    variant = _variant_with([allele])
+    vcf_results._pool_annotations(variant)
+    wire = json.loads(variant.model_dump_json(by_alias=True))
+
+    assert "annotation_pool" in wire
+    assert "annotations" not in wire["alternative_alleles"][0]
+    assert "annotation_refs" in wire["alternative_alleles"][0]

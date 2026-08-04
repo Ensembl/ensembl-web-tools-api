@@ -36,7 +36,11 @@ from vep.utils.spec_loader import (
 from vep.models.display_panels_model import DisplayPanel
 from vep.models.display_spec_model import DisplayPayload
 from vep.models.merged_spec_model import MergedSpec
-from vep.utils.spec_interpreter import apply_plugin_spec, pattern_affixes
+from vep.utils.spec_interpreter import (
+    apply_plugin_spec,
+    compile_parsing_spec,
+    pattern_affixes,
+)
 from vep.models.parsing_spec_model import ParsingSpec
 
 # Taken from https://github.com/Ensembl/ensembl-hypsipyle
@@ -252,17 +256,27 @@ def _spec_annotations(
     spec: ParsingSpec | None,
     scope: str,
     cache: dict | None = None,
+    plans: dict | None = None,
 ) -> list[model.Annotation]:
     """The generic annotations for one CSQ entry at the given scope, driving each
     matching spec plugin through `apply_plugin_spec`. Additive to the typed
-    fields; when there is no pinned spec this is empty and nothing changes."""
+    fields; when there is no pinned spec this is empty and nothing changes.
+
+    `plans` is every plugin resolved against this file's CSQ header
+    (`compile_parsing_spec`). Optional: without it each plugin resolves itself
+    per row, which is correct but is the cost the plans exist to remove."""
     if spec is None:
         return []
     annotations: list[model.Annotation] = []
     for plugin in spec.plugins:
         if plugin.scope != scope:
             continue
-        data = apply_plugin_spec(csq_values, index_map, plugin, cache)
+        plan = plans.get(plugin.plugin) if plans else None
+        # A plugin whose columns the header does not carry never ran, and that
+        # is a property of the file — skip it here rather than per row.
+        if plan is not None and not plan.runnable:
+            continue
+        data = apply_plugin_spec(csq_values, index_map, plugin, cache, plan)
         if data is not None:
             annotations.append(
                 model.Annotation(plugin=plugin.plugin, scope=scope, data=data)
@@ -277,6 +291,7 @@ def _get_alt_allele_details(
     index_map: dict[str, int],
     spec: ParsingSpec | None = None,
     sv: dict | None = None,
+    plans: dict | None = None,
 ) -> model.AlternativeVariantAllele:
     """Creates  AlternativeVariantAllele based on
     target alt allele and CSQ entires.
@@ -285,6 +300,11 @@ def _get_alt_allele_details(
     structural variants: `alt` stays VEP's CSQ `Allele` word for matching the CSQ
     rows below, but the allele is shown as its symbolic/breakend form."""
     consequences = []
+    # Resolving the header is meant to happen once per file; a caller that did
+    # not do it still gets it once per allele rather than once per plugin per
+    # CSQ row, which is what `apply_plugin_spec`'s own fallback would cost.
+    if plans is None and spec is not None:
+        plans = compile_parsing_spec(index_map, spec)
     allele_type = sv["type_word"] if sv else _get_variant_type(ref, alt)
     # Allele-level annotations are identical across all of this allele's CSQ
     # rows, so capture them once (from the first matching row). They are also
@@ -312,7 +332,7 @@ def _get_alt_allele_details(
                 get_csq_value(csq_values, "Existing_variation", None, index_map)
             )
             allele_annotations = _spec_annotations(
-                csq_values, index_map, spec, "allele", parse_cache
+                csq_values, index_map, spec, "allele", parse_cache, plans
             )
             allele_level_captured = True
 
@@ -382,7 +402,7 @@ def _get_alt_allele_details(
                     ),
                     # Generic spec-driven annotations: everything else.
                     annotations=_spec_annotations(
-                        csq_values, index_map, spec, "transcript", parse_cache
+                        csq_values, index_map, spec, "transcript", parse_cache, plans
                     ),
                 )
             )
@@ -1107,6 +1127,12 @@ def _get_results_from_vcfpy(
     if "Allele" not in prediction_index_map:
         raise Exception("Allele column missing from CSQ header")
 
+    # Resolve every plugin against this file's CSQ header once. The header is
+    # fixed for the file, so which columns a plugin reads, whether it ran at
+    # all, and which columns a pattern_map matches are all answerable here
+    # instead of on every CSQ row. See PluginPlan.
+    plans = compile_parsing_spec(prediction_index_map, spec) if spec else None
+
     variants = []
     # populate variants page. `presliced` means the stream already contains
     # exactly this page's rows (the index seek path), so the page-bounds guard —
@@ -1142,7 +1168,7 @@ def _get_results_from_vcfpy(
 
             alt_alleles = [
                 _get_alt_allele_details(
-                    record.REF, alt, csq_strings, prediction_index_map, spec, sv
+                    record.REF, alt, csq_strings, prediction_index_map, spec, sv, plans
                 )
                 for alt in alt_allele_strings
             ]

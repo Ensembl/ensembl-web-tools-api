@@ -108,16 +108,6 @@ def _element_shapes(list_target) -> dict[str, tuple[str, ...]]:
     return shapes
 
 
-def _item_field_shape(list_target, item_ref: str | None) -> tuple[str, ...] | None:
-    """The shape of a list element's field (a cell/label `from`), or of the
-    scalar element itself when the cell has no `from`. None when the named field
-    is not among the target's declared `as` fields — an unresolved item ref,
-    already reported by `_check_display_refs`."""
-    if item_ref is None:
-        return _scalar_shape(list_target.type)
-    return _element_shapes(list_target).get(item_ref)
-
-
 def _format_suits_shape(fmt: str, shape: tuple[str, ...]) -> bool:
     """Whether `format` can be applied to `shape` without crashing / misreading.
     `text` (and any unlisted format) only stringifies, so it suits anything."""
@@ -316,8 +306,7 @@ class MergedSpec(BaseModel):
             if isinstance(entry.config, CustomEmitter) and entry.parsed_as:
                 errors += self._check_custom_columns(entry, entry.config)
 
-        errors += self._check_display_refs()
-        errors += self._check_display_format_types()
+        errors += self._check_display()
         errors += self._check_stars_scales()
 
         if errors:
@@ -394,8 +383,15 @@ class MergedSpec(BaseModel):
             by_plugin[plugin.plugin] = paths
         return by_plugin
 
-    def _check_display_refs(self) -> list[str]:
-        """Display↔parsing consistency: resolve every field a display option
+    def _check_display(self) -> list[str]:
+        """Display↔parsing consistency, in one walk of the block tree.
+
+        Two things are checked per site, because they were two walks and a
+        construct kept being added to one and forgotten in the other -- which is
+        how a stacked row's cells came to be ref-checked but never type-checked.
+        Anything reachable here is now reachable by both.
+
+        **That the field exists**: resolve every field a display option
         reads against the parsing plugins and their declared targets — a fixed
         row's `<plugin>.<field>`, a block's `when` field, a list block's
         `<plugin>.<listField>`, and each list element's item-relative refs (label
@@ -405,7 +401,13 @@ class MergedSpec(BaseModel):
 
         Element refs resolve by *path*, so a column's `items` and their `expand`
         are checked against the nested lists they actually read rather than
-        against the table's own row (see `_list_element_fields`)."""
+        against the table's own row (see `_list_element_fields`).
+
+        **And that its `format` suits it**: a format assumes a shape, and
+        applying it to the wrong one crashes the renderer (`num` ->
+        `.toPrecision`, `join`/`humanize_join` -> `.join`/`.map`). Only refs
+        that resolve are shape-checked; an unresolved one is already reported
+        above rather than complained about twice."""
         if self.display is None:
             return []
 
@@ -415,6 +417,10 @@ class MergedSpec(BaseModel):
         }
         paths_by_plugin = self._list_element_fields()
         errors: list[str] = []
+
+        def target_of(ref: str):
+            plugin, _, field = ref.partition(".")
+            return targets_by_plugin.get(plugin, {}).get(field)
 
         def field_error(option_id: str, plugin: str, field: str) -> str | None:
             if plugin not in targets_by_plugin:
@@ -469,6 +475,38 @@ class MergedSpec(BaseModel):
                 )
             return found
 
+        def check(oid: str, ref: str, fmt: str, shape: tuple[str, ...]) -> None:
+            if not _format_suits_shape(fmt, shape):
+                errors.append(
+                    f"display option {oid!r} formats {ref!r} as {fmt!r}, but "
+                    f"that is {_describe_shape(shape)}; {fmt!r} needs "
+                    f"{_FORMAT_NEEDS.get(fmt, 'a compatible value')}"
+                )
+
+        def check_at(
+            oid: str, plugin: str, path: tuple[str, ...], field: str | None, fmt: str
+        ) -> None:
+            """The same, for a field of a list reached by path. A format written
+            one or two lists in was checked nowhere before, so `humanize_terms`
+            was type-checked nowhere at all."""
+            if field is None:
+                return
+            shape = paths_by_plugin.get(plugin, {}).get(path, {}).get(field)
+            if shape is not None:  # an unresolved ref is item_errors' complaint
+                check(oid, f"{plugin}.{'.'.join(path)}.{field}", fmt, shape)
+
+        def check_items(
+            oid: str, plugin: str, path: tuple[str, ...], items
+        ) -> None:
+            """A column's `items`, and the detail they expand onto."""
+            if items.format:
+                check_at(oid, plugin, path, items.source, items.format)
+            if not items.expand:
+                return
+            nested = path + (items.expand.source,)
+            for cell in items.expand.cells:
+                check_items(oid, plugin, nested, cell)
+
         for option in self.display.options:
             oid = option.option_id
             for block in option.iter_blocks():
@@ -500,6 +538,14 @@ class MergedSpec(BaseModel):
                         # one unnamed section rather than fail.
                         refs.append(block.group_by.field)
                     errors += item_errors(oid, plugin, (list_field,), refs)
+                    label = block.item.label
+                    if label and label.format:
+                        check_at(oid, plugin, (list_field,), label.source, label.format)
+                    for part in (block.item.cells or []) + (block.item.rows or []):
+                        if part.format:
+                            check_at(
+                                oid, plugin, (list_field,), part.source, part.format
+                            )
                 elif isinstance(block, DisplayTableBlock):
                     if block.rows is not None:
                         # Fixed matrix: each row value is a scalar `plugin.field`,
@@ -508,6 +554,12 @@ class MergedSpec(BaseModel):
                             err = scalar_ref_error(oid, ref)
                             if err:
                                 errors.append(err)
+                        # A value column's format applies to each row value it
+                        # holds -- checked against that scalar field.
+                        for ref, fmt in block.value_column_formats():
+                            target = target_of(ref)
+                            if target is not None:
+                                check(oid, ref, fmt, _target_shape(target))
                         continue
                     # List mode: iterates a list target like a list block; each
                     # column reads one of that target's item_fields.
@@ -520,19 +572,32 @@ class MergedSpec(BaseModel):
                         oid, plugin, (list_field,), block.column_field_refs()
                     )
                     for column in block.columns:
-                        if column.items and column.source:
-                            errors += column_errors(
+                        if column.format:
+                            check_at(
                                 oid,
                                 plugin,
-                                (list_field, column.source),
-                                column.items,
+                                (list_field,),
+                                column.source,
+                                column.format,
                             )
+                        if column.items and column.source:
+                            nested = (list_field, column.source)
+                            errors += column_errors(oid, plugin, nested, column.items)
+                            check_items(oid, plugin, nested, column.items)
                 elif isinstance(block, DisplayRowsBlock):
                     for row in block.rows:
                         for ref in row.field_refs():
                             err = scalar_ref_error(oid, ref)
                             if err:
                                 errors.append(err)
+                        if row.source and row.format:
+                            target = target_of(row.source)
+                            if target is not None:
+                                check(
+                                    oid, row.source, row.format, _target_shape(target)
+                                )
+                        if row.compose:
+                            errors += _compose_errors(oid, row.compose, target_of)
                         # A row that stacks a list reads that list's element
                         # fields, exactly as a list block's item does.
                         list_ref = row.list_ref()
@@ -549,6 +614,15 @@ class MergedSpec(BaseModel):
                             # between two places shows up whole in both.
                             refs.append(row.where.field)
                         errors += item_errors(oid, plugin, (list_field,), refs)
+                        for cell in row.item.cells or []:
+                            if cell.format:
+                                check_at(
+                                    oid,
+                                    plugin,
+                                    (list_field,),
+                                    cell.source,
+                                    cell.format,
+                                )
         return errors
 
     def _check_stars_scales(self) -> list[str]:
@@ -604,154 +678,6 @@ class MergedSpec(BaseModel):
                                     f"{'.'.join(list_ref)}.{cell.stars_from} "
                                     "states but `rating_scales` does not define"
                                 )
-        return errors
-
-    def _check_display_format_types(self) -> list[str]:
-        """Display↔parsing *type* consistency: every explicit `format` (and the
-        `with_score` compose) must suit the shape of the value it reads, so a
-        format that assumes a number or a list can't be applied to a string
-        field and crash the renderer at display time (`num` -> `.toPrecision`,
-        `join`/`humanize_join` -> `.join`/`.map`). The companion to
-        `_check_display_refs`, which already checked the field *exists*; here only
-        refs that resolve are shape-checked (an unresolved one is reported there),
-        so the two passes stay independent."""
-        if self.display is None:
-            return []
-
-        targets_by_plugin = {
-            plugin.plugin: {t.field: t for t in plugin.targets}
-            for plugin in self.parsing.plugins
-        }
-        paths_by_plugin = self._list_element_fields()
-        errors: list[str] = []
-
-        def target_of(ref: str):
-            plugin, _, field = ref.partition(".")
-            return targets_by_plugin.get(plugin, {}).get(field)
-
-        def check(oid: str, ref: str, fmt: str, shape: tuple[str, ...]) -> None:
-            if not _format_suits_shape(fmt, shape):
-                errors.append(
-                    f"display option {oid!r} formats {ref!r} as {fmt!r}, but "
-                    f"that is {_describe_shape(shape)}; {fmt!r} needs "
-                    f"{_FORMAT_NEEDS.get(fmt, 'a compatible value')}"
-                )
-
-        def check_at(
-            oid: str, plugin: str, path: tuple[str, ...], field: str | None, fmt: str
-        ) -> None:
-            """The same, for a field of a list reached by path — a format that
-            only appears one or two lists in was checked nowhere before, so
-            `humanize_terms` was type-checked nowhere at all."""
-            if field is None:
-                return
-            shape = paths_by_plugin.get(plugin, {}).get(path, {}).get(field)
-            if shape is not None:  # unresolved refs are _check_display_refs' job
-                check(oid, f"{plugin}.{'.'.join(path)}.{field}", fmt, shape)
-
-        def check_items(
-            oid: str, plugin: str, path: tuple[str, ...], items
-        ) -> None:
-            """A column's `items`, and the detail they expand onto."""
-            if items.format:
-                check_at(oid, plugin, path, items.source, items.format)
-            if not items.expand:
-                return
-            nested = path + (items.expand.source,)
-            for cell in items.expand.cells:
-                check_items(oid, plugin, nested, cell)
-
-        for option in self.display.options:
-            oid = option.option_id
-            for block in option.iter_blocks():
-                if isinstance(block, DisplayRowsBlock):
-                    for row in block.rows:
-                        if row.source and row.format:
-                            target = target_of(row.source)
-                            if target is not None:
-                                check(oid, row.source, row.format, _target_shape(target))
-                        if row.compose:
-                            errors += _compose_errors(oid, row.compose, target_of)
-                        list_ref = row.list_ref()
-                        if list_ref is None:
-                            continue
-                        # A row that stacks a list formats its cells against the
-                        # element fields, not against the list itself.
-                        row_plugin, row_list = list_ref
-                        for cell in row.item.cells or []:
-                            if cell.format:
-                                check_at(
-                                    oid,
-                                    row_plugin,
-                                    (row_list,),
-                                    cell.source,
-                                    cell.format,
-                                )
-                elif isinstance(block, DisplayListBlock):
-                    plugin, list_field = block.list_ref()
-                    list_target = targets_by_plugin.get(plugin, {}).get(list_field)
-                    if list_target is None:
-                        continue  # unresolved list ref -> reported by _check_display_refs
-                    item = block.item
-                    label = item.label
-                    if label and label.format and label.source:
-                        shape = _item_field_shape(list_target, label.source)
-                        if shape is not None:
-                            check(
-                                oid,
-                                f"{plugin}.{list_field}.{label.source}",
-                                label.format,
-                                shape,
-                            )
-                    for cell in item.cells or []:
-                        if not cell.format:
-                            continue
-                        shape = _item_field_shape(list_target, cell.source)
-                        if shape is not None:
-                            ref = f"{plugin}.{list_field}" + (
-                                f".{cell.source}" if cell.source else ""
-                            )
-                            check(oid, ref, cell.format, shape)
-                    for field_row in item.rows or []:
-                        if not field_row.format:
-                            continue
-                        shape = _item_field_shape(list_target, field_row.source)
-                        if shape is not None:
-                            check(
-                                oid,
-                                f"{plugin}.{list_field}.{field_row.source}",
-                                field_row.format,
-                                shape,
-                            )
-                elif isinstance(block, DisplayTableBlock):
-                    if block.rows is not None:
-                        # Fixed matrix: a value column's format applies to each
-                        # row value it holds — checked against that scalar field.
-                        for ref, fmt in block.value_column_formats():
-                            target = target_of(ref)
-                            if target is not None:
-                                check(oid, ref, fmt, _target_shape(target))
-                        continue
-                    plugin, list_field = block.list_ref()
-                    list_target = targets_by_plugin.get(plugin, {}).get(list_field)
-                    if list_target is None:
-                        continue  # unresolved list ref -> reported by _check_display_refs
-                    for column in block.columns:
-                        if column.items and column.source:
-                            check_items(
-                                oid,
-                                plugin,
-                                (list_field, column.source),
-                                column.items,
-                            )
-                        if not column.format:
-                            continue
-                        shape = _item_field_shape(list_target, column.source)
-                        if shape is not None:
-                            ref = f"{plugin}.{list_field}" + (
-                                f".{column.source}" if column.source else ""
-                            )
-                            check(oid, ref, column.format, shape)
         return errors
 
     def _check_custom_columns(

@@ -215,6 +215,24 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                     else operation.sep.join(str(part) for part in parts)
                 )
             continue
+        if operation.op == "derive_if_empty":
+            compiled = re.compile(operation.pattern)
+            for row in rows:
+                if row.get(operation.into):
+                    continue
+                raw = row.get(operation.by)
+                if not raw:
+                    continue
+                built = []
+                for entry in str(raw).split(operation.sep or "+"):
+                    match = compiled.match(entry)
+                    if match:
+                        built.append(
+                            {k: v for k, v in match.groupdict().items()}
+                        )
+                if built:
+                    row[operation.into] = built
+            continue
         if operation.op == "default":
             for row in rows:
                 if row.get(operation.by) in (None, ""):

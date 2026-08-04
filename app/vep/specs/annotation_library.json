@@ -642,6 +642,14 @@
         "post_joins": [
           {
             "target": "records",
+            "op": "derive_if_empty",
+            "by": "condition",
+            "sep": "+",
+            "pattern": "^(?:(?P<id_curie>[^:]+:[^:]+):)?(?P<name>.+)$",
+            "into": "names"
+          },
+          {
+            "target": "records",
             "op": "only_if_differs",
             "in": "classifications.submitters",
             "field": "condition",

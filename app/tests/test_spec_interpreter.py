@@ -2247,3 +2247,63 @@ def test_collapse_needs_fields_and_into():
         PostOp.model_validate({"op": "collapse", "fields": ["name"]})
     with pytest.raises(VE, match="collapse requires `fields` and `into`"):
         PostOp.model_validate({"op": "collapse", "into": "gathered"})
+
+
+def test_derive_if_empty_builds_a_list_only_when_it_is_still_empty():
+    """ClinVar's conditions table takes its names from CLNDN, and a few RCV
+    records name a condition CLNDN does not carry at all. The record itself has
+    it -- `MedGen:C0338106:Colon_adenocarcinoma` -- so the cell need not be
+    blank."""
+    spec = probe_plugin(
+        ["Recs"],
+        {
+            "field": "rows", "from": "Recs", "transform": "records",
+            "sep": "&", "item_sep": "~",
+            "as": [{"field": "rcv", "type": "string"},
+                   {"field": "condition", "type": "string"}],
+        },
+        post_joins=[
+            {"target": "rows", "op": "derive_if_empty", "by": "condition",
+             "sep": "+", "into": "names",
+             "pattern": r"^(?:(?P<id_curie>[^:]+:[^:]+):)?(?P<name>.+)$"}
+        ],
+    )
+    out = apply_plugin_spec(
+        ["A", "R1~MedGen:C1:Colon_adenocarcinoma+Neoplasm&R2~PLEC-related_disorder"],
+        index_map_for("Allele", "Recs"),
+        spec,
+    )
+    first, second = out["rows"]
+    # the prefix is taken off the name and kept as the curie
+    assert [(n["name"], n["id_curie"]) for n in first["names"]] == [
+        ("Colon_adenocarcinoma", "MedGen:C1"),
+        ("Neoplasm", None),
+    ]
+    # a bare name with no id at all still yields a name
+    assert [(n["name"], n["id_curie"]) for n in second["names"]] == [
+        ("PLEC-related_disorder", None)
+    ]
+
+
+def test_derive_if_empty_leaves_a_list_that_is_already_there():
+    """It is a fallback, not an override: where the join found names, those are
+    the ones with the ontology ids and the links."""
+    spec = probe_plugin(
+        ["Recs"],
+        {
+            "field": "rows", "from": "Recs", "transform": "records",
+            "sep": "&", "item_sep": "~",
+            "as": [{"field": "rcv", "type": "string"},
+                   {"field": "condition", "type": "string"}],
+            "post": [{"op": "default", "by": "names", "value": "kept"}],
+        },
+        post_joins=[
+            {"target": "rows", "op": "derive_if_empty", "by": "condition",
+             "sep": "+", "into": "names",
+             "pattern": r"^(?P<name>.+)$"}
+        ],
+    )
+    out = apply_plugin_spec(
+        ["A", "R1~Colon_adenocarcinoma"], index_map_for("Allele", "Recs"), spec
+    )
+    assert out["rows"][0]["names"] == "kept"

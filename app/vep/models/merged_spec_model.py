@@ -91,6 +91,23 @@ def _target_shape(target) -> tuple[str, ...]:
     return ("object",)  # unreachable for the current Transform set; be safe
 
 
+def _element_shapes(list_target) -> dict[str, tuple[str, ...]]:
+    """The shape of each field a list target's elements declare.
+
+    A `stack` declares its fields per group rather than once: the same field
+    name in every group, plus each group's constant tags (always strings)."""
+    shapes = {
+        field.field: _scalar_shape(field.type)
+        for field in list_target.as_fields or []
+    }
+    for group in list_target.of or []:
+        for field in group.as_fields:
+            shapes[field.field] = _scalar_shape(field.type)
+        for tag in group.const:
+            shapes[tag] = ("scalar", "string")
+    return shapes
+
+
 def _item_field_shape(list_target, item_ref: str | None) -> tuple[str, ...] | None:
     """The shape of a list element's field (a cell/label `from`), or of the
     scalar element itself when the cell has no `from`. None when the named field
@@ -98,18 +115,7 @@ def _item_field_shape(list_target, item_ref: str | None) -> tuple[str, ...] | No
     already reported by `_check_display_refs`."""
     if item_ref is None:
         return _scalar_shape(list_target.type)
-    for field in list_target.as_fields or []:
-        if field.field == item_ref:
-            return _scalar_shape(field.type)
-    # A `stack` declares its fields per group rather than once: the same field
-    # name in every group, plus each group's constant tags (always strings).
-    for group in list_target.of or []:
-        for field in group.as_fields:
-            if field.field == item_ref:
-                return _scalar_shape(field.type)
-        if item_ref in group.const:
-            return ("scalar", "string")
-    return None
+    return _element_shapes(list_target).get(item_ref)
 
 
 def _format_suits_shape(fmt: str, shape: tuple[str, ...]) -> bool:
@@ -325,9 +331,11 @@ class MergedSpec(BaseModel):
             )
         return self
 
-    def _list_element_fields(self) -> dict[str, dict[tuple[str, ...], set[str]]]:
-        """Per plugin, what an element of each of its lists carries, keyed by
-        the path to that list.
+    def _list_element_fields(
+        self,
+    ) -> dict[str, dict[tuple[str, ...], dict[str, tuple[str, ...] | None]]]:
+        """Per plugin, what an element of each of its lists carries — each field
+        with its shape where that is known — keyed by the path to that list.
 
         A path rather than a name because lists nest: a ClinVar condition holds
         the classifications its submitters gave, and each of those holds the
@@ -342,23 +350,33 @@ class MergedSpec(BaseModel):
         their fields would be a second copy to keep in step -- and the two
         declarations that existed had already drifted from the targets they
         described.
+
+        Shape is None for a name the target lists but does not type -- the two
+        come from different places, `item_fields` naming what an element carries
+        and `as`/`of` typing what the transform builds.
         """
-        by_plugin: dict[str, dict[tuple[str, ...], set[str]]] = {}
+        by_plugin: dict[
+            str, dict[tuple[str, ...], dict[str, tuple[str, ...] | None]]
+        ] = {}
         for plugin in self.parsing.plugins:
-            paths: dict[tuple[str, ...], set[str]] = {
-                (target.field,): set(target.item_fields or [])
-                for target in plugin.targets
-            }
+            paths: dict[tuple[str, ...], dict[str, tuple[str, ...] | None]] = {}
+            for target in plugin.targets:
+                shapes = _element_shapes(target)
+                paths[(target.field,)] = {
+                    name: shapes.get(name) for name in target.item_fields or []
+                }
             # In declaration order: a join may draw from a list an earlier one
             # enriched, and then the attached rows carry that enrichment too.
             for join in plugin.joins or []:
                 into = paths.get((join.into,))
                 if into is None:
                     continue
-                into.update(join.produced_fields())
+                if join.count_into:
+                    into[join.count_into] = ("scalar", "num")
                 if not join.as_field:
                     continue
-                source = set(paths.get((join.source,), set()))
+                into[join.as_field] = ("list", "object")
+                source = dict(paths.get((join.source,), {}))
                 attached = (join.into, join.as_field)
                 if not join.count_by:
                     paths[attached] = source
@@ -366,10 +384,12 @@ class MergedSpec(BaseModel):
                 # A counted join attaches groups, not rows: each is the value
                 # grouped on plus its count, and -- with `nest_as` -- the rows
                 # behind it.
-                paths[attached] = {join.count_by, "count"} | (
-                    {join.nest_as} if join.nest_as else set()
-                )
+                paths[attached] = {
+                    join.count_by: source.get(join.count_by),
+                    "count": ("scalar", "num"),
+                }
                 if join.nest_as:
+                    paths[attached][join.nest_as] = ("list", "object")
                     paths[attached + (join.nest_as,)] = source
             by_plugin[plugin.plugin] = paths
         return by_plugin
@@ -602,6 +622,7 @@ class MergedSpec(BaseModel):
             plugin.plugin: {t.field: t for t in plugin.targets}
             for plugin in self.parsing.plugins
         }
+        paths_by_plugin = self._list_element_fields()
         errors: list[str] = []
 
         def target_of(ref: str):
@@ -616,6 +637,30 @@ class MergedSpec(BaseModel):
                     f"{_FORMAT_NEEDS.get(fmt, 'a compatible value')}"
                 )
 
+        def check_at(
+            oid: str, plugin: str, path: tuple[str, ...], field: str | None, fmt: str
+        ) -> None:
+            """The same, for a field of a list reached by path — a format that
+            only appears one or two lists in was checked nowhere before, so
+            `humanize_terms` was type-checked nowhere at all."""
+            if field is None:
+                return
+            shape = paths_by_plugin.get(plugin, {}).get(path, {}).get(field)
+            if shape is not None:  # unresolved refs are _check_display_refs' job
+                check(oid, f"{plugin}.{'.'.join(path)}.{field}", fmt, shape)
+
+        def check_items(
+            oid: str, plugin: str, path: tuple[str, ...], items
+        ) -> None:
+            """A column's `items`, and the detail they expand onto."""
+            if items.format:
+                check_at(oid, plugin, path, items.source, items.format)
+            if not items.expand:
+                return
+            nested = path + (items.expand.source,)
+            for cell in items.expand.cells:
+                check_items(oid, plugin, nested, cell)
+
         for option in self.display.options:
             oid = option.option_id
             for block in option.iter_blocks():
@@ -627,6 +672,21 @@ class MergedSpec(BaseModel):
                                 check(oid, row.source, row.format, _target_shape(target))
                         if row.compose:
                             errors += _compose_errors(oid, row.compose, target_of)
+                        list_ref = row.list_ref()
+                        if list_ref is None:
+                            continue
+                        # A row that stacks a list formats its cells against the
+                        # element fields, not against the list itself.
+                        row_plugin, row_list = list_ref
+                        for cell in row.item.cells or []:
+                            if cell.format:
+                                check_at(
+                                    oid,
+                                    row_plugin,
+                                    (row_list,),
+                                    cell.source,
+                                    cell.format,
+                                )
                 elif isinstance(block, DisplayListBlock):
                     plugin, list_field = block.list_ref()
                     list_target = targets_by_plugin.get(plugin, {}).get(list_field)
@@ -677,6 +737,13 @@ class MergedSpec(BaseModel):
                     if list_target is None:
                         continue  # unresolved list ref -> reported by _check_display_refs
                     for column in block.columns:
+                        if column.items and column.source:
+                            check_items(
+                                oid,
+                                plugin,
+                                (list_field, column.source),
+                                column.items,
+                            )
                         if not column.format:
                             continue
                         shape = _item_field_shape(list_target, column.source)

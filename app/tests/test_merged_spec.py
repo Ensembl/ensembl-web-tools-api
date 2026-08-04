@@ -599,3 +599,40 @@ def test_scale_named_by_a_stack_constant_must_exist():
                     group["const"]["rating_scale"] = "clinvar_agregate"  # sic
     with pytest.raises(ValidationError, match="clinvar_agregate"):
         MergedSpec.model_validate(doc)
+
+
+def test_nested_item_format_must_suit_its_type():
+    # `humanize` calls string methods; ClinVar's per-classification count is a
+    # number the join produced, two lists below the option's own fields.
+    doc = _assembled()
+    items = _classification_column(doc)["items"]
+    items["from"] = "count"
+    items["format"] = "humanize"
+    with pytest.raises(ValidationError, match="formats .*count.* as 'humanize'"):
+        MergedSpec.model_validate(doc)
+
+
+def test_expanded_cell_format_must_suit_its_type():
+    doc = _assembled()
+    cell = _classification_column(doc)["items"]["expand"]["cells"][0]
+    cell["format"] = "num"
+    with pytest.raises(ValidationError, match="formats .*submitter.* as 'num'"):
+        MergedSpec.model_validate(doc)
+
+
+def test_stacked_row_cell_format_must_suit_its_type():
+    doc = _assembled()
+    found = False
+    for option in doc["display"]["options"]:
+        blocks = list(option["blocks"])
+        while blocks:
+            block = blocks.pop()
+            blocks += block.get("blocks", []) or []
+            for row in block.get("rows", []) or []:
+                for cell in (row.get("item") or {}).get("cells", []):
+                    if cell.get("from") == "supporting":
+                        cell["format"] = "humanize"
+                        found = True
+    assert found, "no stacked cell over a counted field left to probe"
+    with pytest.raises(ValidationError, match="as 'humanize'"):
+        MergedSpec.model_validate(doc)

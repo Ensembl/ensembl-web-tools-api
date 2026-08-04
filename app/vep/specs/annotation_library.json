@@ -1345,8 +1345,7 @@
           "PHENOTYPES"
         ],
         "require_any_output": [
-          "phenotypes",
-          "clinvar_phenotypes"
+          "phenotypes"
         ],
         "targets": [
           {
@@ -1354,7 +1353,7 @@
             "from": "PHENOTYPES",
             "transform": "regex",
             "each": true,
-            "pattern": "^(?P<type>[^+]+)\\+(?!ClinVar\\+)(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)\\+[^+]*$",
+            "pattern": "^(?P<type>[^+]+)\\+(?!ClinVar\\+)(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)$",
             "as": [
               {
                 "field": "type",
@@ -1393,71 +1392,6 @@
               "phenotype",
               "id",
               "risk_allele"
-            ],
-            "post": [
-              {
-                "op": "exclude",
-                "by": "phenotype",
-                "values": [
-                  "ClinVar:_phenotype_not_specified",
-                  "not_specified",
-                  "not_provided"
-                ]
-              },
-              {
-                "op": "dedup"
-              }
-            ]
-          },
-          {
-            "field": "clinvar_phenotypes",
-            "from": "PHENOTYPES",
-            "transform": "regex",
-            "each": true,
-            "pattern": "^(?P<type>[^+]+)\\+(?P<source>ClinVar)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)\\+(?P<clinvar_clin_sig>[^+]*)$",
-            "as": [
-              {
-                "field": "type",
-                "type": "string"
-              },
-              {
-                "field": "source",
-                "type": "string"
-              },
-              {
-                "field": "phenotype",
-                "type": "string"
-              },
-              {
-                "field": "id",
-                "type": "string"
-              },
-              {
-                "field": "risk_allele",
-                "type": "string"
-              },
-              {
-                "field": "clinvar_clin_sig",
-                "type": "string"
-              }
-            ],
-            "drop_when": {
-              "unless_matches": {
-                "field": "risk_allele",
-                "equals_column": "Allele"
-              },
-              "only_if": {
-                "field": "type",
-                "equals": "Variation"
-              }
-            },
-            "item_fields": [
-              "type",
-              "source",
-              "phenotype",
-              "id",
-              "risk_allele",
-              "clinvar_clin_sig"
             ],
             "post": [
               {

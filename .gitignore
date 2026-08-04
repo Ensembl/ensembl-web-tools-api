@@ -11,7 +11,10 @@ tmpdir/
 venv*
 results_meta.json
 dev-data/
-app/tmp*/
+# Upload staging dirs. `mkdtemp(dir=NF_WORK_DIR)` lands in the *cwd* when
+# NF_WORK_DIR is unset, and the suite runs from either the repo root or app/,
+# so they turn up at both depths.
+tmp*/
 
 # Rendered exports of the design diagrams. The .py generators and the .html they
 # emit are the source of truth; the images are just for pasting into slides and

@@ -691,6 +691,9 @@ def test_legacy_pinned_sidecar_loads_and_falls_back_to_the_current_display(tmp_p
     assert {o.option_id for o in payload.options} == SPEC_DRIVEN_OPTIONS
     # Scopes still describe the *pinned* parsers -- only the layout is current.
     assert payload.plugin_scopes == pinned.plugin_scopes()
+    # And the layout is *whole*: the rating scales its options refer to travel
+    # with them, or these jobs would render ClinVar's review status unrated.
+    assert "clinvar_submission" in payload.rating_scales
 
 
 def test_a_current_pinned_sidecar_uses_its_own_display(tmp_path):

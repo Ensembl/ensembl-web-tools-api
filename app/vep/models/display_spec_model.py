@@ -1026,17 +1026,17 @@ class DisplaySpec(BaseModel):
         return self
 
 
-class DisplayPayload(BaseModel):
+class DisplayPayload(DisplaySpec):
     """What the results response carries: the display spec plus the plugin ->
     scope map derived from `parsing`, which the frontend needs to know whether
     to read a row's plugin from the allele or the transcript consequence.
 
     The scopes are derived rather than authored so there is only ever one place
     that states them (the parsing plugin), and no hand-synced copy to drift.
+
+    It *is* the display spec, so it subclasses one: re-declaring the fields made
+    every addition a three-site edit, and the payload had already been missed
+    once.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
-    options: list[DisplayOptionSpec]
     plugin_scopes: dict[str, str]
-    rating_scales: dict[str, RatingScale] = Field(default_factory=dict)

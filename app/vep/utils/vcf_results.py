@@ -837,10 +837,10 @@ def _resolve_display_payload(spec: MergedSpec | None) -> DisplayPayload | None:
         return None
     # The scopes must still describe the *pinned* parsers, since those are what
     # produced this job's annotations; only the layout comes from the current
-    # spec.
-    return DisplayPayload(
-        options=current_payload.options, plugin_scopes=spec.plugin_scopes()
-    )
+    # spec. Copied rather than rebuilt field by field: listing the fields here
+    # meant a new one silently did not reach these jobs, and the rating scales
+    # had already been lost that way.
+    return current_payload.model_copy(update={"plugin_scopes": spec.plugin_scopes()})
 
 
 def _with_display_panels(

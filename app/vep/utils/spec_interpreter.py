@@ -244,6 +244,27 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
     return rows
 
 
+def _aligned_rows(columns, field_specs, align, const=None):
+    """N positionally aligned columns -> one row per position.
+
+    `align` says what to do with columns of different length: `max` keeps every
+    position and leaves the short columns null there, anything else stops at the
+    shortest. `const` tags each row with values the columns do not carry.
+    """
+    lengths = [len(column) for column in columns]
+    length = (max(lengths) if align == "max" else min(lengths)) if lengths else 0
+    for i in range(length):
+        row = {
+            field_spec.field: _coerce(
+                column[i] if i < len(column) else None, field_spec.type, field_spec
+            )
+            for column, field_spec in zip(columns, field_specs)
+        }
+        if const:
+            row.update(const)
+        yield row
+
+
 def _apply_zip(csq_values, index_map, target: TargetSpec) -> list[dict]:
     """N positionally-aligned '&'-lists -> a list of objects.
 
@@ -254,30 +275,22 @@ def _apply_zip(csq_values, index_map, target: TargetSpec) -> list[dict]:
         raw_amp(_column(csq_values, name, index_map), target.sep)
         for name in target.source
     ]
-    lengths = [len(column) for column in columns]
-    length = (max(lengths) if target.align == "max" else min(lengths)) if lengths else 0
-
-    rows: list[dict] = []
-    for i in range(length):
-        row = {
-            field_spec.field: _coerce(
-                column[i] if i < len(column) else None, field_spec.type, field_spec
-            )
-            for column, field_spec in zip(columns, target.as_fields)
-        }
-        if _should_drop(row, target.drop_when, csq_values, index_map):
-            continue
-        rows.append(row)
+    rows = [
+        row
+        for row in _aligned_rows(columns, target.as_fields, target.align)
+        if not _should_drop(row, target.drop_when, csq_values, index_map)
+    ]
     return _apply_post(rows, target.post)
 
 
 def _apply_stack(csq_values, index_map, target: TargetSpec) -> list[dict]:
     """Several groups of columns -> one list, each group's rows tagged.
 
-    Each group is a `zip` over its own columns, so a group of scalar columns
-    yields a single row and a group of list columns yields one row per position.
-    `drop_when` and `post` then apply to the whole stack, which is what lets one
-    `curie_link` resolve every group's ids.
+    Each group is a `zip` over its own columns -- literally the same alignment,
+    plus the group's `const` -- so a group of scalar columns yields a single row
+    and a group of list columns yields one row per position. `drop_when` and
+    `post` then apply to the whole stack, which is what lets one `curie_link`
+    resolve every group's ids.
     """
     rows: list[dict] = []
     for group in target.of:
@@ -287,21 +300,13 @@ def _apply_stack(csq_values, index_map, target: TargetSpec) -> list[dict]:
             else ([raw] if (raw := _column(csq_values, name, index_map)) else [])
             for name in group.source
         ]
-        lengths = [len(column) for column in columns]
-        length = (
-            (max(lengths) if group.align == "max" else min(lengths)) if lengths else 0
-        )
-        for i in range(length):
-            row = {
-                field_spec.field: _coerce(
-                    column[i] if i < len(column) else None, field_spec.type, field_spec
-                )
-                for column, field_spec in zip(columns, group.as_fields)
-            }
-            row.update(group.const)
-            if _should_drop(row, target.drop_when, csq_values, index_map):
-                continue
-            rows.append(row)
+        rows += [
+            row
+            for row in _aligned_rows(
+                columns, group.as_fields, group.align, group.const
+            )
+            if not _should_drop(row, target.drop_when, csq_values, index_map)
+        ]
     return _apply_post(rows, target.post)
 
 

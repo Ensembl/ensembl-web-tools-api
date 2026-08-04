@@ -1191,7 +1191,7 @@ def test_lookup_needs_all_three_of_by_into_and_table():
         PostOp.model_validate({"op": "dedup", "table": "go_namespaces"})
     # `into` is shared with concat and curie_link now, so it is rejected only for
     # the ops that write no field at all.
-    with pytest.raises(ValidationError, match="belongs to lookup, concat or curie_link"):
+    with pytest.raises(ValidationError, match="belongs to lookup, concat, curie_link or collapse"):
         PostOp.model_validate({"op": "dedup", "into": "namespace"})
 
 
@@ -2162,3 +2162,88 @@ def test_a_when_can_test_a_column_that_is_not_amp_separated():
     # ...and it is membership, not a substring: the whole entry must match.
     got = apply_plugin_spec(["Conflicting_more", "v"], index_map, spec.plugin("probe"))
     assert got is None or got.get("value") is None
+
+
+# --- collapse: rows that differ only in one thing are one row -------------- #
+
+
+def _collapsed(fields, recs):
+    """A list of records, collapsed on `fields` into `gathered`."""
+    spec = probe_plugin(
+        ["Recs"],
+        {
+            "field": "rows",
+            "from": "Recs",
+            "transform": "records",
+            "sep": "&",
+            "item_sep": "~",
+            "as": [
+                {"field": "name", "type": "string"},
+                {"field": "url", "type": "string"},
+                {"field": "verdict", "type": "string"},
+            ],
+        },
+        post_joins=[
+            {"target": "rows", "op": "collapse", "fields": fields,
+             "into": "gathered"}
+        ],
+    )
+    out = apply_plugin_spec(["A", recs], index_map_for("Allele", "Recs"), spec)
+    return out["rows"] if out else []
+
+
+def test_collapse_merges_rows_that_differ_only_in_the_named_fields():
+    """ClinVar files one submission against several conditions at once, so a
+    variant's table carried five rows that were one classification by one
+    submitter under five disease names -- identical in every column but the
+    condition, and read as five findings when they are one."""
+    rows = _collapsed(
+        ["name", "url"],
+        "Disease_one~u1~Benign&Disease_two~u2~Benign&Other~u3~Pathogenic",
+    )
+    assert [r["verdict"] for r in rows] == ["Benign", "Pathogenic"]
+    assert [[g["name"] for g in r["gathered"]] for r in rows] == [
+        ["Disease_one", "Disease_two"],
+        ["Other"],
+    ]
+    # Each gathered set keeps its own companions -- the link is per condition.
+    assert [g["url"] for g in rows[0]["gathered"]] == ["u1", "u2"]
+
+
+def test_collapse_keys_on_the_whole_of_the_rest_of_the_row():
+    """Not on a list of fields somebody has to keep in step: a row differing
+    anywhere outside `fields` is a different row."""
+    rows = _collapsed(
+        ["name"],
+        "Disease_one~u1~Benign&Disease_two~u2~Benign",
+    )
+    # `url` is not gathered, and it differs, so these do not merge.
+    assert len(rows) == 2
+
+
+def test_collapse_gathers_a_group_of_one_too():
+    """One shape for the display to read, not two."""
+    rows = _collapsed(["name", "url"], "Only~u1~Benign")
+    assert len(rows) == 1
+    assert [g["name"] for g in rows[0]["gathered"]] == ["Only"]
+    assert "name" not in rows[0]
+
+
+def test_collapse_keeps_first_seen_order():
+    rows = _collapsed(
+        ["name", "url"],
+        "B~u1~Second&A~u2~First&C~u3~Second",
+    )
+    assert [r["verdict"] for r in rows] == ["Second", "First"]
+    assert [g["name"] for g in rows[0]["gathered"]] == ["B", "C"]
+
+
+def test_collapse_needs_fields_and_into():
+    from pydantic import ValidationError as VE
+
+    from app.vep.models.parsing_spec_model import PostOp
+
+    with pytest.raises(VE, match="collapse requires `fields` and `into`"):
+        PostOp.model_validate({"op": "collapse", "fields": ["name"]})
+    with pytest.raises(VE, match="collapse requires `fields` and `into`"):
+        PostOp.model_validate({"op": "collapse", "into": "gathered"})

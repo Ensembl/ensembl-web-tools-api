@@ -215,6 +215,29 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                     else operation.sep.join(str(part) for part in parts)
                 )
             continue
+        if operation.op == "collapse":
+            # Rows identical but for `fields` are one row with those fields
+            # gathered. Keyed on everything else, so what "identical" means is
+            # the whole of the rest of the row rather than a list somebody has
+            # to keep in step.
+            varying = list(operation.fields or [])
+            groups: dict[str, dict] = {}
+            for row in rows:
+                key = json.dumps(
+                    {k: v for k, v in row.items() if k not in varying},
+                    sort_keys=True,
+                    default=str,
+                )
+                group = groups.get(key)
+                if group is None:
+                    group = {k: v for k, v in row.items() if k not in varying}
+                    group[operation.into] = []
+                    groups[key] = group
+                group[operation.into].append(
+                    {field: row.get(field) for field in varying}
+                )
+            rows = list(groups.values())  # first-seen order
+            continue
         if operation.op == "curie_link":
             for row in rows:
                 url, label = _resolve_curie(

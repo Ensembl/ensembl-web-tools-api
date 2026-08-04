@@ -1365,11 +1365,8 @@
               }
             ],
             "item_fields": [
-              "name",
-              "ids",
+              "names",
               "type",
-              "id_url",
-              "id_curie",
               "classifications",
               "records"
             ],
@@ -1681,6 +1678,17 @@
           }
         ],
         "post_joins": [
+          {
+            "target": "conditions",
+            "op": "collapse",
+            "fields": [
+              "name",
+              "ids",
+              "id_url",
+              "id_curie"
+            ],
+            "into": "names"
+          },
           {
             "target": "conditions",
             "op": "sort",
@@ -3569,13 +3577,16 @@
                   },
                   {
                     "label": "Condition",
-                    "from": "name",
-                    "format": "phenotype",
-                    "link": {
-                      "kind": "external",
-                      "template": "{value}"
-                    },
-                    "link_from": "id_url"
+                    "from": "names",
+                    "items": {
+                      "from": "name",
+                      "format": "phenotype",
+                      "link": {
+                        "kind": "external",
+                        "template": "{value}"
+                      },
+                      "link_from": "id_url"
+                    }
                   },
                   {
                     "label": "ClinVar record",
@@ -3690,13 +3701,16 @@
                   },
                   {
                     "label": "Condition",
-                    "from": "name",
-                    "format": "phenotype",
-                    "link": {
-                      "kind": "external",
-                      "template": "{value}"
-                    },
-                    "link_from": "id_url"
+                    "from": "names",
+                    "items": {
+                      "from": "name",
+                      "format": "phenotype",
+                      "link": {
+                        "kind": "external",
+                        "template": "{value}"
+                      },
+                      "link_from": "id_url"
+                    }
                   },
                   {
                     "label": "ClinVar record",

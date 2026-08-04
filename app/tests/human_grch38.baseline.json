@@ -1000,9 +1000,6 @@
         "parsed_as": [
           "clinvar_sv"
         ],
-        "requires": [
-          "clinvar"
-        ],
         "config": {
           "emit": "custom",
           "params": {
@@ -1578,7 +1575,8 @@
                 "desc": true,
                 "nulls": "last"
               }
-            ]
+            ],
+            "join_source": true
           },
           {
             "field": "records",
@@ -1615,7 +1613,8 @@
               "review_status",
               "classification",
               "condition"
-            ]
+            ],
+            "join_source": true
           }
         ],
         "joins": [
@@ -1631,12 +1630,7 @@
             },
             "as": "classifications",
             "count_by": "classification",
-            "nest_as": "submitters",
-            "item_fields": [
-              "classification",
-              "count",
-              "submitters"
-            ]
+            "nest_as": "submitters"
           },
           {
             "into": "conditions",
@@ -1649,12 +1643,7 @@
             "also_match": {
               "type": "classification_type"
             },
-            "as": "records",
-            "item_fields": [
-              "rcv",
-              "classification",
-              "review_status"
-            ]
+            "as": "records"
           },
           {
             "into": "classification_summary",
@@ -2433,7 +2422,7 @@
             "drop_when": {
               "unless_matches": {
                 "field": "risk_allele",
-                "column": "Allele"
+                "equals_column": "Allele"
               },
               "only_if": {
                 "field": "type",
@@ -2497,7 +2486,7 @@
             "drop_when": {
               "unless_matches": {
                 "field": "risk_allele",
-                "column": "Allele"
+                "equals_column": "Allele"
               },
               "only_if": {
                 "field": "type",

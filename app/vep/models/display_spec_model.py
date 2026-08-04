@@ -598,6 +598,20 @@ class ColumnItems(BaseModel):
     # RatingScale) — as on a row.
     stars: str | None = None
 
+    def item_field_refs(self) -> Iterator[str]:
+        """Fields this reads from one element of the cell's list value.
+
+        Not `expand.cells` -- those read a *further* list's elements, so they
+        are resolved against that list rather than this one.
+        """
+        yield self.source
+        if self.count_from:
+            yield self.count_from
+        if self.link_from:
+            yield self.link_from
+        if self.expand:
+            yield self.expand.source
+
     @model_validator(mode="after")
     def _split_needs_a_link(self) -> "ColumnItems":
         # Splitting a value only changes what the reader sees if each part
@@ -721,8 +735,16 @@ class TableColumn(BaseModel):
         return self
 
     def item_field_refs(self) -> Iterator[str]:
+        """Fields this column reads from the element that is one table row.
+
+        `items` and `expand` are excluded on purpose: they read elements of a
+        list *inside* the row, a different set of names, so the checker resolves
+        them a level down (see `MergedSpec._list_element_fields`).
+        """
         if self.source:
             yield self.source
+        if self.link_from:
+            yield self.link_from
 
 
 class TableMatrixRow(BaseModel):
@@ -1004,17 +1026,17 @@ class DisplaySpec(BaseModel):
         return self
 
 
-class DisplayPayload(BaseModel):
+class DisplayPayload(DisplaySpec):
     """What the results response carries: the display spec plus the plugin ->
     scope map derived from `parsing`, which the frontend needs to know whether
     to read a row's plugin from the allele or the transcript consequence.
 
     The scopes are derived rather than authored so there is only ever one place
     that states them (the parsing plugin), and no hand-synced copy to drift.
+
+    It *is* the display spec, so it subclasses one: re-declaring the fields made
+    every addition a three-site edit, and the payload had already been missed
+    once.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
-    options: list[DisplayOptionSpec]
     plugin_scopes: dict[str, str]
-    rating_scales: dict[str, RatingScale] = Field(default_factory=dict)

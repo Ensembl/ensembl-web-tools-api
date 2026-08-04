@@ -466,7 +466,7 @@ def test_alignment_is_restricted_to_left_or_right():
 def test_table_column_ref_must_be_an_item_field():
     """A column reads a field of the list element, checked like a list cell."""
     with pytest.raises(
-        ValidationError, match=r"table p.assays references item field 'nope'"
+        ValidationError, match=r"item field 'nope' not in p.assays"
     ):
         MergedSpec.model_validate(_typed_table({"label": "X", "from": "nope"}))
 
@@ -512,7 +512,7 @@ def test_group_by_labels_are_optional():
 def test_group_by_field_must_be_an_item_field():
     """The field the rows group on is checked like a column's."""
     with pytest.raises(
-        ValidationError, match=r"table p.assays references item field 'nope'"
+        ValidationError, match=r"item field 'nope' not in p.assays"
     ):
         MergedSpec.model_validate(_grouped_table({"field": "nope"}))
 
@@ -691,6 +691,9 @@ def test_legacy_pinned_sidecar_loads_and_falls_back_to_the_current_display(tmp_p
     assert {o.option_id for o in payload.options} == SPEC_DRIVEN_OPTIONS
     # Scopes still describe the *pinned* parsers -- only the layout is current.
     assert payload.plugin_scopes == pinned.plugin_scopes()
+    # And the layout is *whole*: the rating scales its options refer to travel
+    # with them, or these jobs would render ClinVar's review status unrated.
+    assert "clinvar_submission" in payload.rating_scales
 
 
 def test_a_current_pinned_sidecar_uses_its_own_display(tmp_path):
@@ -905,8 +908,8 @@ def _starred_column(scale):
         {"options": [{"option_id": "p", "blocks": [{
             "kind": "table",
             "from": "p.summary",
-            "columns": [{"label": "Verdict", "from": "verdict",
-                         "items": {"from": "verdict", "stars": scale}}],
+            "columns": [{"label": "Verdict", "from": "verdicts",
+                         "items": {"from": "status", "stars": scale}}],
         }]}]},
         plugins=_LIST_PLUGIN,
     )
@@ -990,6 +993,29 @@ _LIST_PLUGIN = [
                     {"field": "verdict", "type": "string"},
                 ],
                 "item_fields": ["kind", "verdict"],
+            },
+            {
+                "field": "detail",
+                "from": "C",
+                "transform": "chunk",
+                "size": 2,
+                "as": [
+                    {"field": "kind", "type": "string"},
+                    {"field": "status", "type": "string"},
+                ],
+                "item_fields": ["kind", "status"],
+            },
+        ],
+        # A cell can only hold a list of objects if something put one there, and
+        # a join is the one thing that does -- so a fixture for an itemised
+        # column needs one, exactly as the real specs do.
+        "joins": [
+            {
+                "into": "summary",
+                "from": "detail",
+                "left_key": "kind",
+                "right_key": "kind",
+                "as": "verdicts",
             }
         ],
     }

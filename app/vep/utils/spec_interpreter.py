@@ -69,26 +69,45 @@ def _column(csq_values: list[str], name: str, index_map: dict[str, int]) -> str 
     return get_csq_value(csq_values, name, None, index_map)
 
 
+def _same(value, expected) -> bool:
+    """The one equality every predicate in a parsing spec is built from.
+
+    Compared as text, so `equals: "1"` finds an int 1 -- a spec states its
+    right-hand side in JSON and cannot say which Python type the transform will
+    have coerced the field to. Absent on either side never matches: a field that
+    is not there is not equal to anything, including a column the output does
+    not carry.
+    """
+    if value is None or expected is None or expected == "":
+        return False
+    return str(value) == str(expected)
+
+
+def _matches(row: dict, match, csq_values=None, index_map=None) -> bool:
+    """Whether a produced element satisfies one `Match` (see the model)."""
+    if match.equals_column is not None:
+        expected = (
+            _column(csq_values, match.equals_column, index_map)
+            if csq_values is not None and index_map is not None
+            else None
+        )
+    else:
+        expected = match.equals
+    return _same(row.get(match.field), expected)
+
+
 def _should_drop(row: dict, drop_when, csq_values=None, index_map=None) -> bool:
     if drop_when is None:
         return False
     # A conditional rule only applies to elements it names (the allele rule is
     # for a "Variation" phenotype, not a "Gene" one).
     condition = drop_when.only_if
-    if condition is not None and row.get(condition.field) != condition.equals:
+    if condition is not None and not _matches(row, condition, csq_values, index_map):
         return False
     if drop_when.all_null:
         return all(value is None for value in row.values())
     if drop_when.unless_matches is not None:
-        match = drop_when.unless_matches
-        # None (an absent field, or a column this output doesn't carry) never
-        # matches, so the element drops.
-        column_value = (
-            _column(csq_values, match.column, index_map)
-            if csq_values is not None and index_map is not None
-            else None
-        )
-        return row.get(match.field) != column_value or column_value in (None, "")
+        return not _matches(row, drop_when.unless_matches, csq_values, index_map)
     return row.get(drop_when.null) is None
 
 
@@ -147,10 +166,15 @@ def _resolve_curie(value, prefer, templates, sep):
     """
     if not value:
         return None, None
-    # Decode first, unlike every structural split: post-ops run before the
-    # target's decode step, and by this point the only separators left are the
-    # source's own. ClinVar escapes the comma between CURIEs, so splitting the
-    # raw value would find one CURIE where there are several.
+    # Decode *first*, which is the exception to the split-before-decode rule the
+    # rest of this module follows — and the reason is in the source: ClinVar
+    # escapes the comma that separates one CURIE from the next, so the separator
+    # only exists after decoding. Splitting the raw value finds one CURIE where
+    # there are several, and the wrong authority wins the `prefer` order.
+    #
+    # The cost is that this post-op's own output is decoded a second time by the
+    # final pass. Harmless for the numeric accessions ClinVar publishes; wrong
+    # for any label carrying a literal '%'.
     curies = [part.strip() for part in unquote(str(value)).split(sep) if part.strip()]
     by_prefix: dict[str, str] = {}
     for curie in curies:
@@ -202,10 +226,14 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                     row[operation.label_into] = label
             continue
         if operation.op == "dedup":
+            # Keyed on the row's JSON rather than a tuple of its values: after a
+            # join a row can hold a list, and a tuple containing one is
+            # unhashable — which raised at request time for any `dedup` in
+            # `post_joins`.
             seen = set()
             unique = []
             for row in rows:
-                key = tuple(row.values())
+                key = json.dumps(row, sort_keys=True, default=str)
                 if key in seen:
                     continue
                 seen.add(key)
@@ -222,18 +250,38 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                 )
             ]
         elif operation.op == "sort":
-            nulls_last = operation.nulls == "last"
-            # A null key sorts to whichever end `nulls` asks for, whatever `desc`
-            # does to the rest.
-            sentinel = float("-inf") if nulls_last == operation.desc else float("inf")
-            rows = sorted(
-                rows,
-                key=lambda row: (
-                    row[operation.by] if row[operation.by] is not None else sentinel
-                ),
-                reverse=operation.desc,
-            )
+            # Partitioned rather than sorted against a sentinel value. A sentinel
+            # has to be comparable with the real keys, so a string column with
+            # one null raised TypeError, and a row missing the field entirely
+            # raised KeyError — both at request time, on data the spec had no
+            # way to forbid. Partitioning also delivers what the docstring
+            # promises: `nulls` places them independently of `desc`.
+            keyed = [row for row in rows if row.get(operation.by) is not None]
+            absent = [row for row in rows if row.get(operation.by) is None]
+            keyed.sort(key=lambda row: row[operation.by], reverse=operation.desc)
+            rows = keyed + absent if operation.nulls == "last" else absent + keyed
     return rows
+
+
+def _aligned_rows(columns, field_specs, align, const=None):
+    """N positionally aligned columns -> one row per position.
+
+    `align` says what to do with columns of different length: `max` keeps every
+    position and leaves the short columns null there, anything else stops at the
+    shortest. `const` tags each row with values the columns do not carry.
+    """
+    lengths = [len(column) for column in columns]
+    length = (max(lengths) if align == "max" else min(lengths)) if lengths else 0
+    for i in range(length):
+        row = {
+            field_spec.field: _coerce(
+                column[i] if i < len(column) else None, field_spec.type, field_spec
+            )
+            for column, field_spec in zip(columns, field_specs)
+        }
+        if const:
+            row.update(const)
+        yield row
 
 
 def _apply_zip(csq_values, index_map, target: TargetSpec) -> list[dict]:
@@ -246,30 +294,22 @@ def _apply_zip(csq_values, index_map, target: TargetSpec) -> list[dict]:
         raw_amp(_column(csq_values, name, index_map), target.sep)
         for name in target.source
     ]
-    lengths = [len(column) for column in columns]
-    length = (max(lengths) if target.align == "max" else min(lengths)) if lengths else 0
-
-    rows: list[dict] = []
-    for i in range(length):
-        row = {
-            field_spec.field: _coerce(
-                column[i] if i < len(column) else None, field_spec.type, field_spec
-            )
-            for column, field_spec in zip(columns, target.as_fields)
-        }
-        if _should_drop(row, target.drop_when, csq_values, index_map):
-            continue
-        rows.append(row)
+    rows = [
+        row
+        for row in _aligned_rows(columns, target.as_fields, target.align)
+        if not _should_drop(row, target.drop_when, csq_values, index_map)
+    ]
     return _apply_post(rows, target.post)
 
 
 def _apply_stack(csq_values, index_map, target: TargetSpec) -> list[dict]:
     """Several groups of columns -> one list, each group's rows tagged.
 
-    Each group is a `zip` over its own columns, so a group of scalar columns
-    yields a single row and a group of list columns yields one row per position.
-    `drop_when` and `post` then apply to the whole stack, which is what lets one
-    `curie_link` resolve every group's ids.
+    Each group is a `zip` over its own columns -- literally the same alignment,
+    plus the group's `const` -- so a group of scalar columns yields a single row
+    and a group of list columns yields one row per position. `drop_when` and
+    `post` then apply to the whole stack, which is what lets one `curie_link`
+    resolve every group's ids.
     """
     rows: list[dict] = []
     for group in target.of:
@@ -279,21 +319,13 @@ def _apply_stack(csq_values, index_map, target: TargetSpec) -> list[dict]:
             else ([raw] if (raw := _column(csq_values, name, index_map)) else [])
             for name in group.source
         ]
-        lengths = [len(column) for column in columns]
-        length = (
-            (max(lengths) if group.align == "max" else min(lengths)) if lengths else 0
-        )
-        for i in range(length):
-            row = {
-                field_spec.field: _coerce(
-                    column[i] if i < len(column) else None, field_spec.type, field_spec
-                )
-                for column, field_spec in zip(columns, group.as_fields)
-            }
-            row.update(group.const)
-            if _should_drop(row, target.drop_when, csq_values, index_map):
-                continue
-            rows.append(row)
+        rows += [
+            row
+            for row in _aligned_rows(
+                columns, group.as_fields, group.align, group.const
+            )
+            if not _should_drop(row, target.drop_when, csq_values, index_map)
+        ]
     return _apply_post(rows, target.post)
 
 
@@ -438,7 +470,9 @@ def _apply_key_value(csq_values, index_map, target: TargetSpec) -> dict:
 def _when_holds(csq_values, index_map, when: WhenSpec | None) -> bool:
     if when is None:
         return True
-    return when.includes in split_amp(_column(csq_values, when.field, index_map))
+    return when.includes in _listed_keys(
+        _column(csq_values, when.field, index_map), when.sep, when.item_pattern
+    )
 
 
 def _empty_value(target: TargetSpec):
@@ -485,31 +519,48 @@ def _build_target(csq_values, index_map, target: TargetSpec):
     raise ValueError(f"unknown transform: {target.transform}")
 
 
-def _decode_leaves(value):
+def _decode_leaves(value, memo: dict | None = None):
     """Percent-decode every string leaf of a produced value.
 
     `unquote`, never `unquote_plus`: '+' is a structural separator in the
     enriched ClinVar VCF, not an encoded space.
+
+    `memo` keys decoded containers by identity, because a join attaches the
+    *same* row objects to more than one place: a submission is reachable both
+    as `submissions[i]` and as `conditions[j].classifications[k].submitters[l]`.
+    Decoding the output as one tree therefore walked each of those records once
+    per path — measured at twice the decode work on ClinVar, and it also broke
+    the sharing, so the response carried two copies of every submission. With
+    the memo each container is decoded once and stays shared.
     """
     if isinstance(value, str):
         return unquote(value)
+    if not isinstance(value, (list, dict)):
+        return value
+    memo = {} if memo is None else memo
+    seen = memo.get(id(value))
+    if seen is not None:
+        return seen
     if isinstance(value, list):
-        return [_decode_leaves(v) for v in value]
-    if isinstance(value, dict):
-        return {k: _decode_leaves(v) for k, v in value.items()}
-    return value
+        decoded = [_decode_leaves(v, memo) for v in value]
+    else:
+        decoded = {k: _decode_leaves(v, memo) for k, v in value.items()}
+    memo[id(value)] = decoded
+    return decoded
 
 
 def _apply_target(csq_values, index_map, target: TargetSpec):
-    """One target's value, decoded if the source escapes its separators.
+    """One target's value, still encoded.
 
-    Decoding is the *last* step by construction: the value has already been split
-    on every delimiter, so an encoded '%2C' cannot be mistaken for one. Doing it
-    the other way round is how a comma inside a disease name becomes a field
-    boundary.
+    Decoding is deliberately *not* done here. It is the last step of
+    `apply_plugin_spec`, after the joins, because a join splits on a separator
+    too: decoding a target as it was built left the join splitting text that had
+    already been decoded, so an escaped separator inside a value — a condition
+    literally named `Foo+Bar` — was read as a real one and its rows silently
+    vanished. One decode point, after every split, is the only arrangement in
+    which that cannot happen.
     """
-    value = _build_target(csq_values, index_map, target)
-    return _decode_leaves(value) if target.decode else value
+    return _build_target(csq_values, index_map, target)
 
 
 def _join_key(value, pattern, case_insensitive: bool) -> str | None:
@@ -568,7 +619,7 @@ def _apply_joins(built: dict, joins) -> None:
                 matches = [
                     match
                     for match in matches
-                    if str(match.get(join.where.field)) == join.where.equals
+                    if _matches(match, join.where)
                 ]
             if join.count_into:
                 # No candidates at all means there is nothing to report, not a
@@ -595,6 +646,27 @@ def _apply_joins(built: dict, joins) -> None:
                 row[join.as_field] = matches
 
 
+def _listed_keys(listed: str | None, sep: str, item_pattern: str | None) -> set[str]:
+    """The comparable entries of a column that packs a list.
+
+    Split on the separator first, decode after: an escaped separator inside a
+    name must not be read as one (the house rule for this VCF). `item_pattern`
+    takes the comparable part of each entry via a `key` group, as a join's
+    `right_key_pattern` does.
+
+    Shared by `applies_to` and a target's `when`, which are the same membership
+    test asked in two places -- and were two implementations, which is how
+    `when` came to be missing the separator and pattern that `applies_to` grew.
+    """
+    if not listed:
+        return set()
+    return {
+        _join_key(unquote(entry), item_pattern, False)
+        for entry in listed.split(sep)
+        if entry
+    }
+
+
 def _row_in_scope(csq_values, index_map, scope) -> bool:
     """Whether this CSQ row is one the plugin's annotation belongs to.
 
@@ -608,18 +680,14 @@ def _row_in_scope(csq_values, index_map, scope) -> bool:
     value = _column(csq_values, scope.column, index_map)
     if not listed or not value:
         return True
-    # Split on the separator first, decode after: an escaped separator inside a
-    # name must not be read as one (the house rule for this VCF).
-    names = {
-        _join_key(unquote(entry), scope.item_pattern, False)
-        for entry in listed.split(scope.sep)
-        if entry
-    }
-    return value in names
+    return value in _listed_keys(listed, scope.sep, scope.item_pattern)
 
 
 def apply_plugin_spec(
-    csq_values: list[str], index_map: dict[str, int], spec: PluginSpec
+    csq_values: list[str],
+    index_map: dict[str, int],
+    spec: PluginSpec,
+    cache: dict | None = None,
 ) -> dict | None:
     """One plugin's annotation for this CSQ entry, or None if there is nothing.
 
@@ -632,6 +700,20 @@ def apply_plugin_spec(
 
     if not _row_in_scope(csq_values, index_map, spec.applies_to):
         return None
+
+    # A plugin reads only its own columns, and VEP repeats those on every CSQ
+    # row of a variant — so the annotation is the same for all of them, and a
+    # transcript-scoped plugin was parsing it once per row to get one answer.
+    # ClinVar did that 936 times over a 50-record file to produce 61 distinct
+    # results. Keyed on the columns the plugin actually reads, so two rows that
+    # differ only in the ones it ignores share the work. The row gate above is
+    # deliberately outside this: it is what legitimately differs per row.
+    key = None
+    if cache is not None:
+        key = (spec.plugin, tuple(_column(csq_values, c, index_map)
+                                  for c in spec.csq_fields))
+        if key in cache:
+            return cache[key]
 
     # Raw presence, deliberately: a literal 'NA' counts as present here, which
     # is what the hand-written parsers do.
@@ -653,9 +735,28 @@ def apply_plugin_spec(
         if isinstance(rows, list):
             output[operation.target] = _apply_post(rows, [operation])
 
+    # Every split has now run — the targets' own and the joins' — so an encoded
+    # separator can no longer be mistaken for one (see `_apply_target`).
+    decoded: dict = {}
+    for target in spec.targets:
+        if target.decode:
+            output[target.field] = _decode_leaves(output[target.field], decoded)
+
     if spec.require_any_output and not any(
         _is_present(output.get(field)) for field in spec.require_any_output
     ):
-        return None
+        output = None
 
+    # The join sources have done their work. `_apply_joins` attached the very
+    # same row objects where they are actually read -- a submission under the
+    # condition it was filed against -- so keeping the flat lists as well
+    # shipped every submission twice, 40% of ClinVar's payload. Dropped last, so
+    # decoding and `require_any_output` still see them.
+    if output is not None:
+        for target in spec.targets:
+            if target.join_source:
+                output.pop(target.field, None)
+
+    if key is not None:
+        cache[key] = output
     return output

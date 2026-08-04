@@ -628,9 +628,6 @@
         "parsed_as": [
           "clinvar_sv"
         ],
-        "requires": [
-          "clinvar"
-        ],
         "config": {
           "emit": "custom",
           "params": {

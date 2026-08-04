@@ -251,6 +251,7 @@ def _spec_annotations(
     index_map: dict[str, int],
     spec: ParsingSpec | None,
     scope: str,
+    cache: dict | None = None,
 ) -> list[model.Annotation]:
     """The generic annotations for one CSQ entry at the given scope, driving each
     matching spec plugin through `apply_plugin_spec`. Additive to the typed
@@ -261,7 +262,7 @@ def _spec_annotations(
     for plugin in spec.plugins:
         if plugin.scope != scope:
             continue
-        data = apply_plugin_spec(csq_values, index_map, plugin)
+        data = apply_plugin_spec(csq_values, index_map, plugin, cache)
         if data is not None:
             annotations.append(
                 model.Annotation(plugin=plugin.plugin, scope=scope, data=data)
@@ -292,6 +293,13 @@ def _get_alt_allele_details(
     colocated_variants: list[str] = []
     allele_annotations: list[model.Annotation] = []
     allele_level_captured = False
+    # A plugin reads only its own CSQ columns and VEP repeats those on every row
+    # of the variant, so a transcript-scoped plugin produces the same annotation
+    # for all of them. This lets it be parsed once and reused; the per-row gate
+    # (`applies_to`) still runs for each, which is what makes ClinVar attach to
+    # one gene and not its neighbour. Per allele, since that is the widest scope
+    # over which the columns are guaranteed identical.
+    parse_cache: dict = {}
 
     for str_csq in csqs:
         csq_values = str_csq.split("|")
@@ -304,7 +312,7 @@ def _get_alt_allele_details(
                 get_csq_value(csq_values, "Existing_variation", None, index_map)
             )
             allele_annotations = _spec_annotations(
-                csq_values, index_map, spec, "allele"
+                csq_values, index_map, spec, "allele", parse_cache
             )
             allele_level_captured = True
 
@@ -374,7 +382,7 @@ def _get_alt_allele_details(
                     ),
                     # Generic spec-driven annotations: everything else.
                     annotations=_spec_annotations(
-                        csq_values, index_map, spec, "transcript"
+                        csq_values, index_map, spec, "transcript", parse_cache
                     ),
                 )
             )
@@ -829,10 +837,10 @@ def _resolve_display_payload(spec: MergedSpec | None) -> DisplayPayload | None:
         return None
     # The scopes must still describe the *pinned* parsers, since those are what
     # produced this job's annotations; only the layout comes from the current
-    # spec.
-    return DisplayPayload(
-        options=current_payload.options, plugin_scopes=spec.plugin_scopes()
-    )
+    # spec. Copied rather than rebuilt field by field: listing the fields here
+    # meant a new one silently did not reach these jobs, and the rating scales
+    # had already been lost that way.
+    return current_payload.model_copy(update={"plugin_scopes": spec.plugin_scopes()})
 
 
 def _with_display_panels(

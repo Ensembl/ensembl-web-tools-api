@@ -223,8 +223,6 @@ def test_clinvar_non_conflicting_ignores_breakdown():
                 "supporting": None,
             }
         ],
-        "submissions": [],
-        "records": [],
     }
 
 
@@ -250,8 +248,6 @@ def test_clinvar_when_matches_list_membership_not_substring():
                 "supporting": None,
             }
         ],
-        "submissions": [],
-        "records": [],
     }
 
 
@@ -1405,6 +1401,7 @@ def _joined(joins, **columns):
                         "transform": "records",
                         "sep": "+",
                         "item_sep": "~",
+                        "decode": True,
                         "as": [
                             {"field": "name", "type": "string"},
                             # Only the `also_match` test fills this; the rest
@@ -1418,6 +1415,8 @@ def _joined(joins, **columns):
                         "transform": "records",
                         "sep": "&",
                         "item_sep": "~",
+                        "decode": True,
+                        "join_source": columns.get("join_source", False),
                         "as": [
                             {"field": "acc", "type": "string"},
                             {"field": "verdict", "type": "string"},
@@ -1523,6 +1522,40 @@ def test_join_nest_as_keeps_each_group_beside_its_count():
         ["R3"],
     ]
     assert [g["count"] for g in groups] == [2, 1]
+
+
+def test_a_join_source_is_dropped_once_it_has_been_joined():
+    """The joined rows *are* the source rows -- the same objects -- so leaving
+    the flat list in place ships every one of them twice. ClinVar's submissions
+    were 40% of its payload on that account."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "matches"}],
+        names="Disease_one",
+        recs="R1~Pathogenic~Disease_one",
+        join_source=True,
+    )
+    assert "records" not in result
+    # ...and the rows are still there, where they are read from.
+    assert [r["acc"] for r in result["conditions"][0]["matches"]] == ["R1"]
+
+
+def test_a_display_ref_to_a_join_source_fails_at_load():
+    from pydantic import ValidationError
+
+    from app.vep.models.merged_spec_model import MergedSpec
+    from app.tests.test_merged_spec import _assembled
+
+    doc = _assembled()
+    for option in doc["display"]["options"]:
+        if option["option_id"] == "phenotypes":
+            option["blocks"].append(
+                {"kind": "rows", "rows": [
+                    {"label": "Submissions", "from": "clinvar.submissions"}
+                ]}
+            )
+    with pytest.raises(ValidationError, match="join source"):
+        MergedSpec.model_validate(doc)
 
 
 def test_join_nest_as_needs_a_grouping_to_nest_under():
@@ -1995,3 +2028,231 @@ def test_a_gated_out_list_transform_yields_a_list():
     }])
     off = apply_plugin_spec(["A", "off", "x"], index_map, spec.plugin("probe"))
     assert off == {"recs": [], "stacked": []}
+
+
+def test_sort_survives_a_row_that_lacks_the_key():
+    """A sentinel has to be comparable with the real keys, so a missing field
+    raised KeyError and a string column with one null raised TypeError — both at
+    request time, on data no spec could forbid."""
+    index_map = index_map_for("Allele", "Recs")
+    spec = ParsingSpec(plugins=[{
+        "plugin": "probe", "scope": "allele", "output": "probe",
+        "csq_fields": ["Recs"],
+        "targets": [{
+            "field": "rows", "from": "Recs", "transform": "records",
+            "item_sep": "~",
+            "as": [{"field": "name", "type": "string"},
+                   {"field": "rank", "type": "string"}],
+            "post": [{"op": "sort", "by": "rank", "desc": True, "nulls": "last"}],
+        }],
+    }])
+    # "Bare" has no second field at all, so `rank` comes out null.
+    result = apply_plugin_spec(["A", "Low~a&Bare&High~b"], index_map, spec.plugin("probe"))
+    assert [r["name"] for r in result["rows"]] == ["High", "Low", "Bare"]
+
+
+def test_dedup_survives_a_row_holding_a_list():
+    """A tuple containing a list is unhashable, so `dedup` in `post_joins` —
+    where every row may carry joined-in rows — raised at request time."""
+    index_map = index_map_for("Allele", "Names", "Recs")
+    spec = ParsingSpec(plugins=[{
+        "plugin": "probe", "scope": "allele", "output": "probe",
+        "csq_fields": ["Names", "Recs"],
+        "targets": [
+            {"field": "conditions", "from": "Names", "transform": "records",
+             "sep": "+", "item_sep": "~", "as": [{"field": "name", "type": "string"}]},
+            {"field": "recs", "from": "Recs", "transform": "records",
+             "item_sep": "~", "as": [{"field": "acc", "type": "string"},
+                                     {"field": "cond", "type": "string"}]},
+        ],
+        "joins": [{"into": "conditions", "from": "recs", "left_key": "name",
+                   "right_key": "cond", "as": "hits"}],
+        "post_joins": [{"target": "conditions", "op": "dedup"}],
+    }])
+    result = apply_plugin_spec(
+        ["A", "One+One+Two", "R1~One"], index_map, spec.plugin("probe")
+    )
+    assert [c["name"] for c in result["conditions"]] == ["One", "Two"]
+
+
+def test_a_join_splits_before_the_value_is_decoded():
+    """The whole reason decoding is one step at the end. A condition literally
+    named `Foo+Bar` arrives as `Foo%2BBar`; if the target decodes as it is built,
+    the join then splits on the '+' the source had escaped and the condition
+    matches nothing — silently, since a join drops evidence rather than erroring."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "right_key_sep": "+", "as": "records"}],
+        names="Foo%2BBar",
+        recs="R1~Pathogenic~Foo%2BBar",
+    )
+    condition = result["conditions"][0]
+    assert condition["name"] == "Foo+Bar"
+    assert [r["acc"] for r in condition["records"]] == ["R1"]
+
+
+def test_decoding_visits_a_shared_row_once():
+    """A join attaches the *same* row objects in two places, so decoding the
+    output as one tree walked each of them once per path — twice the work, and
+    it broke the sharing so the response carried two copies of every row."""
+    result = _joined(
+        [{"into": "conditions", "from": "records", "left_key": "name",
+          "right_key": "condition", "as": "records"}],
+        names="Disease_one",
+        recs="R1~Pathogenic~Disease_one",
+    )
+    nested = result["conditions"][0]["records"][0]
+    assert any(record is nested for record in result["records"])
+
+
+def test_a_cache_makes_a_plugin_parse_once_for_identical_columns():
+    """VEP repeats a plugin's own columns on every CSQ row of a variant, so a
+    transcript-scoped plugin parsed the same annotation once per row — 936
+    parses over a 50-record file to produce 61 distinct results, and the whole
+    results parse measured 265ms against 95ms with this.
+
+    Keyed on the columns the plugin *reads*, so rows differing only in the ones
+    it ignores share the work."""
+    index_map = index_map_for("Allele", "SYMBOL", "Probe_SIG")
+    spec = ParsingSpec(plugins=[{
+        "plugin": "probe", "scope": "transcript", "output": "probe",
+        "csq_fields": ["Probe_SIG"],
+        "targets": [{"field": "significance", "from": "Probe_SIG",
+                     "transform": "scalar", "type": "string"}],
+    }])
+    plugin = spec.plugin("probe")
+    cache: dict = {}
+    first = apply_plugin_spec(["A", "BRCA2", "Pathogenic"], index_map, plugin, cache)
+    # a different row of the same variant: SYMBOL differs, the plugin's own
+    # column does not
+    second = apply_plugin_spec(["A", "ZAR1L", "Pathogenic"], index_map, plugin, cache)
+    assert first is second
+    assert len(cache) == 1
+
+    # a genuinely different value is parsed in its own right
+    third = apply_plugin_spec(["A", "BRCA2", "Benign"], index_map, plugin, cache)
+    assert third is not first
+    assert third["significance"] == "Benign"
+    assert len(cache) == 2
+
+
+def test_the_row_gate_runs_even_when_the_parse_is_cached():
+    """The gate is what makes ClinVar attach to one gene and not its neighbour,
+    so it must stay outside the reuse — otherwise caching would hand the second
+    gene the first one's annotation."""
+    index_map = index_map_for("Allele", "SYMBOL", "Probe_SIG", "Probe_GENEINFO")
+    spec = ParsingSpec(plugins=[{
+        "plugin": "probe", "scope": "transcript", "output": "probe",
+        "csq_fields": ["Probe_SIG", "Probe_GENEINFO"],
+        "applies_to": {"column": "SYMBOL", "listed_in": "Probe_GENEINFO",
+                       "item_pattern": "^(?P<key>[^:]+)"},
+        "targets": [{"field": "significance", "from": "Probe_SIG",
+                     "transform": "scalar", "type": "string"}],
+    }])
+    plugin = spec.plugin("probe")
+    cache: dict = {}
+    row = ["A", "SMARCB1", "Pathogenic", "SMARCB1:6598"]
+    assert apply_plugin_spec(row, index_map, plugin, cache) is not None
+    neighbour = ["A", "DERL3", "Pathogenic", "SMARCB1:6598"]
+    assert apply_plugin_spec(neighbour, index_map, plugin, cache) is None
+
+
+# --- one equality, spelled once ------------------------------------------- #
+
+
+def _drop_probe(drop_when, **columns):
+    """A one-target plugin whose elements are filtered by `drop_when`."""
+    index_map = index_map_for("Allele", "Recs")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Recs"],
+                "targets": [
+                    {
+                        "field": "rows",
+                        "from": "Recs",
+                        "transform": "records",
+                        "sep": "&",
+                        "item_sep": "~",
+                        "as": [
+                            {"field": "kind", "type": "string"},
+                            {"field": "flag", "type": "int"},
+                            {"field": "allele", "type": "string"},
+                        ],
+                        "drop_when": drop_when,
+                    }
+                ],
+            }
+        ]
+    )
+    out = apply_plugin_spec(
+        [columns["allele"], columns["recs"]], index_map, spec.plugin("probe")
+    )
+    return out["rows"] if out else []
+
+
+def test_a_literal_match_reads_a_number_as_the_spec_wrote_it():
+    """A spec states its right-hand side in JSON and cannot know which Python
+    type the transform coerced the field to. `only_if` used to compare the raw
+    values, so `equals: "1"` against an int field matched nothing and the rule
+    it guarded silently never applied -- while the identical predicate on a
+    join's `where` worked, because that one stringified."""
+    rows = _drop_probe(
+        {"null": "kind", "only_if": {"field": "flag", "equals": "1"}},
+        allele="A",
+        recs="~1~A&keep~0~A",
+    )
+    # The flagged row has a null `kind` and the rule applies to it, so it goes.
+    # The unflagged one keeps its null `kind`, because the rule is not for it.
+    assert [r["flag"] for r in rows] == [0]
+
+
+def test_a_column_match_never_matches_an_absent_field():
+    """Absent is not equal to anything -- including an absent column."""
+    rows = _drop_probe(
+        {"unless_matches": {"field": "allele", "equals_column": "Allele"}},
+        allele="",
+        recs="keep~1~A",
+    )
+    assert rows == []
+    # ...and where the column does have a value, the matching row stays.
+    rows = _drop_probe(
+        {"unless_matches": {"field": "allele", "equals_column": "Allele"}},
+        allele="A",
+        recs="keep~1~A&drop~1~T",
+    )
+    assert [r["kind"] for r in rows] == ["keep"]
+
+
+def test_a_when_can_test_a_column_that_is_not_amp_separated():
+    """`when` and `applies_to` are the same membership test, but only one of
+    them had grown a separator -- so a `when` against a '+'-separated column
+    could not be written, and would have quietly found nothing."""
+    index_map = index_map_for("Sig", "Val")
+    spec = ParsingSpec(
+        plugins=[
+            {
+                "plugin": "probe",
+                "scope": "allele",
+                "output": "probe",
+                "csq_fields": ["Sig", "Val"],
+                "targets": [
+                    {
+                        "field": "value",
+                        "from": "Val",
+                        "transform": "scalar",
+                        "type": "string",
+                        "when": {"field": "Sig", "includes": "Conflicting", "sep": "+"},
+                    }
+                ],
+            }
+        ]
+    )
+    got = apply_plugin_spec(["Benign+Conflicting", "v"], index_map, spec.plugin("probe"))
+    assert got["value"] == "v"
+    # ...and it is membership, not a substring: the whole entry must match.
+    got = apply_plugin_spec(["Conflicting_more", "v"], index_map, spec.plugin("probe"))
+    assert got is None or got.get("value") is None

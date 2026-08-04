@@ -498,7 +498,10 @@ def _assembled(name="human_grch38"):
 
 
 def _clinvar_conditions_table(doc):
-    """The first conditions table of the phenotypes option."""
+    """The first conditions table of the phenotypes option.
+
+    It iterates `clinvar.records` -- one row per RCV, ClinVar's own
+    variant+condition aggregate -- with the CLNDN names joined onto it."""
     for option in doc["display"]["options"]:
         if option["option_id"] != "phenotypes":
             continue
@@ -507,7 +510,7 @@ def _clinvar_conditions_table(doc):
             block = stack.pop(0)
             if block.get("kind") == "group":
                 stack = list(block.get("blocks", [])) + stack
-            elif block.get("from") == "clinvar.conditions":
+            elif block.get("from") == "clinvar.records":
                 return block
     raise AssertionError("the conditions table is no longer where this expects")
 

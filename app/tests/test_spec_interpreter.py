@@ -240,7 +240,7 @@ def test_clinvar_non_conflicting_ignores_breakdown():
     assert run("clinvar", csq) == {
         "id": "12345",
         "significance": ["Pathogenic"],
-        "conditions": [],
+        "records": [],
         "classification_summary": [
             {
                 "classification": "Pathogenic",
@@ -265,7 +265,7 @@ def test_clinvar_when_matches_list_membership_not_substring():
     assert run("clinvar", csq) == {
         "id": "678",
         "significance": ["Not_" + CONFLICTING],
-        "conditions": [],
+        "records": [],
         "classification_summary": [
             {
                 "classification": "Not_" + CONFLICTING + "",
@@ -1191,7 +1191,7 @@ def test_lookup_needs_all_three_of_by_into_and_table():
         PostOp.model_validate({"op": "dedup", "table": "go_namespaces"})
     # `into` is shared with concat and curie_link now, so it is rejected only for
     # the ops that write no field at all.
-    with pytest.raises(ValidationError, match="belongs to lookup, concat, curie_link or collapse"):
+    with pytest.raises(ValidationError, match="belongs to lookup, concat, curie_link, collapse or"):
         PostOp.model_validate({"op": "dedup", "into": "namespace"})
 
 

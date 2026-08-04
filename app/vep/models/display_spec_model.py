@@ -320,6 +320,11 @@ class ValuePiece(BaseModel):
     # reading as three words on the page. An unmapped value keeps the data's own
     # wording, as a heading's `labels` does — only the odd one out needs saying.
     labels: dict[str, str] | None = None
+    # A prefix before the value, for a meta value like OpenTargets' "L2G 0.42"
+    # or a ClinVar submitter's own wording ("filed as ..."). On the base rather
+    # than on a cell: prefixing is a thing a *value* does, whichever of the
+    # three is rendering it.
+    label: str | None = None
     # Keep the value on one line, so its column is never sized below it. For an
     # identifier: a link's icon and its id are one thing, and a break between
     # them strands the icon on the row above. Opt-in, never a blanket rule for
@@ -344,10 +349,9 @@ class ValuePiece(BaseModel):
 class CellSpec(ValuePiece):
     """One cell of a repeated item (see `DisplayListBlock`).
 
-    Everything a value can do, plus a `label` prefixing it ("L2G 0.42").
+    Everything a value can do, and nothing more — the last thing that was its
+    own, a `label` prefix, moved to the base once an item line needed one too.
     """
-
-    label: str | None = None
 
     def item_field_refs(self) -> Iterator[str]:
         """Every item field this cell reads: its `from` plus any `{field}`

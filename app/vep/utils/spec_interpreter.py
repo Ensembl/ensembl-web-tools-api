@@ -215,6 +215,56 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                     else operation.sep.join(str(part) for part in parts)
                 )
             continue
+        if operation.op == "default":
+            for row in rows:
+                if row.get(operation.by) in (None, ""):
+                    row[operation.by] = operation.value
+            continue
+        if operation.op == "only_if_differs":
+            def _leaves(row, path):
+                """Every element at a dotted path, however deep."""
+                nodes = [row]
+                for step in path.split("."):
+                    nxt = []
+                    for node in nodes:
+                        value = node.get(step) if isinstance(node, dict) else None
+                        if isinstance(value, list):
+                            nxt.extend(value)
+                        elif value is not None:
+                            nxt.append(value)
+                    nodes = nxt
+                return nodes
+
+            for row in rows:
+                shown = {
+                    str(v).casefold()
+                    for v in _leaves(row, operation.against)
+                    if not isinstance(v, (dict, list))
+                }
+                # Copy: a join attaches the same object to every row it matched,
+                # so writing through it would mark the others too.
+                holder, _, last = operation.in_.rpartition(".")
+                for parent in _leaves(row, holder) if holder else [row]:
+                    if not isinstance(parent, dict):
+                        continue
+                    items = parent.get(last)
+                    if not isinstance(items, list):
+                        continue
+                    parent[last] = [
+                        {
+                            **item,
+                            operation.into: (
+                                item.get(operation.field)
+                                if str(item.get(operation.field)).casefold() not in shown
+                                and item.get(operation.field) is not None
+                                else None
+                            ),
+                        }
+                        if isinstance(item, dict)
+                        else item
+                        for item in items
+                    ]
+            continue
         if operation.op == "collapse":
             # Rows identical but for `fields` are one row with those fields
             # gathered. Keyed on everything else, so what "identical" means is
@@ -600,6 +650,39 @@ def _join_key(value, pattern, case_insensitive: bool) -> str | None:
     return key.casefold() if case_insensitive else key
 
 
+def _left_keys(row: dict, join) -> list[str]:
+    """The key(s) a left row joins on — usually one, sometimes several.
+
+    A left row can be about more than one thing. A dotted `left_key` reads a
+    subfield of a list the row already carries, and `left_key_sep` splits a
+    field that packs several values into one string, with `left_key_pattern`
+    taking the comparable part of each — the mirror of the right-hand options.
+
+    ClinVar needs both: a submission is filed under one RCV, and an RCV covers
+    up to five conditions listed as `MedGen:C0266313:Renal_tubular_dysgenesis`
+    in a single '+'-joined field.
+    """
+    field, _, sub = join.left_key.partition(".")
+    value = row.get(field)
+    values = (
+        [item.get(sub) for item in value or [] if isinstance(item, dict)]
+        if sub
+        else [value]
+    )
+    if join.left_key_sep:
+        values = [
+            part
+            for raw in values
+            for part in (str(raw).split(join.left_key_sep) if raw is not None else [])
+        ]
+    keys = []
+    for raw in values:
+        key = _join_key(raw, join.left_key_pattern, join.case_insensitive)
+        if key is not None and key not in keys:
+            keys.append(key)
+    return keys
+
+
 def _apply_joins(built: dict, joins) -> None:
     """Stitch the plugin's lists together in place (see JoinSpec)."""
     for join in joins or []:
@@ -620,8 +703,12 @@ def _apply_joins(built: dict, joins) -> None:
                 if key is not None:
                     buckets.setdefault(key, []).append(row)
         for row in left:
-            key = _join_key(row.get(join.left_key), None, join.case_insensitive)
-            matches = buckets.get(key, []) if key is not None else []
+            matches = []
+            for key in _left_keys(row, join):
+                for candidate in buckets.get(key, []):
+                    # A row reachable by two keys is still one match.
+                    if not any(candidate is seen for seen in matches):
+                        matches.append(candidate)
             # A key can be ambiguous on its own (one condition name under two
             # classification types); the extra equalities disambiguate it.
             for left_field, right_field in (join.also_match or {}).items():

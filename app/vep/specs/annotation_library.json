@@ -315,10 +315,11 @@
               }
             ],
             "item_fields": [
-              "names",
+              "name",
+              "ids",
               "type",
-              "classifications",
-              "records"
+              "id_url",
+              "id_curie"
             ],
             "decode": true,
             "post": [
@@ -341,7 +342,8 @@
                   "Human_Phenotype_Ontology": "https://hpo.jax.org/browse/term/HP:{id}"
                 }
               }
-            ]
+            ],
+            "join_source": true
           },
           {
             "field": "classification_summary",
@@ -495,6 +497,10 @@
               {
                 "field": "contributes",
                 "type": "int"
+              },
+              {
+                "field": "rcv",
+                "type": "string"
               }
             ],
             "item_fields": [
@@ -513,9 +519,16 @@
               "condition",
               "condition_id",
               "pmid",
-              "contributes"
+              "contributes",
+              "rcv",
+              "filed_as"
             ],
             "post": [
+              {
+                "op": "default",
+                "by": "classification",
+                "value": "none"
+              },
               {
                 "op": "sort",
                 "by": "contributes",
@@ -559,38 +572,39 @@
               "classification_type",
               "review_status",
               "classification",
-              "condition"
+              "condition",
+              "names",
+              "classifications",
+              "contributing"
             ],
-            "join_source": true
+            "join_source": false
           }
         ],
         "joins": [
           {
-            "into": "conditions",
-            "from": "submissions",
-            "left_key": "name",
-            "right_key": "condition",
-            "right_key_sep": "+",
+            "into": "records",
+            "from": "conditions",
+            "left_key": "condition",
+            "left_key_sep": "+",
+            "left_key_pattern": "^(?:[^:]+:[^:]+:)?(?P<key>.*)$",
+            "right_key": "name",
             "case_insensitive": true,
             "also_match": {
-              "type": "classification_type"
+              "classification_type": "type"
+            },
+            "as": "names"
+          },
+          {
+            "into": "records",
+            "from": "submissions",
+            "left_key": "rcv",
+            "right_key": "rcv",
+            "also_match": {
+              "classification_type": "classification_type"
             },
             "as": "classifications",
             "count_by": "classification",
             "nest_as": "submitters"
-          },
-          {
-            "into": "conditions",
-            "from": "records",
-            "left_key": "name",
-            "right_key": "condition",
-            "right_key_pattern": "^(?:[^:]+:[^:]+:)?(?P<key>.*)$",
-            "right_key_sep": "+",
-            "case_insensitive": true,
-            "also_match": {
-              "type": "classification_type"
-            },
-            "as": "records"
           },
           {
             "into": "classification_summary",
@@ -611,14 +625,12 @@
             }
           },
           {
-            "into": "conditions",
+            "into": "records",
             "from": "submissions",
-            "left_key": "name",
-            "right_key": "condition",
-            "right_key_sep": "+",
-            "case_insensitive": true,
+            "left_key": "rcv",
+            "right_key": "rcv",
             "also_match": {
-              "type": "classification_type"
+              "classification_type": "classification_type"
             },
             "where": {
               "field": "contributes",
@@ -629,18 +641,15 @@
         ],
         "post_joins": [
           {
-            "target": "conditions",
-            "op": "collapse",
-            "fields": [
-              "name",
-              "ids",
-              "id_url",
-              "id_curie"
-            ],
-            "into": "names"
+            "target": "records",
+            "op": "only_if_differs",
+            "in": "classifications.submitters",
+            "field": "condition",
+            "against": "names.name",
+            "into": "filed_as"
           },
           {
-            "target": "conditions",
+            "target": "records",
             "op": "sort",
             "by": "contributing",
             "desc": true,
@@ -2507,9 +2516,9 @@
               {
                 "kind": "table",
                 "when": {
-                  "present": "clinvar.conditions"
+                  "present": "clinvar.records"
                 },
-                "from": "clinvar.conditions",
+                "from": "clinvar.records",
                 "truncate": {
                   "visible_count": 3
                 },
@@ -2544,6 +2553,11 @@
                               "template": "https://europepmc.org/article/MED/{value}"
                             },
                             "nowrap": true
+                          },
+                          {
+                            "from": "filed_as",
+                            "format": "phenotype",
+                            "label": "filed as"
                           }
                         ],
                         "emphasis": {
@@ -2574,19 +2588,16 @@
                   },
                   {
                     "label": "ClinVar record",
-                    "from": "records",
-                    "items": {
-                      "from": "rcv",
-                      "link": {
-                        "kind": "external",
-                        "template": "https://www.ncbi.nlm.nih.gov/clinvar/{value}/"
-                      },
-                      "nowrap": true
-                    }
+                    "from": "rcv",
+                    "link": {
+                      "kind": "external",
+                      "template": "https://www.ncbi.nlm.nih.gov/clinvar/{value}/"
+                    },
+                    "nowrap": true
                   }
                 ],
                 "where": {
-                  "field": "type",
+                  "field": "classification_type",
                   "equals": "Germline"
                 },
                 "indent": true
@@ -2631,9 +2642,9 @@
               {
                 "kind": "table",
                 "when": {
-                  "present": "clinvar.conditions"
+                  "present": "clinvar.records"
                 },
-                "from": "clinvar.conditions",
+                "from": "clinvar.records",
                 "truncate": {
                   "visible_count": 3
                 },
@@ -2668,6 +2679,11 @@
                               "template": "https://europepmc.org/article/MED/{value}"
                             },
                             "nowrap": true
+                          },
+                          {
+                            "from": "filed_as",
+                            "format": "phenotype",
+                            "label": "filed as"
                           }
                         ],
                         "emphasis": {
@@ -2698,19 +2714,16 @@
                   },
                   {
                     "label": "ClinVar record",
-                    "from": "records",
-                    "items": {
-                      "from": "rcv",
-                      "link": {
-                        "kind": "external",
-                        "template": "https://www.ncbi.nlm.nih.gov/clinvar/{value}/"
-                      },
-                      "nowrap": true
-                    }
+                    "from": "rcv",
+                    "link": {
+                      "kind": "external",
+                      "template": "https://www.ncbi.nlm.nih.gov/clinvar/{value}/"
+                    },
+                    "nowrap": true
                   }
                 ],
                 "where": {
-                  "field": "type",
+                  "field": "classification_type",
                   "not_equals": "Germline"
                 },
                 "indent": true

@@ -174,15 +174,34 @@ class PostOp(BaseModel):
             order, and a group of one collapses too, so the display reads one
             shape rather than two.
 
+    default  fill a field where the source left it empty. ClinVar accepts a
+            submission with no classification at all ("no classification
+            provided"), and grouping by classification would otherwise have
+            nothing to file it under and drop it — so it becomes an explicit
+            "none" that the reader can see, hung off its own condition and RCV
+            like any other. `by` is the field, `value` what to put there.
+
+    only_if_differs  keep a nested element's field only where the row does not
+            already show that value, writing it to `into` (null otherwise, so
+            the display drops it). ClinVar's submitters file against their own
+            wording — "Renal tubular dysgenesis of genetic origin" where the
+            aggregate says "Renal tubular dysgenesis" — and that is worth
+            showing exactly when it is not what the reader can already see.
+            `in` is the dotted path to the nested elements, `field` what to
+            compare, `against` the dotted path to the values the row shows.
+            Elements are copied, never mutated: a join attaches the same object
+            to every row it matched.
+
     `exclude` is a post-op rather than a `drop_when` mode because `drop_when`
     takes exactly one mode and the phenotype targets already spend theirs on the
     per-allele rule.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     op: Literal[
-        "dedup", "sort", "exclude", "lookup", "concat", "curie_link", "collapse"
+        "dedup", "sort", "exclude", "lookup", "concat", "curie_link", "collapse",
+        "only_if_differs", "default",
     ]
     by: str | None = None
     desc: bool = False
@@ -194,6 +213,12 @@ class PostOp(BaseModel):
     table: str | None = None
     # `concat`, and `collapse` (there the fields that may differ).
     fields: list[str] | None = None
+    # `default` only: what to put where the source left the field empty.
+    value: str | None = None
+    # `only_if_differs` only.
+    in_: str | None = Field(default=None, alias="in")
+    field: str | None = None
+    against: str | None = None
     sep: str = ""
     # `curie_link` only.
     prefer: list[str] | None = None
@@ -224,13 +249,28 @@ class PostOp(BaseModel):
             raise ValueError("concat requires `fields` and `into`")
         if self.op == "concat" and len(self.fields) < 2:
             raise ValueError("concat needs at least two `fields`")
+        if self.op == "default" and not (self.by and self.value):
+            raise ValueError("default requires `by` and `value`")
+        if self.op != "default" and self.value is not None:
+            raise ValueError("`value` belongs to default")
+        if self.op == "only_if_differs" and not (
+            self.in_ and self.field and self.against and self.into
+        ):
+            raise ValueError(
+                "only_if_differs requires `in`, `field`, `against` and `into`"
+            )
+        if self.op != "only_if_differs" and (self.in_ or self.field or self.against):
+            raise ValueError("`in`/`field`/`against` belong to only_if_differs")
         if self.op == "collapse" and not (self.fields and self.into):
             raise ValueError("collapse requires `fields` and `into`")
         if self.op not in ("concat", "collapse") and self.fields is not None:
             raise ValueError("`fields` belongs to concat or collapse")
-        if self.op not in ("lookup", "concat", "curie_link", "collapse") and self.into:
+        if self.op not in (
+            "lookup", "concat", "curie_link", "collapse", "only_if_differs"
+        ) and self.into:
             raise ValueError(
-                "`into` belongs to lookup, concat, curie_link or collapse"
+                "`into` belongs to lookup, concat, curie_link, collapse or "
+                "only_if_differs"
             )
         return self
 
@@ -501,6 +541,12 @@ class JoinSpec(BaseModel):
     right_key: str
     # Applied to the right-hand key before comparing; needs a `key` group.
     right_key_pattern: str | None = None
+    # The same two, for the *left* key. A left row can be about several things
+    # at once: one ClinVar RCV record covers up to five conditions, listed in
+    # one '+'-joined field as `MedGen:C0266313:Renal_tubular_dysgenesis`, so the
+    # separator splits them and the pattern takes the name off each.
+    left_key_sep: str | None = None
+    left_key_pattern: str | None = None
     # When one right-hand row belongs under several left-hand rows, the
     # separator its key list uses. ClinVar files one submission (or one RCV
     # record) against several conditions at once, '+'-joined; the row then

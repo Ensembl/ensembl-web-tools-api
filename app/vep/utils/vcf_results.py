@@ -1207,10 +1207,19 @@ def _get_results_from_vcfpy(
                 alt_allele_strings = [_alt_value(alt) for alt in record.ALT]
             else:
                 csq_strings = record.INFO["CSQ"]
-                alt_allele_strings = list(set([
+                # `dict.fromkeys`, not `set`: both deduplicate, but a set's
+                # iteration order depends on string hashes, which Python
+                # randomises per process. The alleles came back in a different
+                # order in every worker and after every restart, and this order
+                # is the order they are displayed in — so a variant's alleles
+                # visibly rearranged themselves for no reason, and anything
+                # diffing or caching a response saw changes that were not there.
+                # First appearance in the CSQ rows is the natural order, and it
+                # matches the no-CSQ branch above, which follows record.ALT.
+                alt_allele_strings = list(dict.fromkeys(
                     csq_string.split("|")[prediction_index_map["Allele"]]
                     for csq_string in csq_strings
-                ]))
+                ))
 
             sv = _structural_info(record)
 

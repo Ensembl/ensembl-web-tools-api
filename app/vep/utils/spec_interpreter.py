@@ -644,7 +644,10 @@ def _row_in_scope(csq_values, index_map, scope) -> bool:
 
 
 def apply_plugin_spec(
-    csq_values: list[str], index_map: dict[str, int], spec: PluginSpec
+    csq_values: list[str],
+    index_map: dict[str, int],
+    spec: PluginSpec,
+    cache: dict | None = None,
 ) -> dict | None:
     """One plugin's annotation for this CSQ entry, or None if there is nothing.
 
@@ -657,6 +660,20 @@ def apply_plugin_spec(
 
     if not _row_in_scope(csq_values, index_map, spec.applies_to):
         return None
+
+    # A plugin reads only its own columns, and VEP repeats those on every CSQ
+    # row of a variant — so the annotation is the same for all of them, and a
+    # transcript-scoped plugin was parsing it once per row to get one answer.
+    # ClinVar did that 936 times over a 50-record file to produce 61 distinct
+    # results. Keyed on the columns the plugin actually reads, so two rows that
+    # differ only in the ones it ignores share the work. The row gate above is
+    # deliberately outside this: it is what legitimately differs per row.
+    key = None
+    if cache is not None:
+        key = (spec.plugin, tuple(_column(csq_values, c, index_map)
+                                  for c in spec.csq_fields))
+        if key in cache:
+            return cache[key]
 
     # Raw presence, deliberately: a literal 'NA' counts as present here, which
     # is what the hand-written parsers do.
@@ -688,6 +705,8 @@ def apply_plugin_spec(
     if spec.require_any_output and not any(
         _is_present(output.get(field)) for field in spec.require_any_output
     ):
-        return None
+        output = None
 
+    if key is not None:
+        cache[key] = output
     return output

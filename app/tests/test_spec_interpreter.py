@@ -2072,3 +2072,55 @@ def test_decoding_visits_a_shared_row_once():
     )
     nested = result["conditions"][0]["records"][0]
     assert any(record is nested for record in result["records"])
+
+
+def test_a_cache_makes_a_plugin_parse_once_for_identical_columns():
+    """VEP repeats a plugin's own columns on every CSQ row of a variant, so a
+    transcript-scoped plugin parsed the same annotation once per row — 936
+    parses over a 50-record file to produce 61 distinct results, and the whole
+    results parse measured 265ms against 95ms with this.
+
+    Keyed on the columns the plugin *reads*, so rows differing only in the ones
+    it ignores share the work."""
+    index_map = index_map_for("Allele", "SYMBOL", "Probe_SIG")
+    spec = ParsingSpec(plugins=[{
+        "plugin": "probe", "scope": "transcript", "output": "probe",
+        "csq_fields": ["Probe_SIG"],
+        "targets": [{"field": "significance", "from": "Probe_SIG",
+                     "transform": "scalar", "type": "string"}],
+    }])
+    plugin = spec.plugin("probe")
+    cache: dict = {}
+    first = apply_plugin_spec(["A", "BRCA2", "Pathogenic"], index_map, plugin, cache)
+    # a different row of the same variant: SYMBOL differs, the plugin's own
+    # column does not
+    second = apply_plugin_spec(["A", "ZAR1L", "Pathogenic"], index_map, plugin, cache)
+    assert first is second
+    assert len(cache) == 1
+
+    # a genuinely different value is parsed in its own right
+    third = apply_plugin_spec(["A", "BRCA2", "Benign"], index_map, plugin, cache)
+    assert third is not first
+    assert third["significance"] == "Benign"
+    assert len(cache) == 2
+
+
+def test_the_row_gate_runs_even_when_the_parse_is_cached():
+    """The gate is what makes ClinVar attach to one gene and not its neighbour,
+    so it must stay outside the reuse — otherwise caching would hand the second
+    gene the first one's annotation."""
+    index_map = index_map_for("Allele", "SYMBOL", "Probe_SIG", "Probe_GENEINFO")
+    spec = ParsingSpec(plugins=[{
+        "plugin": "probe", "scope": "transcript", "output": "probe",
+        "csq_fields": ["Probe_SIG", "Probe_GENEINFO"],
+        "applies_to": {"column": "SYMBOL", "listed_in": "Probe_GENEINFO",
+                       "item_pattern": "^(?P<key>[^:]+)"},
+        "targets": [{"field": "significance", "from": "Probe_SIG",
+                     "transform": "scalar", "type": "string"}],
+    }])
+    plugin = spec.plugin("probe")
+    cache: dict = {}
+    row = ["A", "SMARCB1", "Pathogenic", "SMARCB1:6598"]
+    assert apply_plugin_spec(row, index_map, plugin, cache) is not None
+    neighbour = ["A", "DERL3", "Pathogenic", "SMARCB1:6598"]
+    assert apply_plugin_spec(neighbour, index_map, plugin, cache) is None

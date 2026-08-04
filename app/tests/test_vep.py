@@ -312,3 +312,60 @@ def test_stream_vep_tsv(tmp_path):
     intergenic = dict(zip(header, data[1]))
     assert intergenic["Consequence"] == "intergenic_variant"
     assert intergenic["Location"] == "19:82829"
+
+
+# --- a variant's alleles come back in a stable order --------------------------
+
+
+def _multi_allele_vcf(alleles):
+    """One record whose CSQ rows name `alleles`, each twice (VEP repeats a row
+    per transcript), in the order given."""
+    rows = []
+    for allele in alleles:
+        for feature in ("ENST00000001.1", "ENST00000002.1"):
+            rows.append(
+                f"{allele}|upstream_gene_variant|MODIFIER|FAM138F|ENSG00000282591"
+                f"|Transcript|{feature}|lncRNA||||||||||rs1|C|C/{allele}"
+                "|4978|-1||HGNC|HGNC:33581|YES|||0.1||||||||"
+            )
+    return (
+        "##fileformat=VCFv4.2\n"
+        f'##INFO=<ID=CSQ,Number=.,Type=String,Description="{CSQ_DESCRIPTION}">\n'
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        f"chr19\t82664\t.\tC\t{','.join(alleles)}\t50\tPASS\tCSQ={','.join(rows)}\n"
+    )
+
+
+def test_alleles_keep_the_order_they_appear_in():
+    """The alleles were deduplicated through a `set`, whose iteration order
+    depends on string hashes — which Python randomises per process. So a
+    multi-allele variant's alleles came back in a different order in every
+    worker and after every restart, and this order is the order they are
+    displayed in.
+
+    Six alleles: a hash-ordered set would reproduce first-appearance order
+    about once in 720 runs, so this fails on the old code and cannot pass by
+    luck in CI.
+    """
+    alleles = ["T", "A", "G", "TT", "AA", "GG"]
+    # presliced: the stream already holds exactly this page, which skips the
+    # page-bounds guard (`page * page_size <= total`) that makes the unrelated
+    # skipped test above return nothing.
+    results = get_results_from_stream(
+        100, 1, 1, StringIO(_multi_allele_vcf(alleles)), presliced=True
+    )
+    assert [
+        a.allele_sequence for a in results.variants[0].alternative_alleles
+    ] == alleles
+
+
+def test_repeated_alleles_are_still_deduplicated():
+    """Order is the fix; deduplication is what it must not lose. VEP emits one
+    CSQ row per transcript, so every allele appears many times over."""
+    results = get_results_from_stream(
+        100, 1, 1, StringIO(_multi_allele_vcf(["T", "A", "T", "G", "A"])),
+        presliced=True,
+    )
+    assert [
+        a.allele_sequence for a in results.variants[0].alternative_alleles
+    ] == ["T", "A", "G"]

@@ -1131,11 +1131,18 @@ def get_results_from_path(
     total = vcf_info.variant_count
     page = max(page, 1) # normalize values
     page_size = min(max(page_size, 0), total)
-    row_offset = min(page * page_size, total) + vcf_info.header_count
+    # This page's own bounds. `_read_row_slice` returns the lines *ending* at
+    # `row_offset`, so the count it is given is what decides where the page
+    # starts — and a last page shorter than `page_size` must ask for only the
+    # records that remain. Asking for a full one returned a full page ending at
+    # the final record, i.e. records the previous page had already shown.
+    first_record = (page - 1) * page_size
+    last_record = min(page * page_size, total)
+    row_offset = last_record + vcf_info.header_count
     vcf_headers = subprocess.check_output(  # fetch all header rows
         ["bcftools", "view", "-h", str(vcf_path)], text=True
     )
-    vcf_slice = _read_row_slice(vcf_path, row_offset, page_size)
+    vcf_slice = _read_row_slice(vcf_path, row_offset, last_record - first_record)
     vcf_stream = StringIO(vcf_headers + vcf_slice)
 
     return _with_display_panels(
@@ -1185,7 +1192,13 @@ def _get_results_from_vcfpy(
     # populate variants page. `presliced` means the stream already contains
     # exactly this page's rows (the index seek path), so the page-bounds guard —
     # which the scan path needs to return empty past the end — is skipped.
-    if presliced or page*page_size <= total:
+    #
+    # The guard asks where the page *starts*, not where it ends. Asking
+    # `page * page_size <= total` treated a page that merely runs past the last
+    # record as being past the end, so the final partial page came back empty:
+    # 21 records at 5 a page served four pages and lost the 21st. It is the
+    # first record that decides whether a page exists at all.
+    if presliced or (page - 1) * page_size < total:
         for record in vcf_records:
             if record is None:
                 break

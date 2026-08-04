@@ -185,7 +185,6 @@ def test_get_alt_allele_details_intergenic():
         == "intergenic_variant"
     )
 
-@pytest.mark.skip(reason="Unknown bug")
 def test_get_results_from_stream():
     variant_count = 3
     results = get_results_from_stream(100, 1, variant_count, StringIO(TEST_VCF))
@@ -235,14 +234,42 @@ def test_paging():
     assert(results.variants[0].name == "id_16")
     assert(results.variants[-1].name == "id_20")
 
-    #results = get_results_from_path(5, 5, VCF_PATH)
-    #assert(results.variants[0].name == "id_21")
-    #assert(len(results.variants) == 1)
+    # The last page holds the one record that does not fill it. This used to
+    # come back empty — the guard asked whether the page *ended* within the
+    # file — so it was commented out rather than failing.
+    results = get_results_from_path(5, 5, VCF_PATH)
+    assert(results.variants[0].name == "id_21")
+    assert(len(results.variants) == 1)
 
 def test_negative_paging():
     results = get_results_from_path(5, 6, VCF_PATH)
     assert(len(results.variants) == 0)
     assert(results.metadata.pagination.total == 21)
+
+
+def test_every_record_is_reachable_exactly_once_by_paging():
+    """The boundary the old guard got wrong, stated as a whole: paging through
+    a file whose record count is not a multiple of the page size must yield
+    every record, once, and then stop.
+
+    21 records at 5 a page is four full pages and a remainder of one. The
+    remainder was lost, and reaching it naively would have served a full page
+    ending at the last record — five records, four of them repeats of page 4.
+    """
+    seen = []
+    for page in range(1, 8):
+        seen += [v.name for v in get_results_from_path(5, page, VCF_PATH).variants]
+    assert seen == [f"id_{n:02}" for n in range(1, 22)]
+
+
+def test_a_page_larger_than_the_file_is_one_page():
+    """Asking for more per page than the file holds is the common case for a
+    small result set — the whole file on page 1, nothing after it."""
+    first = get_results_from_path(100, 1, VCF_PATH)
+    assert len(first.variants) == 21
+    assert first.variants[0].name == "id_01"
+    assert first.variants[-1].name == "id_21"
+    assert len(get_results_from_path(100, 2, VCF_PATH).variants) == 0
 
 
 @pytest.mark.skip(reason="Used to test against a real VCF file")
@@ -348,11 +375,8 @@ def test_alleles_keep_the_order_they_appear_in():
     luck in CI.
     """
     alleles = ["T", "A", "G", "TT", "AA", "GG"]
-    # presliced: the stream already holds exactly this page, which skips the
-    # page-bounds guard (`page * page_size <= total`) that makes the unrelated
-    # skipped test above return nothing.
     results = get_results_from_stream(
-        100, 1, 1, StringIO(_multi_allele_vcf(alleles)), presliced=True
+        100, 1, 1, StringIO(_multi_allele_vcf(alleles))
     )
     assert [
         a.allele_sequence for a in results.variants[0].alternative_alleles
@@ -363,8 +387,7 @@ def test_repeated_alleles_are_still_deduplicated():
     """Order is the fix; deduplication is what it must not lose. VEP emits one
     CSQ row per transcript, so every allele appears many times over."""
     results = get_results_from_stream(
-        100, 1, 1, StringIO(_multi_allele_vcf(["T", "A", "T", "G", "A"])),
-        presliced=True,
+        100, 1, 1, StringIO(_multi_allele_vcf(["T", "A", "T", "G", "A"]))
     )
     assert [
         a.allele_sequence for a in results.variants[0].alternative_alleles

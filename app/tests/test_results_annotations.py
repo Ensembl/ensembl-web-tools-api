@@ -8,8 +8,17 @@ response; apply_plugin_spec's own correctness is covered by
 test_spec_interpreter.
 """
 
+import os
+
+from pydantic import FilePath
+
+from app.vep.utils import vcf_results
 from app.vep.utils.spec_interpreter import apply_plugin_spec
-from app.vep.utils.spec_loader import load_merged_spec
+from app.vep.utils.spec_loader import (
+    SPEC_SIDECAR_FILE,
+    load_merged_spec,
+    write_spec_sidecar,
+)
 from app.vep.utils.vcf_results import _gate_af_columns, _get_alt_allele_details
 
 SPEC = load_merged_spec("human_grch38").parsing
@@ -156,3 +165,69 @@ def test_af_columns_gate_is_a_no_op_without_a_spec():
     _gate_af_columns([allele], None, {"gnomAD_exomes_AF_nfe"})
     assert set(gnomad.data["populations"]) == {"nfe", "eas", "afr"}
     assert gnomad.data["overall"] == 0.01
+
+
+# --- the pinned spec is cached per file ---------------------------------------
+
+
+def _pin(tmp_path, spec):
+    """A stand-in results VCF with `spec` pinned beside it."""
+    write_spec_sidecar(tmp_path, spec)
+    path = tmp_path / "input_VEP.vcf.gz"
+    path.write_bytes(b"")
+    return FilePath(path)
+
+
+def test_the_pinned_spec_is_read_once_per_file(tmp_path, monkeypatch):
+    """Reading it means parsing and validating a large JSON document, and a
+    single request goes through this twice (`_load_pinned_spec` calls it) before
+    paging asks again for every page."""
+    vcf_results.clear_spec_cache()
+    merged = load_merged_spec("human_grch38")
+    path = _pin(tmp_path, merged)
+
+    reads = []
+    real = vcf_results.load_spec_sidecar
+    monkeypatch.setattr(
+        vcf_results, "load_spec_sidecar",
+        lambda p: (reads.append(p), real(p))[1],
+    )
+
+    first = vcf_results._load_pinned_merged_spec(path)
+    again = vcf_results._load_pinned_merged_spec(path)
+    parsing = vcf_results._load_pinned_spec(path)
+
+    assert len(reads) == 1, f"sidecar read {len(reads)} times, expected 1"
+    assert again is first
+    assert parsing is first.parsing
+
+
+def test_a_rewritten_output_is_never_served_a_stale_spec(tmp_path, monkeypatch):
+    """The key is the file's identity *now*. The dev harness rewrites one fixed
+    path, so a cache that missed a rewrite would serve annotations parsed to the
+    wrong shape — the whole reason the scan cache keys the same way."""
+    vcf_results.clear_spec_cache()
+    merged = load_merged_spec("human_grch38")
+    path = _pin(tmp_path, merged)
+    assert vcf_results._load_pinned_merged_spec(path) is not None
+
+    # The job is regenerated: same path, no sidecar this time.
+    (tmp_path / SPEC_SIDECAR_FILE).unlink()
+    stat = path.stat()
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
+
+    assert vcf_results._load_pinned_merged_spec(path) is None
+
+
+def test_an_unreadable_sidecar_is_not_cached(tmp_path):
+    """A fault that can be repaired without the output changing: caching the
+    failure would keep serving no annotations until the file was touched."""
+    vcf_results.clear_spec_cache()
+    (tmp_path / SPEC_SIDECAR_FILE).write_text("{ not json")
+    path = tmp_path / "input_VEP.vcf.gz"
+    path.write_bytes(b"")
+    path = FilePath(path)
+
+    assert vcf_results._load_pinned_merged_spec(path) is None
+    write_spec_sidecar(tmp_path, load_merged_spec("human_grch38"))
+    assert vcf_results._load_pinned_merged_spec(path) is not None

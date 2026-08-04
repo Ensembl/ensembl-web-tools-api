@@ -517,20 +517,33 @@ class _ScanResult:
     stats: list[results_filters.FilterStat]
 
 
+def _file_identity(vcf_path: FilePath) -> tuple | None:
+    """This file as it is right now, or None if it cannot be stat'd.
+
+    None is the "do not cache" answer, deliberately: without a stat there is no
+    way to notice the file changing under us, and the dev harness rewrites one
+    fixed path — so serving a stale answer is the failure to avoid, not a miss.
+    """
+    try:
+        stat = Path(vcf_path).stat()
+    except OSError:
+        return None
+    return (str(vcf_path), stat.st_mtime_ns, stat.st_size)
+
+
 def _scan_cache_key(
     vcf_path: FilePath, filters: list[results_filters.ResultsFilter]
 ) -> tuple | None:
     """Identity of (this file as it is now, this exact filter set), or None if the
     file cannot be stat'd — in which case nothing is cached rather than risking a
     stale answer."""
-    try:
-        stat = Path(vcf_path).stat()
-    except OSError:
+    identity = _file_identity(vcf_path)
+    if identity is None:
         return None
     condition = tuple(
         (f.field, f.operator, tuple(f.values), f.threshold, f.match) for f in filters
     )
-    return (str(vcf_path), stat.st_mtime_ns, stat.st_size, condition)
+    return identity + (condition,)
 
 
 def _scan_cache_get(key: tuple | None) -> _ScanResult | None:
@@ -693,23 +706,58 @@ def stream_filtered_vcf_text(
     return generate()
 
 
+# ---------------------------------------------------------------------------
+# The pinned spec sidecar, cached per file.
+#
+# It is a job's own frozen copy of the spec, so for a given output it can only
+# change if the file itself is rewritten — yet reading it means parsing and
+# validating a large JSON document, and a single request did that *twice*
+# (`_load_pinned_spec` goes through this one) before paging did it all again for
+# every page. Same key discipline as the scan cache: the file's identity now, so
+# a regenerated output is never served against a stale spec.
+#
+# A None result is cached too. "This output has no sidecar" is an answer worth
+# keeping — otherwise the pre-pin jobs are the ones that re-read on every page.
+# ---------------------------------------------------------------------------
+_SPEC_CACHE_MAX_ENTRIES = 4
+_spec_cache: "OrderedDict[tuple, MergedSpec | None]" = OrderedDict()
+
+
+def clear_spec_cache() -> None:
+    """Drop every cached pinned spec (tests; and anything that rewrites outputs)."""
+    _spec_cache.clear()
+
+
 def _load_pinned_merged_spec(vcf_path: FilePath) -> MergedSpec | None:
     """The whole merged spec document pinned to this job, loaded defensively.
 
     Never raises: an output with no sidecar (pre-dating the pin) or an
     unreadable one returns None.
     """
+    key = _file_identity(vcf_path)
+    if key is not None and key in _spec_cache:
+        _spec_cache.move_to_end(key)
+        return _spec_cache[key]
+
     try:
         merged = load_spec_sidecar(vcf_path)
     except Exception as exc:
         logging.warning(
             "Ignoring unreadable spec sidecar for %s: %s", vcf_path, exc
         )
+        # Not cached: an unreadable sidecar is a fault that may be repaired
+        # without the output changing, and retrying it costs one read.
         return None
     if merged is None:
         logging.debug(
             "No spec sidecar for %s; no annotations will be emitted", vcf_path
         )
+
+    if key is not None:
+        _spec_cache[key] = merged
+        _spec_cache.move_to_end(key)
+        while len(_spec_cache) > _SPEC_CACHE_MAX_ENTRIES:
+            _spec_cache.popitem(last=False)
     return merged
 
 

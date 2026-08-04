@@ -20,6 +20,7 @@ import pytest
 from pydantic import FilePath, ValidationError
 
 from app.vep.models.display_spec_model import (
+    CellSpec,
     DEFAULT_TRUNCATE_VISIBLE_COUNT,
     DisplayGroupBlock,
     DisplayListBlock,
@@ -785,12 +786,16 @@ def test_intact_identifier_columns_link_to_their_own_resources():
 
 
 def test_split_or_prefix_without_a_link_is_rejected_at_load():
-    with pytest.raises(ValidationError, match="only apply to a linked column"):
+    # The rule belongs to a rendered value, so it holds wherever one appears --
+    # a column, a cell of a repeated item, a line of a list-valued cell.
+    with pytest.raises(ValidationError, match="only apply to a linked value"):
         DisplayTableBlock.model_validate({
             "kind": "table",
             "from": "intact.interactions",
             "columns": [{"label": "Participants", "from": "x", "split": "_and_"}],
         })
+    with pytest.raises(ValidationError, match="only apply to a linked value"):
+        CellSpec.model_validate({"from": "x", "link_prefix": "uniprotkb:"})
 
 
 # --- house style: repeating blocks are capped ------------------------------

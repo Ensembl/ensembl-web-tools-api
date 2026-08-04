@@ -1065,3 +1065,28 @@ def test_stars_from_and_template_fields_are_item_refs_too():
         MergedSpec.model_validate(
             _stacking_row({"from": "kind", "template": "{kind} of {total}"})
         )
+
+
+def test_the_fixture_omits_only_what_the_defaults_put_back():
+    """The guard that replaces byte-identity.
+
+    The generated fixture is dumped with `exclude_none`, so it no longer lists
+    every field a model could have. That is only safe if what it leaves out is
+    exactly what loading it back fills in -- otherwise the frontend renders from
+    a document that says less than the spec does.
+
+    Byte-identity used to serve this purpose, but it cannot survive a model
+    gaining a field, which is precisely what converging the value types does.
+
+    `exclude_defaults` would be the tighter filter and is the wrong one: it also
+    drops non-None defaults, and the frontend cannot put those back. The house
+    truncation is one, and dropping it stopped every long list truncating.
+    """
+    payload = SPEC.display_payload()
+    assert payload is not None
+    lean = payload.model_dump(mode="json", by_alias=True, exclude_none=True)
+    # `type(payload)`, not an import: this suite reaches the models as
+    # `app.vep.models...` while the loader builds them as `vep.models...`, and
+    # those are two different classes, on which pydantic equality is always
+    # False.
+    assert type(payload).model_validate(lean) == payload

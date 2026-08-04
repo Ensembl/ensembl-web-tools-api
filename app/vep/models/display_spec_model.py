@@ -257,36 +257,56 @@ class DisplayRow(BaseModel):
         return plugin, field
 
 
-class CellSpec(BaseModel):
-    """One cell of a repeated item (see `DisplayListBlock`).
+class ValuePiece(BaseModel):
+    """One rendered value, wherever it appears.
 
-    `from` is a field *of the list element* (not `plugin.field`) — e.g. `score`
-    on a MaveDB assay. Omit it for a scalar list whose elements are the value
-    themselves (phenotype strings). `link` makes the cell an anchor. An optional
-    `label` prefixes the value ("L2G 0.42").
+    A cell of a repeated item and a line of a list-valued table cell are the
+    same idea, and they had drifted: `labels` and `template` existed on one,
+    `count_from` and `split` on the other, and a rating was named by a field
+    here and stated outright there — differences that came from the order the
+    two grew, not from anything about the values themselves. Two reviewers
+    found that independently from opposite ends.
+
+    So a capability belongs to *a value* and both subtypes have it. What is
+    genuinely particular stays on the subtype: a cell's `label` prefix, an
+    item's `count_from` and `expand`.
+
+    `from` is a field *of the element* (not `plugin.field`) — e.g. `score` on a
+    MaveDB assay. Omit it for a scalar list whose elements are the value
+    themselves (phenotype strings).
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    label: str | None = None
     # `from` is a Python keyword, hence the alias.
     source: str | None = Field(default=None, alias="from")
     format: RowFormat | None = None
     mono: bool = False
     link: LinkSpec | None = None
-    # A star rating in front of this cell, on the scale *named by this field of
-    # the element*. Unlike a row's fixed `stars`, the scale varies per element:
-    # ClinVar reads the same review-status wording differently for a germline
-    # classification and a somatic one, so which scale applies is data.
+    # Build the link from a *sibling* field of the element rather than from the
+    # value's own text. A condition's URL is resolved in the parse (see the
+    # `curie_link` post-op) and lands beside the name, so the name is what the
+    # reader sees and the resolved URL is what it points at.
+    link_from: str | None = None
+    # One value packing several, each rendered and linked in its own right — a
+    # ClinVar submission cites its publications as one '+'-joined list of PMIDs,
+    # and each is its own paper.
+    split: str | None = None
+    # A star rating in front of the value, on the scale named here...
+    stars: str | None = None
+    # ...or on the scale *named by this field of the element*, so sibling lines
+    # can be rated differently: ClinVar reads the same review-status wording one
+    # way for a germline classification and another for a somatic one, so which
+    # scale applies is data.
     stars_from: str | None = None
-    # Which field the rating is *of*, when it is not this cell's own value: the
+    # Which field the rating is *of*, when it is not this value itself: the
     # stars lead the classification but rate the review status behind it, so
     # they read as the confidence in the term they precede.
     stars_of: str | None = None
-    # The cell's text, as a `{field}` template over the element — for a value
-    # that only means something said in words ("1/44 submissions contribute to
-    # aggregate classification"). `from` still says which field must be there
-    # for the cell to render at all.
+    # The text as a `{field}` template over the element — for a value that only
+    # means something said in words ("1/44 submissions contribute to aggregate
+    # classification"). `from` still says which field must be there for it to
+    # render at all.
     template: str | None = None
     # Value -> what to show for it. For a value whose wording is the source's
     # rather than a reader's: ClinVar's classification type is the key a join
@@ -294,8 +314,32 @@ class CellSpec(BaseModel):
     # reading as three words on the page. An unmapped value keeps the data's own
     # wording, as a heading's `labels` does — only the odd one out needs saying.
     labels: dict[str, str] | None = None
-    # Keep the cell on one line, so its column is never sized below it.
+    # Keep the value on one line, so its column is never sized below it. For an
+    # identifier: a link's icon and its id are one thing, and a break between
+    # them strands the icon on the row above. Opt-in, never a blanket rule for
+    # links, because the same table links a condition *name* — prose, which must
+    # be free to wrap.
     nowrap: bool = False
+
+    @model_validator(mode="after")
+    def _split_needs_a_link(self) -> "ValuePiece":
+        # Splitting a value only changes what the reader sees if each part
+        # becomes its own link; without one the parts would run together
+        # exactly as the unsplit string does.
+        if self.split and self.link is None:
+            raise ValueError(
+                f"`split` only applies to a linked value; {self.source!r} has no link"
+            )
+        return self
+
+
+class CellSpec(ValuePiece):
+    """One cell of a repeated item (see `DisplayListBlock`).
+
+    Everything a value can do, plus a `label` prefixing it ("L2G 0.42").
+    """
+
+    label: str | None = None
 
     def item_field_refs(self) -> Iterator[str]:
         """Every item field this cell reads: its `from` plus any `{field}`
@@ -303,6 +347,8 @@ class CellSpec(BaseModel):
         frontend builder owns its inputs)."""
         if self.source:
             yield self.source
+        if self.link_from:
+            yield self.link_from
         if self.stars_from:
             yield self.stars_from
         if self.stars_of:
@@ -561,7 +607,7 @@ class DisplayListBlock(_GatedBlock):
         return plugin, field
 
 
-class ColumnItems(BaseModel):
+class ColumnItems(ValuePiece):
     """One line per element of a list-valued cell.
 
     A column normally shows one value. ClinVar's conditions table has two that
@@ -569,34 +615,18 @@ class ColumnItems(BaseModel):
     every RCV record covering the condition — a condition can have several, and
     they stack.
 
-    `from` names the element field to show, `count_from` a companion count
-    rendered after it in brackets ("Pathogenic (5)"), and `link`/`link_from`
-    work as on the column itself: `{value}` is the displayed value, or the
-    sibling field when `link_from` names one. `expand` opens that one line onto
-    its own detail (see ColumnExpand).
+    Everything a value can do, plus the two things that are particular to a line
+    of a list: a companion count rendered after it, and a detail it opens onto.
     """
 
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
+    # Required here, unlike on the base: a line of a list of *objects* has to
+    # say which field of them it shows. (A cell may omit it, because a list of
+    # scalars is its own value.)
     source: str = Field(alias="from")
-    format: RowFormat | None = None
+    # A companion count rendered after the value in brackets: "Pathogenic (5)".
     count_from: str | None = None
-    link: LinkSpec | None = None
-    link_from: str | None = None
-    # One value packing several, each rendered (and linked) in its own right —
-    # as on a column. A ClinVar submission cites its publications as one
-    # '+'-joined list of PMIDs, and each is its own paper.
-    split: str | None = None
-    # Keep this item on one line. For a value that is an identifier: a link's
-    # icon and its id are one thing, and letting the line break between them
-    # leaves the icon stranded on the row above. Opt-in per item rather than a
-    # blanket rule for links, because the same table links a condition *name* —
-    # prose, which must be free to wrap.
-    nowrap: bool = False
+    # This one line's collapsed detail (see ColumnExpand).
     expand: "ColumnExpand | None" = None
-    # A star rating in front of the value, using the named scale (see
-    # RatingScale) — as on a row.
-    stars: str | None = None
 
     def item_field_refs(self) -> Iterator[str]:
         """Fields this reads from one element of the cell's list value.
@@ -609,19 +639,12 @@ class ColumnItems(BaseModel):
             yield self.count_from
         if self.link_from:
             yield self.link_from
+        if self.stars_from:
+            yield self.stars_from
+        if self.stars_of:
+            yield self.stars_of
         if self.expand:
             yield self.expand.source
-
-    @model_validator(mode="after")
-    def _split_needs_a_link(self) -> "ColumnItems":
-        # Splitting a value only changes what the reader sees if each part
-        # becomes its own link; without one the parts would run together
-        # exactly as the unsplit string does.
-        if self.split and self.link is None:
-            raise ValueError(
-                f"`split` only applies to a linked item; {self.source!r} has no link"
-            )
-        return self
 
 
 class ColumnExpand(BaseModel):
@@ -997,6 +1020,15 @@ def _items_stars_refs(items: ColumnItems | None) -> Iterator[str]:
         yield from _items_stars_refs(cell)
 
 
+def _piece_stars_refs(piece: ValuePiece | None) -> Iterator[str]:
+    """The scale any rendered value states outright. A cell can name one since
+    it became a `ValuePiece`, and a scale that nothing checks shows no stars —
+    which is exactly what an unrecognised *term* legitimately does, so a typo
+    would read as data rather than as a broken spec."""
+    if piece is not None and piece.stars:
+        yield piece.stars
+
+
 class DisplaySpec(BaseModel):
     """The display half of the merged document: every laid-out option."""
 
@@ -1012,6 +1044,16 @@ class DisplaySpec(BaseModel):
             for block in option.iter_blocks():
                 for column in getattr(block, "columns", None) or []:
                     yield from _items_stars_refs(column.items)
+                # A cell of a repeated item, or of a row that stacks a list.
+                # `rows` is a DisplayRow on a rows block and a TableMatrixRow
+                # on a fixed table; only the former stacks an item.
+                sources = [getattr(block, "item", None)] + [
+                    getattr(row, "item", None)
+                    for row in getattr(block, "rows", None) or []
+                ]
+                for source in sources:
+                    for cell in getattr(source, "cells", None) or []:
+                        yield from _piece_stars_refs(cell)
 
     @model_validator(mode="after")
     def _stars_name_a_known_scale(self) -> "DisplaySpec":

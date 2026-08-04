@@ -174,6 +174,16 @@ class PostOp(BaseModel):
             order, and a group of one collapses too, so the display reads one
             shape rather than two.
 
+    derive_if_empty  build a list from a packed field, but only where the list
+            is still empty. ClinVar's conditions table takes its names from
+            CLNDN, and a handful of RCV records name a condition CLNDN does not
+            carry at all — the record itself has it, as
+            `MedGen:C0338106:Colon_adenocarcinoma`, so the cell need not be
+            blank. `by` is the packed field, `sep` what separates its entries,
+            `pattern` a regex whose named groups become each element's fields,
+            and `into` the list to fill. Entries the pattern does not match are
+            skipped.
+
     default  fill a field where the source left it empty. ClinVar accepts a
             submission with no classification at all ("no classification
             provided"), and grouping by classification would otherwise have
@@ -201,7 +211,7 @@ class PostOp(BaseModel):
 
     op: Literal[
         "dedup", "sort", "exclude", "lookup", "concat", "curie_link", "collapse",
-        "only_if_differs", "default",
+        "only_if_differs", "default", "derive_if_empty",
     ]
     by: str | None = None
     desc: bool = False
@@ -215,6 +225,8 @@ class PostOp(BaseModel):
     fields: list[str] | None = None
     # `default` only: what to put where the source left the field empty.
     value: str | None = None
+    # `derive_if_empty` only: the regex whose named groups become the fields.
+    pattern: str | None = None
     # `only_if_differs` only.
     in_: str | None = Field(default=None, alias="in")
     field: str | None = None
@@ -249,6 +261,14 @@ class PostOp(BaseModel):
             raise ValueError("concat requires `fields` and `into`")
         if self.op == "concat" and len(self.fields) < 2:
             raise ValueError("concat needs at least two `fields`")
+        if self.op == "derive_if_empty" and not (
+            self.by and self.into and self.pattern
+        ):
+            raise ValueError(
+                "derive_if_empty requires `by`, `into` and `pattern`"
+            )
+        if self.op != "derive_if_empty" and self.pattern:
+            raise ValueError("`pattern` belongs to derive_if_empty")
         if self.op == "default" and not (self.by and self.value):
             raise ValueError("default requires `by` and `value`")
         if self.op != "default" and self.value is not None:
@@ -266,7 +286,8 @@ class PostOp(BaseModel):
         if self.op not in ("concat", "collapse") and self.fields is not None:
             raise ValueError("`fields` belongs to concat or collapse")
         if self.op not in (
-            "lookup", "concat", "curie_link", "collapse", "only_if_differs"
+            "lookup", "concat", "curie_link", "collapse", "only_if_differs",
+            "derive_if_empty",
         ) and self.into:
             raise ValueError(
                 "`into` belongs to lookup, concat, curie_link, collapse or "

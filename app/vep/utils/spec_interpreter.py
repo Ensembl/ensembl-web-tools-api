@@ -455,23 +455,22 @@ def pattern_affixes(from_pattern: str) -> tuple[str, str]:
     return from_pattern[: placeholder.start()], from_pattern[placeholder.end() :]
 
 
-def _apply_pattern_map(csq_values, index_map, target: TargetSpec) -> dict:
+def _apply_pattern_map(csq_values, index_map, target: TargetSpec, columns=None) -> dict:
     """Columns matching `from_pattern` -> {wildcard: value}.
 
     The columns are discovered from the CSQ header, so whichever ancestries a
-    run actually emitted come through without being named in the spec.
+    run actually emitted come through without being named in the spec. That
+    discovery depends only on the header, so `columns` carries it precomputed
+    (see PluginPlan); without one it is rediscovered here, which is what a
+    caller holding only an index_map gets.
     """
-    prefix, suffix = pattern_affixes(target.from_pattern)
-    excluded = set(target.exclude or [])
+    if columns is None:
+        columns = _pattern_columns(index_map, target)
 
     values: dict = {}
-    for column in index_map:
-        if column in excluded:
-            continue
-        if not (column.startswith(prefix) and column.endswith(suffix)):
-            continue
-        key = column[len(prefix) : len(column) - len(suffix)]
-        value = _coerce(_column(csq_values, column, index_map), target.type)
+    for key, index in columns:
+        # `or None` keeps the empty column reading as absent, as `_column` did.
+        value = _coerce(csq_values[index] or None, target.type)
         if value is not None:
             values[key] = value
     return values
@@ -579,7 +578,7 @@ def _empty_value(target: TargetSpec):
     return None
 
 
-def _build_target(csq_values, index_map, target: TargetSpec):
+def _build_target(csq_values, index_map, target: TargetSpec, plan=None):
     if not _when_holds(csq_values, index_map, target.when):
         return _empty_value(target)
 
@@ -588,7 +587,12 @@ def _build_target(csq_values, index_map, target: TargetSpec):
     if target.transform == "regex":
         return _apply_regex(csq_values, index_map, target)
     if target.transform == "pattern_map":
-        return _apply_pattern_map(csq_values, index_map, target)
+        return _apply_pattern_map(
+            csq_values,
+            index_map,
+            target,
+            plan.pattern_columns.get(target.field) if plan else None,
+        )
     if target.transform == "chunk":
         return _apply_chunk(csq_values, index_map, target)
     if target.transform == "positional":
@@ -640,7 +644,7 @@ def _decode_leaves(value, memo: dict | None = None):
     return decoded
 
 
-def _apply_target(csq_values, index_map, target: TargetSpec):
+def _apply_target(csq_values, index_map, target: TargetSpec, plan=None):
     """One target's value, still encoded.
 
     Decoding is deliberately *not* done here. It is the last step of
@@ -651,7 +655,7 @@ def _apply_target(csq_values, index_map, target: TargetSpec):
     vanished. One decode point, after every split, is the only arrangement in
     which that cannot happen.
     """
-    return _build_target(csq_values, index_map, target)
+    return _build_target(csq_values, index_map, target, plan)
 
 
 def _join_key(value, pattern, case_insensitive: bool) -> str | None:
@@ -811,19 +815,98 @@ def _row_in_scope(csq_values, index_map, scope) -> bool:
     return value in _listed_keys(listed, scope.sep, scope.item_pattern)
 
 
+class PluginPlan:
+    """One plugin resolved against one CSQ header.
+
+    Everything here depends only on the header, which is fixed for the whole
+    file — yet all of it used to be recomputed per CSQ row, by name. Over a
+    50-record dev-data run that was 21k `has_any_column` calls asking the same
+    question, 88k `_column` reads building cache keys, and a 283-column scan per
+    `pattern_map` target per allele (~86k `startswith`). Resolving once per file
+    and reading by position is what takes the header work off the per-row path.
+
+    `runnable` is False when none of the plugin's columns are in the header —
+    the plugin never ran, so it can be skipped for every row of the file rather
+    than gated on each one.
+    """
+
+    __slots__ = ("runnable", "key_indices", "input_indices", "pattern_columns")
+
+    def __init__(self, runnable, key_indices, input_indices, pattern_columns):
+        self.runnable = runnable
+        self.key_indices = key_indices
+        self.input_indices = input_indices
+        self.pattern_columns = pattern_columns
+
+
+def _pattern_columns(
+    index_map: dict[str, int], target: TargetSpec
+) -> tuple[tuple[str, int], ...]:
+    """The header columns a `pattern_map` target matches, as (wildcard, index).
+
+    Same scan `_apply_pattern_map` did per row, and in the same order, so the
+    resulting dict is built identically — only now it happens once per file.
+    """
+    prefix, suffix = pattern_affixes(target.from_pattern)
+    excluded = set(target.exclude or [])
+    return tuple(
+        (column[len(prefix): len(column) - len(suffix)], index)
+        for column, index in index_map.items()
+        if column not in excluded
+        and column.startswith(prefix)
+        and column.endswith(suffix)
+    )
+
+
+def compile_plugin(index_map: dict[str, int], spec: PluginSpec) -> PluginPlan:
+    """Resolve one plugin against a CSQ header. See PluginPlan."""
+    return PluginPlan(
+        runnable=has_any_column(index_map, *spec.csq_fields),
+        # Absent columns simply drop out: `_column` returned None for them, so
+        # they never distinguished one row from another anyway.
+        key_indices=tuple(
+            index_map[column] for column in spec.csq_fields if column in index_map
+        ),
+        input_indices=tuple(
+            index_map[column]
+            for column in (spec.require_any_input or [])
+            if column in index_map
+        ),
+        pattern_columns={
+            target.field: _pattern_columns(index_map, target)
+            for target in spec.targets
+            if target.transform == "pattern_map"
+        },
+    )
+
+
+def compile_parsing_spec(index_map: dict[str, int], spec) -> dict[str, PluginPlan]:
+    """Every plugin in a parsing spec resolved against a CSQ header, by plugin
+    name. Build once per file and thread down; see PluginPlan."""
+    return {plugin.plugin: compile_plugin(index_map, plugin) for plugin in spec.plugins}
+
+
 def apply_plugin_spec(
     csq_values: list[str],
     index_map: dict[str, int],
     spec: PluginSpec,
     cache: dict | None = None,
+    plan: PluginPlan | None = None,
 ) -> dict | None:
     """One plugin's annotation for this CSQ entry, or None if there is nothing.
 
     None means "no annotation", matching the hand-written parsers: either the
     plugin's columns are absent from the header (it never ran), or they are
     present but this record has no values in them.
+
+    `plan` is this plugin resolved against the header (see PluginPlan). It is
+    optional so a caller with only an index_map still works; pass one built once
+    per file to keep the header work out of the per-row path.
     """
-    if not has_any_column(index_map, *spec.csq_fields):
+    if plan is None:
+        plan = compile_plugin(index_map, spec)
+
+    if not plan.runnable:
         return None
 
     if not _row_in_scope(csq_values, index_map, spec.applies_to):
@@ -838,20 +921,19 @@ def apply_plugin_spec(
     # deliberately outside this: it is what legitimately differs per row.
     key = None
     if cache is not None:
-        key = (spec.plugin, tuple(_column(csq_values, c, index_map)
-                                  for c in spec.csq_fields))
+        key = (spec.plugin, tuple(csq_values[i] for i in plan.key_indices))
         if key in cache:
             return cache[key]
 
     # Raw presence, deliberately: a literal 'NA' counts as present here, which
     # is what the hand-written parsers do.
     if spec.require_any_input and not any(
-        _column(csq_values, column, index_map) for column in spec.require_any_input
+        csq_values[i] for i in plan.input_indices
     ):
         return None
 
     output = {
-        target.field: _apply_target(csq_values, index_map, target)
+        target.field: _apply_target(csq_values, index_map, target, plan)
         for target in spec.targets
     }
     # Every target reads one column, so a source spreading one logical table

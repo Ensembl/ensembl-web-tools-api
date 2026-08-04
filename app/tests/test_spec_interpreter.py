@@ -16,7 +16,11 @@ import pytest
 from app.tests.test_csq_parsers import EMPTY, INDEX_MAP, row_list
 from app.vep.models.parsing_spec_model import ParsingSpec, TargetSpec
 from app.vep.utils.csq import get_prediction_index_map
-from app.vep.utils.spec_interpreter import apply_plugin_spec
+from app.vep.utils.spec_interpreter import (
+    apply_plugin_spec,
+    compile_plugin,
+    pattern_affixes,
+)
 from app.vep.utils.spec_loader import load_merged_spec
 
 SPEC: ParsingSpec = load_merged_spec("human_grch38").parsing
@@ -2307,3 +2311,61 @@ def test_derive_if_empty_leaves_a_list_that_is_already_there():
         ["A", "R1~Colon_adenocarcinoma"], index_map_for("Allele", "Recs"), spec
     )
     assert out["rows"][0]["names"] == "kept"
+
+
+# --- the compiled header plan ------------------------------------------------
+#
+# `apply_plugin_spec` takes an optional PluginPlan: the plugin already resolved
+# against the CSQ header, built once per file so the per-row path reads columns
+# by position rather than by name.
+#
+# Note what does *not* need saying here. Passing no plan compiles one internally,
+# so every pinned-literal test above already drives the compiled path — there is
+# no name-based path left to compare against, and a test that ran
+# apply_plugin_spec both ways would be comparing the plan with itself. What is
+# worth pinning is the plan's own content, since a wrong plan is how the per-row
+# path would start reading the wrong column.
+
+
+def test_a_plan_knows_when_a_plugin_never_ran():
+    """`runnable` is the per-file form of the has_any_column gate: a header
+    carrying none of the plugin's columns means the plugin never ran, so the
+    caller skips it for the whole file instead of testing every row."""
+    spec = SPEC.plugin("revel")
+    assert compile_plugin(INDEX_MAP, spec).runnable is True
+    assert compile_plugin(index_map_for("Allele"), spec).runnable is False
+
+
+def test_a_plan_reads_the_columns_the_plugin_declares():
+    """The cache key's positions are exactly the plugin's `csq_fields` that the
+    header carries, in the order declared — read positionally at parse time, so
+    a wrong index here is a value silently taken from the wrong column."""
+    spec = SPEC.plugin("clinvar")
+    plan = compile_plugin(INDEX_MAP, spec)
+    assert plan.key_indices == tuple(
+        INDEX_MAP[column] for column in spec.csq_fields if column in INDEX_MAP
+    )
+    # Columns the header does not carry drop out rather than shifting the rest.
+    partial = index_map_for("Allele", *spec.csq_fields[:2])
+    assert compile_plugin(partial, spec).key_indices == tuple(
+        partial[column] for column in spec.csq_fields[:2]
+    )
+
+
+def test_a_plan_resolves_pattern_map_columns_from_the_header():
+    """A `pattern_map` target discovers its columns from the header, so they
+    resolve once per file instead of re-scanning every column on every row."""
+    spec = SPEC.plugin("gnomad_exomes")
+    # The same header as test_gnomad_exomes_pattern_map above: an overall column
+    # the pattern must not claim, and two ancestries it must.
+    index_map = index_map_for(
+        "gnomAD_exomes_AF", "gnomAD_exomes_AF_afr", "gnomAD_exomes_AF_nfe_XX"
+    )
+    target = next(t for t in spec.targets if t.transform == "pattern_map")
+    plan = compile_plugin(index_map, spec)
+    assert plan.pattern_columns[target.field] == (("afr", 1), ("nfe_XX", 2))
+    # A header with no ancestry columns resolves to nothing, and the per-row
+    # path then has nothing to read rather than a column to scan for.
+    assert compile_plugin(
+        index_map_for("gnomAD_exomes_AF"), spec
+    ).pattern_columns[target.field] == ()

@@ -1631,12 +1631,7 @@
             },
             "as": "classifications",
             "count_by": "classification",
-            "nest_as": "submitters",
-            "item_fields": [
-              "classification",
-              "count",
-              "submitters"
-            ]
+            "nest_as": "submitters"
           },
           {
             "into": "conditions",
@@ -1649,12 +1644,7 @@
             "also_match": {
               "type": "classification_type"
             },
-            "as": "records",
-            "item_fields": [
-              "rcv",
-              "classification",
-              "review_status"
-            ]
+            "as": "records"
           },
           {
             "into": "classification_summary",

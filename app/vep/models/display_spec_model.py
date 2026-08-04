@@ -598,6 +598,20 @@ class ColumnItems(BaseModel):
     # RatingScale) — as on a row.
     stars: str | None = None
 
+    def item_field_refs(self) -> Iterator[str]:
+        """Fields this reads from one element of the cell's list value.
+
+        Not `expand.cells` -- those read a *further* list's elements, so they
+        are resolved against that list rather than this one.
+        """
+        yield self.source
+        if self.count_from:
+            yield self.count_from
+        if self.link_from:
+            yield self.link_from
+        if self.expand:
+            yield self.expand.source
+
     @model_validator(mode="after")
     def _split_needs_a_link(self) -> "ColumnItems":
         # Splitting a value only changes what the reader sees if each part
@@ -721,8 +735,16 @@ class TableColumn(BaseModel):
         return self
 
     def item_field_refs(self) -> Iterator[str]:
+        """Fields this column reads from the element that is one table row.
+
+        `items` and `expand` are excluded on purpose: they read elements of a
+        list *inside* the row, a different set of names, so the checker resolves
+        them a level down (see `MergedSpec._list_element_fields`).
+        """
         if self.source:
             yield self.source
+        if self.link_from:
+            yield self.link_from
 
 
 class TableMatrixRow(BaseModel):

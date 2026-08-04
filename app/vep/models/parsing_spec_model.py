@@ -489,10 +489,6 @@ class JoinSpec(BaseModel):
     count_by: str | None = None
     # With `count_by`, the field each group carries its own members under.
     nest_as: str | None = None
-    # Declared, not derived — the display checks its column refs against this,
-    # exactly as `item_fields` does for a target.
-    item_fields: list[str] | None = None
-
     @model_validator(mode="after")
     def _nesting_needs_something_to_nest_under(self) -> "JoinSpec":
         if self.nest_as and not self.count_by:

@@ -478,3 +478,124 @@ def test_flags_require_only_their_allele_scoped_columns():
 
 def test_disabled_option_contributes_nothing():
     assert "REVEL" not in _expected(revel=False)
+
+
+# --- Refs into a nested list, and scales named by the data ------------------ #
+#
+# ClinVar's conditions table reads three list levels deep: a condition holds the
+# classifications its submitters gave, and each of those holds the submissions
+# it counted. Only the top level used to be resolvable, so a typo below it
+# loaded clean and rendered an empty cell. These probe the real assembled
+# document rather than a synthetic one, because the shapes that were unchecked
+# are the ones only it has.
+
+
+def _assembled(name="human_grch38"):
+    from app.vep.utils.spec_loader import _assemble_payload
+
+    return _assemble_payload(name)
+
+
+def _clinvar_conditions_table(doc):
+    """The first conditions table of the phenotypes option."""
+    for option in doc["display"]["options"]:
+        if option["option_id"] != "phenotypes":
+            continue
+        stack = list(option["blocks"])
+        while stack:
+            block = stack.pop(0)
+            if block.get("kind") == "group":
+                stack = list(block.get("blocks", [])) + stack
+            elif block.get("from") == "clinvar.conditions":
+                return block
+    raise AssertionError("the conditions table is no longer where this expects")
+
+
+def _classification_column(doc):
+    for column in _clinvar_conditions_table(doc)["columns"]:
+        if column.get("items"):
+            return column
+    raise AssertionError("no itemised column in the conditions table")
+
+
+def test_assembled_spec_still_loads():
+    # The control for every mutation below: unmutated, this must pass.
+    MergedSpec.model_validate(_assembled())
+
+
+def test_column_items_unknown_field_raises():
+    doc = _assembled()
+    _classification_column(doc)["items"]["from"] = "classifcation"  # sic
+    with pytest.raises(ValidationError, match="item field 'classifcation'"):
+        MergedSpec.model_validate(doc)
+
+
+def test_column_items_unknown_count_field_raises():
+    doc = _assembled()
+    _classification_column(doc)["items"]["count_from"] = "bogus"
+    with pytest.raises(ValidationError, match="item field 'bogus'"):
+        MergedSpec.model_validate(doc)
+
+
+def test_column_link_from_unknown_field_raises():
+    doc = _assembled()
+    for column in _clinvar_conditions_table(doc)["columns"]:
+        if column.get("link_from"):
+            column["link_from"] = "bogus_url"
+    with pytest.raises(ValidationError, match="item field 'bogus_url'"):
+        MergedSpec.model_validate(doc)
+
+
+def test_expanded_cell_unknown_field_raises():
+    # Two levels below the table's own list: a submission's field.
+    doc = _assembled()
+    _classification_column(doc)["items"]["expand"]["cells"][0]["from"] = "submiter"
+    with pytest.raises(ValidationError, match="item field 'submiter'"):
+        MergedSpec.model_validate(doc)
+
+
+def test_expand_over_a_field_that_is_not_a_list_raises():
+    doc = _assembled()
+    _classification_column(doc)["items"]["expand"]["from"] = "count"
+    with pytest.raises(ValidationError, match="not a list|does not produce"):
+        MergedSpec.model_validate(doc)
+
+
+def test_emphasis_unknown_field_raises():
+    doc = _assembled()
+    _classification_column(doc)["items"]["expand"]["emphasis"]["field"] = "bogus"
+    with pytest.raises(ValidationError, match="item field 'bogus'"):
+        MergedSpec.model_validate(doc)
+
+
+def test_row_where_unknown_field_raises():
+    # The table's `where` was checked; a stacked row's identical one was not.
+    doc = _assembled()
+    changed = False
+    for option in doc["display"]["options"]:
+        blocks = list(option["blocks"])
+        while blocks:
+            block = blocks.pop()
+            blocks += block.get("blocks", []) or []
+            for row in block.get("rows", []) or []:
+                if row.get("where"):
+                    row["where"]["field"] = "bogus"
+                    changed = True
+    assert changed, "no stacked row with a `where` left to probe"
+    with pytest.raises(ValidationError, match="item field 'bogus'"):
+        MergedSpec.model_validate(doc)
+
+
+def test_scale_named_by_a_stack_constant_must_exist():
+    # `stars_from` names a field, not a scale, so the display alone cannot check
+    # it -- but the field is filled from the parse's `const`, which can be.
+    doc = _assembled()
+    for plugin in doc["parsing"]["plugins"]:
+        if plugin["plugin"] != "clinvar":
+            continue
+        for target in plugin["targets"]:
+            for group in target.get("of", []) or []:
+                if "rating_scale" in group.get("const", {}):
+                    group["const"]["rating_scale"] = "clinvar_agregate"  # sic
+    with pytest.raises(ValidationError, match="clinvar_agregate"):
+        MergedSpec.model_validate(doc)

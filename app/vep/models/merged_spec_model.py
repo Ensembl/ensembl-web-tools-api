@@ -312,6 +312,7 @@ class MergedSpec(BaseModel):
 
         errors += self._check_display_refs()
         errors += self._check_display_format_types()
+        errors += self._check_stars_scales()
 
         if errors:
             raise ValueError("config/parsing inconsistency: " + "; ".join(errors))
@@ -324,14 +325,67 @@ class MergedSpec(BaseModel):
             )
         return self
 
+    def _list_element_fields(self) -> dict[str, dict[tuple[str, ...], set[str]]]:
+        """Per plugin, what an element of each of its lists carries, keyed by
+        the path to that list.
+
+        A path rather than a name because lists nest: a ClinVar condition holds
+        the classifications its submitters gave, and each of those holds the
+        submissions it counted. `("conditions",)` is the target itself,
+        `("conditions", "classifications", "submitters")` a submission three
+        levels in. Only the top level used to be known, so a display ref into a
+        nested list had nothing to check against and a typo rendered an empty
+        cell.
+
+        What a joined-in row carries is *derived*, not declared: a join attaches
+        the source list's own rows unchanged (see `_apply_joins`), so declaring
+        their fields would be a second copy to keep in step -- and the two
+        declarations that existed had already drifted from the targets they
+        described.
+        """
+        by_plugin: dict[str, dict[tuple[str, ...], set[str]]] = {}
+        for plugin in self.parsing.plugins:
+            paths: dict[tuple[str, ...], set[str]] = {
+                (target.field,): set(target.item_fields or [])
+                for target in plugin.targets
+            }
+            # In declaration order: a join may draw from a list an earlier one
+            # enriched, and then the attached rows carry that enrichment too.
+            for join in plugin.joins or []:
+                into = paths.get((join.into,))
+                if into is None:
+                    continue
+                into.update(join.produced_fields())
+                if not join.as_field:
+                    continue
+                source = set(paths.get((join.source,), set()))
+                attached = (join.into, join.as_field)
+                if not join.count_by:
+                    paths[attached] = source
+                    continue
+                # A counted join attaches groups, not rows: each is the value
+                # grouped on plus its count, and -- with `nest_as` -- the rows
+                # behind it.
+                paths[attached] = {join.count_by, "count"} | (
+                    {join.nest_as} if join.nest_as else set()
+                )
+                if join.nest_as:
+                    paths[attached + (join.nest_as,)] = source
+            by_plugin[plugin.plugin] = paths
+        return by_plugin
+
     def _check_display_refs(self) -> list[str]:
         """Display↔parsing consistency: resolve every field a display option
         reads against the parsing plugins and their declared targets — a fixed
         row's `<plugin>.<field>`, a block's `when` field, a list block's
         `<plugin>.<listField>`, and each list element's item-relative refs (label
-        and cells) against that list target's `item_fields` — plus every block's
+        and cells) against that list's element fields — plus every block's
         `requires`. Groups are flattened by `iter_blocks`, so their sub-blocks and
-        their own `when` are checked the same way."""
+        their own `when` are checked the same way.
+
+        Element refs resolve by *path*, so a column's `items` and their `expand`
+        are checked against the nested lists they actually read rather than
+        against the table's own row (see `_list_element_fields`)."""
         if self.display is None:
             return []
 
@@ -339,20 +393,7 @@ class MergedSpec(BaseModel):
             plugin.plugin: {t.field: t for t in plugin.targets}
             for plugin in self.parsing.plugins
         }
-        # An element's fields are its target's `item_fields` *plus* whatever a
-        # join adds to that list: the join's `as` field is as real as a parsed
-        # one, and a display column may read it.
-        item_fields_by_plugin: dict[str, dict[str, set[str]]] = {
-            plugin.plugin: {
-                t.field: set(t.item_fields or []) for t in plugin.targets
-            }
-            for plugin in self.parsing.plugins
-        }
-        for plugin in self.parsing.plugins:
-            for join in plugin.joins or []:
-                fields = item_fields_by_plugin[plugin.plugin].get(join.into)
-                if fields is not None:
-                    fields.update(join.produced_fields())
+        paths_by_plugin = self._list_element_fields()
         errors: list[str] = []
 
         def field_error(option_id: str, plugin: str, field: str) -> str | None:
@@ -371,6 +412,42 @@ class MergedSpec(BaseModel):
         def scalar_ref_error(option_id: str, ref: str) -> str | None:
             plugin, _, field = ref.partition(".")
             return field_error(option_id, plugin, field)
+
+        def item_errors(
+            oid: str, plugin: str, path: tuple[str, ...], refs
+        ) -> list[str]:
+            where = f"{plugin}.{'.'.join(path)}"
+            fields = paths_by_plugin.get(plugin, {}).get(path)
+            if fields is None:
+                return [
+                    f"display option {oid!r} reads items of {where}, which the "
+                    "parse does not produce as a list"
+                ]
+            return [
+                f"display option {oid!r} references item field {ref!r} not in "
+                f"{where}"
+                for ref in refs
+                if ref not in fields
+            ]
+
+        def column_errors(
+            oid: str, plugin: str, path: tuple[str, ...], items
+        ) -> list[str]:
+            """A column's nested `items`/`expand` refs, one list level at a
+            time. Recursive because an expanded line may itself expand."""
+            found = item_errors(oid, plugin, path, items.item_field_refs())
+            if not items.expand or found:
+                # A bad `expand.from` is already reported; descending through it
+                # would only add a second complaint about the same typo.
+                return found
+            nested = path + (items.expand.source,)
+            for cell in items.expand.cells:
+                found += column_errors(oid, plugin, nested, cell)
+            if items.expand.emphasis:
+                found += item_errors(
+                    oid, plugin, nested, [items.expand.emphasis.field]
+                )
+            return found
 
         for option in self.display.options:
             oid = option.option_id
@@ -396,20 +473,13 @@ class MergedSpec(BaseModel):
                     if err:
                         errors.append(err)
                         continue
-                    item_fields = item_fields_by_plugin[plugin][list_field]
                     refs = list(block.item.item_field_refs())
                     if block.group_by:
                         # The field the items group on is an item field too, and
                         # a typo there would silently collapse every item into
                         # one unnamed section rather than fail.
                         refs.append(block.group_by.field)
-                    for item_field in refs:
-                        if item_field not in item_fields:
-                            errors.append(
-                                f"display option {oid!r} list "
-                                f"{plugin}.{list_field} references item field "
-                                f"{item_field!r} not in its target's item_fields"
-                            )
+                    errors += item_errors(oid, plugin, (list_field,), refs)
                 elif isinstance(block, DisplayTableBlock):
                     if block.rows is not None:
                         # Fixed matrix: each row value is a scalar `plugin.field`,
@@ -426,13 +496,16 @@ class MergedSpec(BaseModel):
                     if err:
                         errors.append(err)
                         continue
-                    item_fields = item_fields_by_plugin[plugin][list_field]
-                    for item_field in block.column_field_refs():
-                        if item_field not in item_fields:
-                            errors.append(
-                                f"display option {oid!r} table "
-                                f"{plugin}.{list_field} references item field "
-                                f"{item_field!r} not in its target's item_fields"
+                    errors += item_errors(
+                        oid, plugin, (list_field,), block.column_field_refs()
+                    )
+                    for column in block.columns:
+                        if column.items and column.source:
+                            errors += column_errors(
+                                oid,
+                                plugin,
+                                (list_field, column.source),
+                                column.items,
                             )
                 elif isinstance(block, DisplayRowsBlock):
                     for row in block.rows:
@@ -448,14 +521,68 @@ class MergedSpec(BaseModel):
                         plugin, list_field = list_ref
                         if field_error(oid, plugin, list_field):
                             continue  # already reported by field_refs above
-                        item_fields = item_fields_by_plugin[plugin][list_field]
-                        for item_field in row.item.item_field_refs():
-                            if item_field not in item_fields:
+                        refs = list(row.item.item_field_refs())
+                        if row.where:
+                            # The table's identical `where` was checked and the
+                            # row's was not; a typo here keeps every element
+                            # rather than the ones meant, so a list split
+                            # between two places shows up whole in both.
+                            refs.append(row.where.field)
+                        errors += item_errors(oid, plugin, (list_field,), refs)
+        return errors
+
+    def _check_stars_scales(self) -> list[str]:
+        """A `stars_from` cell names a *field* whose values name scales, so the
+        display alone cannot tell whether those scales exist.
+
+        Where the field is filled from a stack's `const` the values are stated
+        in the parse spec, so they can be checked after all: ClinVar's aggregate
+        classification is rated `clinvar_aggregate` for a germline one and
+        `clinvar_somatic` for a somatic one, and neither name appears anywhere
+        the display-side check can see. A field filled from the data is left
+        alone -- an unknown scale there is a source adding wording, which
+        correctly shows no stars.
+        """
+        if self.display is None:
+            return []
+        targets = {
+            (plugin.plugin, target.field): target
+            for plugin in self.parsing.plugins
+            for target in plugin.targets
+        }
+
+        def const_values(target, field: str) -> set[str] | None:
+            groups = getattr(target, "of", None) or []
+            values = set()
+            for group in groups:
+                value = (group.const or {}).get(field)
+                if not isinstance(value, str):
+                    return None  # data, not a constant
+                values.add(value)
+            return values or None
+
+        errors: list[str] = []
+        for option in self.display.options:
+            for block in option.iter_blocks():
+                for row in getattr(block, "rows", None) or []:
+                    list_ref = getattr(row, "list_ref", None)
+                    list_ref = list_ref() if callable(list_ref) else None
+                    if list_ref is None or row.item is None:
+                        continue
+                    target = targets.get(list_ref)
+                    if target is None:
+                        continue
+                    for cell in row.item.cells:
+                        if not cell.stars_from:
+                            continue
+                        values = const_values(target, cell.stars_from)
+                        for value in sorted(values or ()):
+                            if value not in self.display.rating_scales:
                                 errors.append(
-                                    f"display option {oid!r} row {row.label!r} "
-                                    f"stacks {plugin}.{list_field} and references "
-                                    f"item field {item_field!r} not in its "
-                                    "target's item_fields"
+                                    f"display option {option.option_id!r} rates "
+                                    f"on scale {value!r}, which "
+                                    f"{'.'.join(list_ref)}.{cell.stars_from} "
+                                    "states but `rating_scales` does not define"
                                 )
         return errors
 

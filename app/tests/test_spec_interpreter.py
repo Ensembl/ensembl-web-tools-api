@@ -754,14 +754,12 @@ def test_hgvs_empty_is_none():
 def test_phenotype_data_splits_entries_into_their_cols():
     # The Phenotypes plugin produces a single PHENOTYPES column: '&'-separated
     # entries, each '+'-separated into the fields named by the plugin's `cols`
-    # (type, source, phenotype, id, risk_allele, clinvar_clin_sig). Absent
-    # trailing fields come back null. ClinVar associations go to their own
-    # target, so this one carries none.
+    # (type, source, phenotype, id, risk_allele). Absent trailing fields come
+    # back null.
     index_map = index_map_for("Allele", "PHENOTYPES")
-    gene = "Gene+GenCC+Parkinson_disease+ENSG00000145335++"
-    variation = "Variation+NHGRI-EBI_GWAS_catalog+Atrial_fibrillation+rs699+A+"
+    gene = "Gene+GenCC+Parkinson_disease+ENSG00000145335+"
+    variation = "Variation+NHGRI-EBI_GWAS_catalog+Atrial_fibrillation+rs699+A"
     result = run("phenotype_data", ["A", f"{gene}&{variation}"], index_map)
-    assert result["clinvar_phenotypes"] == []
     assert result["phenotypes"] == [
             {
                 "type": "Gene",
@@ -783,16 +781,19 @@ def test_phenotype_data_splits_entries_into_their_cols():
 def test_phenotype_data_skips_entries_missing_a_required_field():
     """type / source / phenotype must all be present; an entry missing any of
     them is dropped rather than rendered half-empty. (Entries with a different
-    field count are dropped for the same reason — the pattern must match.)"""
+    field count are dropped for the same reason — the pattern must match,
+    which is what stopped every association parsing when `clinvar_clin_sig`
+    left the plugin's `cols` and every record became five fields.)"""
     index_map = index_map_for("PHENOTYPES")
-    good = "Gene+GenCC+Parkinson_disease+ENSG00000145335++"
+    good = "Gene+GenCC+Parkinson_disease+ENSG00000145335+"
     result = run(
         "phenotype_data",
         [
-            "Gene++Parkinson_disease+ENSG1++"  # no source
-            "&Gene+GenCC++ENSG2++"  # no phenotype
-            "&+GenCC+Parkinson_disease+ENSG3++"  # no type
-            "&Cancer_Gene_Census+cancer+ENSG4++"  # 5 fields (pre-`type` shape)
+            "Gene++Parkinson_disease+ENSG1+"  # no source
+            "&Gene+GenCC++ENSG2+"  # no phenotype
+            "&+GenCC+Parkinson_disease+ENSG3+"  # no type
+            "&Cancer_Gene_Census+cancer+ENSG4"  # 4 fields, not this shape
+            "&Gene+GenCC+Parkinson_disease+ENSG5++"  # 6, the shape before
             f"&{good}"
         ],
         index_map,
@@ -800,31 +801,30 @@ def test_phenotype_data_skips_entries_missing_a_required_field():
     assert [p["id"] for p in result["phenotypes"]] == ["ENSG00000145335"]
 
 
-def test_phenotype_data_splits_clinvar_into_its_own_target():
-    """Only ClinVar associations carry a clinical significance, and they get
-    their own table, so they are parsed into their own target: the `phenotypes`
-    pattern excludes source "ClinVar" and the `clinvar_phenotypes` one pins it.
-    Neither leaks into the other."""
-    index_map = index_map_for("Allele", "PHENOTYPES")
+def test_phenotype_data_leaves_clinvar_associations_alone():
+    """ClinVar associations are not parsed here at all any more.
+
+    They used to go to a `clinvar_phenotypes` target of their own, because only
+    they carried a clinical significance. That significance now comes from the
+    ClinVar custom, served under the same Phenotypes option and far richer than
+    one word, so the target went and the `phenotypes` pattern keeps excluding
+    source "ClinVar" — otherwise the same association would be listed twice, in
+    two different levels of detail."""
     result = run(
         "phenotype_data",
         [
             "A",
-            "Variation+ClinVar+Parkinson_disease+rs1+A+pathogenic"
-            "&Variation+NHGRI-EBI_GWAS_catalog+Albumin_levels+rs2+A+"
-            "&Gene+GenCC+Parkinson_disease+ENSG1++",
+            "Variation+ClinVar+Parkinson_disease+rs1+A"
+            "&Variation+NHGRI-EBI_GWAS_catalog+Albumin_levels+rs2+A"
+            "&Gene+GenCC+Parkinson_disease+ENSG1+",
         ],
-        index_map,
+        index_map_for("Allele", "PHENOTYPES"),
     )
-    assert [(p["source"], p["clinvar_clin_sig"]) for p in result["clinvar_phenotypes"]] == [
-        ("ClinVar", "pathogenic")
-    ]
+    assert "clinvar_phenotypes" not in result
     assert [p["source"] for p in result["phenotypes"]] == [
         "NHGRI-EBI_GWAS_catalog",
         "GenCC",
     ]
-    # the non-ClinVar target does not carry the significance field at all
-    assert "clinvar_clin_sig" not in result["phenotypes"][0]
 
 
 def test_phenotype_data_variation_is_scoped_to_its_risk_allele():
@@ -839,16 +839,16 @@ def test_phenotype_data_variation_is_scoped_to_its_risk_allele():
     """
     index_map = index_map_for("Allele", "PHENOTYPES")
     entries = (
-        "Variation+ClinVar+Neurodevelopmental_disorder+rs139548132+C+pathogenic"
-        "&Variation+ClinVar+Inborn_genetic_diseases+rs139548132+G+benign"
-        "&Variation+ClinVar+No_risk_allele+rs139548132++pathogenic"
-        "&Gene+GenCC+Parkinson_disease+ENSG00000145335++"
+        "Variation+NHGRI-EBI_GWAS_catalog+Neurodevelopmental_disorder+rs139548132+C"
+        "&Variation+NHGRI-EBI_GWAS_catalog+Inborn_genetic_diseases+rs139548132+G"
+        "&Variation+NHGRI-EBI_GWAS_catalog+No_risk_allele+rs139548132+"
+        "&Gene+GenCC+Parkinson_disease+ENSG00000145335+"
     )
     def kept(allele):
         out = run("phenotype_data", [allele, entries], index_map)
         return [
             (p["type"], p["risk_allele"], p["phenotype"])
-            for p in out["clinvar_phenotypes"] + out["phenotypes"]
+            for p in out["phenotypes"]
         ]
     assert kept("C") == [
         ("Variation", "C", "Neurodevelopmental_disorder"),
@@ -864,25 +864,25 @@ def test_phenotype_data_variation_is_scoped_to_its_risk_allele():
 
 def test_phenotype_data_drops_placeholder_phenotypes():
     """A source's stand-in for "we have no phenotype" is not an association:
-    ClinVar emits "ClinVar:_phenotype_not_specified" (and bare "not_specified" /
+    sources emit "ClinVar:_phenotype_not_specified" (and bare "not_specified" /
     "not_provided") where a real term would go, and showing those as rows tells
-    the reader nothing. Dropped from both targets, whatever the casing."""
+    the reader nothing. Dropped whatever the casing."""
     index_map = index_map_for("Allele", "PHENOTYPES")
     result = run(
         "phenotype_data",
         [
             "A",
-            "Variation+ClinVar+ClinVar:_phenotype_not_specified+rs1+A+pathogenic"
-            "&Variation+ClinVar+Neurodevelopmental_disorder+rs1+A+pathogenic"
-            "&Gene+GenCC+Not_provided+ENSG1++"
-            "&Gene+GenCC+Parkinson_disease+ENSG1++",
+            "Variation+NHGRI-EBI_GWAS_catalog+ClinVar:_phenotype_not_specified+rs1+A"
+            "&Variation+NHGRI-EBI_GWAS_catalog+Neurodevelopmental_disorder+rs1+A"
+            "&Gene+GenCC+Not_provided+ENSG1+"
+            "&Gene+GenCC+Parkinson_disease+ENSG1+",
         ],
         index_map,
     )
-    assert [p["phenotype"] for p in result["clinvar_phenotypes"]] == [
-        "Neurodevelopmental_disorder"
+    assert [p["phenotype"] for p in result["phenotypes"]] == [
+        "Neurodevelopmental_disorder",
+        "Parkinson_disease",
     ]
-    assert [p["phenotype"] for p in result["phenotypes"]] == ["Parkinson_disease"]
 
 
 def test_phenotype_data_all_placeholders_is_none():
@@ -893,7 +893,7 @@ def test_phenotype_data_all_placeholders_is_none():
     assert (
         run(
             "phenotype_data",
-            ["A", "Variation+ClinVar+ClinVar:_phenotype_not_specified+rs1+A+pathogenic"],
+            ["A", "Variation+NHGRI-EBI_GWAS_catalog+ClinVar:_phenotype_not_specified+rs1+A"],
             index_map,
         )
         is None
@@ -1219,7 +1219,7 @@ def test_phenotype_rows_identical_in_every_field_are_collapsed():
     field (a different source, say) is still its own row."""
     index_map = index_map_for("Allele", "PHENOTYPES")
     # PHENOTYPES packs `+`-separated fields into `&`-separated entries.
-    row = "Variation+{source}+Systolic_blood_pressure+rs699+G+"
+    row = "Variation+{source}+Systolic_blood_pressure+rs699+G"
     entry = "&".join(
         [
             row.format(source="NHGRI-EBI_GWAS_catalog"),

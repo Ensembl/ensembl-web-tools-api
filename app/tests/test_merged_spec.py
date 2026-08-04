@@ -539,10 +539,17 @@ def test_column_items_unknown_count_field_raises():
 
 
 def test_column_link_from_unknown_field_raises():
+    # `link_from` sits on whichever value does the linking — the column itself,
+    # or the items it renders one per line. Both are element refs and both are
+    # checked, so this probes wherever the shipped spec puts it.
     doc = _assembled()
+    changed = False
     for column in _clinvar_conditions_table(doc)["columns"]:
-        if column.get("link_from"):
-            column["link_from"] = "bogus_url"
+        for holder in (column, column.get("items") or {}):
+            if holder.get("link_from"):
+                holder["link_from"] = "bogus_url"
+                changed = True
+    assert changed, "no `link_from` left in the conditions table to probe"
     with pytest.raises(ValidationError, match="item field 'bogus_url'"):
         MergedSpec.model_validate(doc)
 

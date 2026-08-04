@@ -164,6 +164,16 @@ class PostOp(BaseModel):
             condition ClinVar gives no usable id for renders as plain text
             rather than a dead link.
 
+    collapse  merge elements differing *only* in the named fields, gathering
+            those fields into a nested list. ClinVar files one submission
+            against several conditions at once, so a variant's table can carry
+            five rows that are one classification by one submitter under five
+            disease names — identical in every column but the condition, and
+            read as five findings when they are one. `fields` names what may
+            differ, `into` the field the gathered sets land in. First-seen
+            order, and a group of one collapses too, so the display reads one
+            shape rather than two.
+
     `exclude` is a post-op rather than a `drop_when` mode because `drop_when`
     takes exactly one mode and the phenotype targets already spend theirs on the
     per-allele rule.
@@ -171,7 +181,9 @@ class PostOp(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    op: Literal["dedup", "sort", "exclude", "lookup", "concat", "curie_link"]
+    op: Literal[
+        "dedup", "sort", "exclude", "lookup", "concat", "curie_link", "collapse"
+    ]
     by: str | None = None
     desc: bool = False
     nulls: Literal["first", "last"] = "last"
@@ -180,7 +192,7 @@ class PostOp(BaseModel):
     into: str | None = None
     # `lookup` only.
     table: str | None = None
-    # `concat` only.
+    # `concat`, and `collapse` (there the fields that may differ).
     fields: list[str] | None = None
     sep: str = ""
     # `curie_link` only.
@@ -212,10 +224,14 @@ class PostOp(BaseModel):
             raise ValueError("concat requires `fields` and `into`")
         if self.op == "concat" and len(self.fields) < 2:
             raise ValueError("concat needs at least two `fields`")
-        if self.op != "concat" and self.fields is not None:
-            raise ValueError("`fields` belongs to concat")
-        if self.op not in ("lookup", "concat", "curie_link") and self.into:
-            raise ValueError("`into` belongs to lookup, concat or curie_link")
+        if self.op == "collapse" and not (self.fields and self.into):
+            raise ValueError("collapse requires `fields` and `into`")
+        if self.op not in ("concat", "collapse") and self.fields is not None:
+            raise ValueError("`fields` belongs to concat or collapse")
+        if self.op not in ("lookup", "concat", "curie_link", "collapse") and self.into:
+            raise ValueError(
+                "`into` belongs to lookup, concat, curie_link or collapse"
+            )
         return self
 
 

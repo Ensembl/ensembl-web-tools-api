@@ -380,6 +380,27 @@ class MergedSpec(BaseModel):
                 if join.nest_as:
                     paths[attached][join.nest_as] = ("list", "object")
                     paths[attached + (join.nest_as,)] = source
+            # A `collapse` post-op moves fields out of the row and into a
+            # nested list of its own, so the display resolves them a level down
+            # from where the target declared them.
+            for operation in plugin.post_joins or []:
+                if operation.op != "collapse":
+                    continue
+                row = paths.get((operation.target,))
+                if row is None:
+                    continue
+                target = next(
+                    (t for t in plugin.targets if t.field == operation.target),
+                    None,
+                )
+                shapes = _element_shapes(target) if target is not None else {}
+                gathered = operation.fields or []
+                for field in gathered:
+                    row.pop(field, None)
+                row[operation.into] = ("list", "object")
+                paths[(operation.target, operation.into)] = {
+                    field: shapes.get(field) for field in gathered
+                }
             by_plugin[plugin.plugin] = paths
         return by_plugin
 

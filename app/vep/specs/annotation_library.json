@@ -2541,7 +2541,7 @@
                             "split": "+",
                             "link": {
                               "kind": "external",
-                              "template": "http://europepmc.org/abstract/MED/{value}"
+                              "template": "https://europepmc.org/article/MED/{value}"
                             },
                             "nowrap": true
                           }
@@ -2665,7 +2665,7 @@
                             "split": "+",
                             "link": {
                               "kind": "external",
-                              "template": "http://europepmc.org/abstract/MED/{value}"
+                              "template": "https://europepmc.org/article/MED/{value}"
                             },
                             "nowrap": true
                           }
@@ -3189,7 +3189,7 @@
                 },
                 "link": {
                   "kind": "external",
-                  "template": "http://europepmc.org/abstract/MED/{value}"
+                  "template": "https://europepmc.org/article/MED/{value}"
                 }
               }
             ]

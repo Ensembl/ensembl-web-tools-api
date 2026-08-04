@@ -778,7 +778,7 @@ def test_intact_identifier_columns_link_to_their_own_resources():
         "https://www.ebi.ac.uk/intact/details/interaction/{value}"
     )
     assert columns["PubMed Links"].link.template == (
-        "http://europepmc.org/abstract/MED/{value}"
+        "https://europepmc.org/article/MED/{value}"
     )
     # These are never prefixed, so they are linked unconditionally.
     assert columns["Interaction AC"].link_prefix is None

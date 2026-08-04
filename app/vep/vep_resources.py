@@ -24,7 +24,12 @@ import re
 from fastapi import Request, status, APIRouter
 from pydantic import FilePath
 from requests import HTTPError
-from starlette.responses import JSONResponse, FileResponse, StreamingResponse
+from starlette.responses import (
+    JSONResponse,
+    FileResponse,
+    Response,
+    StreamingResponse,
+)
 from starlette.concurrency import run_in_threadpool
 
 from core.config import DUMP_INI, DUMP_INI_DIR, LOCAL_RESULTS_VCF
@@ -334,6 +339,34 @@ async def download_results(
         return response_error_handler(result={"status": 500})
 
 
+def _results_response(**kwargs) -> Response:
+    """A page of results, already serialised.
+
+    Returning the model itself would leave the serialising to FastAPI, which
+    for anything that is not already a Response runs `jsonable_encoder` — a
+    recursive walk in Python over every node of the tree, then `json.dumps`.
+    On a 100-record page that is 490ms against pydantic's own 62ms for the
+    same bytes, and it grew quietly as annotations made each variant bigger:
+    the route has returned the model since the endpoint was written, when the
+    payload was a fraction of this.
+
+    ★ `by_alias=True` is not optional. One display-spec field is `source` on
+    the model and `from` on the wire (`from` being a keyword), and
+    `jsonable_encoder` applies aliases where `model_dump_json` does not — so
+    without it that field silently renames and the frontend stops finding it.
+    With it, the bytes are identical to what this endpoint has always sent.
+
+    Serialising here rather than in the caller also keeps the work inside the
+    threadpool. FastAPI's encoding runs on the event loop, so until now every
+    results request blocked it for the duration.
+    """
+    payload = get_results_from_path(**kwargs)
+    return Response(
+        content=payload.model_dump_json(by_alias=True),
+        media_type="application/json",
+    )
+
+
 @router.get("/submissions/{submission_id}/results", name="view_results")
 async def fetch_results(
     request: Request,
@@ -360,7 +393,7 @@ async def fetch_results(
             # blocking, CPU-bound job; run it in a worker thread so a large
             # filtered scan doesn't stall the event loop for every other request.
             return await run_in_threadpool(
-                get_results_from_path,
+                _results_response,
                 vcf_path=FilePath(LOCAL_RESULTS_VCF),
                 page=page,
                 page_size=per_page,
@@ -375,7 +408,7 @@ async def fetch_results(
             results_file_path = get_vep_results_file_path(input_vcf_file)
             if results_file_path.exists():
                 return await run_in_threadpool(
-                    get_results_from_path,
+                    _results_response,
                     vcf_path=results_file_path,
                     page=page,
                     page_size=per_page,

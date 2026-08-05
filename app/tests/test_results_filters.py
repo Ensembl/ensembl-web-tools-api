@@ -1057,25 +1057,67 @@ def test_the_cache_is_bounded(tmp_path):
     assert len(vcf_results._scan_cache) <= vcf_results._SCAN_CACHE_MAX_ENTRIES
 
 
-# --- CADD score filters -------------------------------------------------------
+# --- Variant impact score filters ---------------------------------------------
 #
-# PHRED and RAW are separate fields because their scales differ (PHRED is ~0-99
-# and scaled for interpretation, RAW is unbounded around -7 to +35), so a
-# threshold means nothing without knowing which one it is on.
+# Every numeric impact prediction the job can carry is one field. Each score is
+# its own field because the scales differ wildly — CADD PHRED is ~0-99, CADD RAW
+# is unbounded around -7 to +35, the protein/splice predictors are 0-1
+# probabilities and popEVE is normally negative — so a threshold means nothing
+# without knowing which scale it is on.
 
-CADD_COLUMNS_HEADER = ["Allele", "Consequence", "Feature", "CADD_PHRED", "CADD_RAW"]
-CADD_INDEX_MAP = {name: i for i, name in enumerate(CADD_COLUMNS_HEADER)}
+SCORE_COLUMNS_HEADER = [
+    "Allele",
+    "Consequence",
+    "Feature",
+    "CADD_PHRED",
+    "CADD_RAW",
+    "am_pathogenicity",
+    "REVEL",
+    "ClinPred",
+    "EVE_SCORE",
+    "popEVE_SCORE",
+    "SpliceAI_pred_DS_AG",
+    "SpliceAI_pred_DS_AL",
+    "SpliceAI_pred_DS_DG",
+    "SpliceAI_pred_DS_DL",
+]
+SCORE_INDEX_MAP = {name: i for i, name in enumerate(SCORE_COLUMNS_HEADER)}
+# The pre-generalisation name, kept for the CADD tests below.
+CADD_INDEX_MAP = SCORE_INDEX_MAP
+
+
+def _score_entry(**values: str) -> str:
+    """A CSQ entry carrying the named score columns; every other score empty."""
+    entry = ["T", "missense_variant", "ENST_1"] + [""] * (
+        len(SCORE_COLUMNS_HEADER) - 3
+    )
+    for column, value in values.items():
+        entry[SCORE_INDEX_MAP[column]] = value
+    return "|".join(entry)
 
 
 def _cadd_entry(phred: str, raw: str) -> str:
-    return "|".join(["T", "missense_variant", "ENST_1", phred, raw])
+    return _score_entry(CADD_PHRED=phred, CADD_RAW=raw)
 
 
-def _cadd_record(pos: int, entries: list[str]) -> str:
+def _spliceai_entry(ag: str, al: str, dg: str, dl: str) -> str:
+    return _score_entry(
+        SpliceAI_pred_DS_AG=ag,
+        SpliceAI_pred_DS_AL=al,
+        SpliceAI_pred_DS_DG=dg,
+        SpliceAI_pred_DS_DL=dl,
+    )
+
+
+def _score_record(pos: int, entries: list[str]) -> str:
     return f"chr1\t{100 + pos}\tid_{pos:02d}\tC\tT\t.\t.\tCSQ={','.join(entries)}\n"
 
 
-def _cadd_filter(field, operator, threshold, include_missing=True):
+# The pre-generalisation names, still used by the scan-cache tests below.
+_cadd_record = _score_record
+
+
+def _score_filter(field, operator, threshold, include_missing=True):
     return rf.ResultsFilter(
         field=field,
         operator=operator,
@@ -1084,12 +1126,18 @@ def _cadd_filter(field, operator, threshold, include_missing=True):
     )
 
 
-def _run_cadd(entries, *filters):
-    lines = [_cadd_record(1, entries)]
+_cadd_filter = _score_filter
+
+
+def _run_score(entries, *filters):
+    lines = [_score_record(1, entries)]
     kept, _ = rf.apply_filter_pipeline(
-        lines, rf.compile_filters(list(filters), CADD_INDEX_MAP)
+        lines, rf.compile_filters(list(filters), SCORE_INDEX_MAP)
     )
     return kept
+
+
+_run_cadd = _run_score
 
 
 def test_cadd_phred_ge_keeps_only_scores_at_or_above():
@@ -1154,6 +1202,205 @@ def test_cadd_rejects_operators_other_than_ge_and_le():
             rf.compile_filters(
                 [_cadd_filter(rf.CADD_PHRED_FIELD, operator, 20)], CADD_INDEX_MAP
             )
+
+
+# --- the other single-column scores ------------------------------------------
+#
+# One parameterised pass over every score that reads exactly one column: they
+# share `_compile_score`, so this pins that each field id is wired to the right
+# column rather than re-testing the comparison logic eleven times.
+
+_SINGLE_COLUMN_SCORES = [
+    (rf.ALPHAMISSENSE_FIELD, "am_pathogenicity"),
+    (rf.REVEL_FIELD, "REVEL"),
+    (rf.CLINPRED_FIELD, "ClinPred"),
+    (rf.EVE_FIELD, "EVE_SCORE"),
+    (rf.POPEVE_FIELD, "popEVE_SCORE"),
+    (rf.SPLICEAI_AG_FIELD, "SpliceAI_pred_DS_AG"),
+    (rf.SPLICEAI_AL_FIELD, "SpliceAI_pred_DS_AL"),
+    (rf.SPLICEAI_DG_FIELD, "SpliceAI_pred_DS_DG"),
+    (rf.SPLICEAI_DL_FIELD, "SpliceAI_pred_DS_DL"),
+]
+
+
+@pytest.mark.parametrize("field,column", _SINGLE_COLUMN_SCORES)
+def test_each_score_filters_on_its_own_column(field, column):
+    high = [_score_entry(**{column: "0.9"})]
+    low = [_score_entry(**{column: "0.1"})]
+    assert _run_score(high, _score_filter(field, "ge", 0.5))
+    assert _run_score(low, _score_filter(field, "ge", 0.5)) == []
+    assert _run_score(low, _score_filter(field, "le", 0.5))
+    assert _run_score(high, _score_filter(field, "le", 0.5)) == []
+
+
+@pytest.mark.parametrize("field,column", _SINGLE_COLUMN_SCORES)
+def test_each_score_reads_no_other_score_column(field, column):
+    """A score set only in some *other* column leaves this field's entry
+    unscored — the wiring mistake this catches is a field pointed at the wrong
+    column, which would silently filter on a neighbouring predictor."""
+    others = [c for _, c in _SINGLE_COLUMN_SCORES if c != column]
+    entry = [_score_entry(**{c: "0.9" for c in others})]
+    assert _run_score(
+        entry, _score_filter(field, "ge", 0.5, include_missing=False)
+    ) == []
+
+
+@pytest.mark.parametrize("field,column", _SINGLE_COLUMN_SCORES)
+def test_each_score_is_a_no_op_when_its_plugin_was_not_run(field, column):
+    without = {
+        name: i
+        for name, i in SCORE_INDEX_MAP.items()
+        if name not in {c for _, c in _SINGLE_COLUMN_SCORES}
+    }
+    assert rf.compile_filters([_score_filter(field, "ge", 0.5)], without) == []
+
+
+def test_popeve_handles_negative_thresholds():
+    """Real popEVE scores run about -5.5 to -2.5, so this is the scale the field
+    is actually used on; a positive threshold would prove nothing about it."""
+    damaging = [_score_entry(popEVE_SCORE="-2.6")]
+    tolerated = [_score_entry(popEVE_SCORE="-5.4")]
+    # "at least -3.0" keeps the (less negative) damaging end.
+    assert _run_score(damaging, _score_filter(rf.POPEVE_FIELD, "ge", -3.0))
+    assert _run_score(tolerated, _score_filter(rf.POPEVE_FIELD, "ge", -3.0)) == []
+    # And the comparison is a real numeric one, not a sign-blind magnitude test.
+    assert _run_score(tolerated, _score_filter(rf.POPEVE_FIELD, "le", -3.0))
+    assert _run_score(damaging, _score_filter(rf.POPEVE_FIELD, "le", -3.0)) == []
+
+
+# --- spliceai_any: one threshold against all four delta scores ----------------
+
+
+def test_spliceai_any_keeps_an_entry_when_only_one_of_the_four_passes():
+    """SpliceAI's four deltas are read as a set — a variant that scores high for
+    donor loss alone is a splice candidate, so one passing column is enough."""
+    for position in range(4):
+        scores = ["0.01"] * 4
+        scores[position] = "0.85"
+        assert _run_score(
+            [_spliceai_entry(*scores)],
+            _score_filter(rf.SPLICEAI_ANY_FIELD, "ge", 0.5),
+        ), f"column {position} alone should keep the entry"
+
+
+def test_spliceai_any_drops_an_entry_when_none_of_the_four_passes():
+    assert _run_score(
+        [_spliceai_entry("0.01", "0.02", "0.03", "0.04")],
+        _score_filter(rf.SPLICEAI_ANY_FIELD, "ge", 0.5),
+    ) == []
+
+
+def test_spliceai_any_partial_data_is_scored_not_missing():
+    """The crux of the multi-column rule: an entry counts as unscored only when
+    EVERY tested column is absent. A variant scored on three of the four deltas
+    is scored, so it must be judged on the values it has — treating "one column
+    absent" as no-data would hand it to `include_missing` and either hide a real
+    hit or keep a variant that clearly fails."""
+    partial_high = [_spliceai_entry("", "0.9", "0.01", ".")]
+    partial_low = [_spliceai_entry("", "0.1", "0.01", ".")]
+    # include_missing=False must not drop the scored-on-three entry that passes.
+    assert _run_score(
+        partial_high,
+        _score_filter(rf.SPLICEAI_ANY_FIELD, "ge", 0.5, include_missing=False),
+    )
+    # ...and include_missing=True must not rescue the one that fails on the
+    # data it does have.
+    assert _run_score(
+        partial_low,
+        _score_filter(rf.SPLICEAI_ANY_FIELD, "ge", 0.5, include_missing=True),
+    ) == []
+
+
+def test_spliceai_any_with_no_data_at_all_follows_include_missing():
+    empty = [_spliceai_entry("", ".", "", "NA")]
+    assert _run_score(
+        empty, _score_filter(rf.SPLICEAI_ANY_FIELD, "ge", 0.5, include_missing=True)
+    )
+    assert _run_score(
+        empty, _score_filter(rf.SPLICEAI_ANY_FIELD, "ge", 0.5, include_missing=False)
+    ) == []
+
+
+def test_spliceai_any_reads_only_the_present_columns():
+    """A header carrying just the AG column still compiles (the bound is the max
+    over the columns actually present), and filters on what is there."""
+    partial_map = {
+        name: i
+        for name, i in SCORE_INDEX_MAP.items()
+        if not name.startswith("SpliceAI_") or name == "SpliceAI_pred_DS_AG"
+    }
+    compiled = rf.compile_filters(
+        [_score_filter(rf.SPLICEAI_ANY_FIELD, "ge", 0.5)], partial_map
+    )
+    assert len(compiled) == 1
+    assert compiled[0].max_csq_index == partial_map["SpliceAI_pred_DS_AG"]
+
+
+# --- available_scores: the two-stage availability gate ------------------------
+
+
+def _response_with_scores(fields: list[str]) -> model.VepResultsResponse:
+    return model.VepResultsResponse(
+        metadata=model.Metadata(
+            pagination=model.PaginationMetadata(page=1, per_page=10, total=0),
+            available_scores=list(fields),
+        ),
+        variants=[],
+    )
+
+
+def test_spliceai_fields_stay_available_on_the_sentinel_column_alone():
+    """The regression this whole design exists to prevent. The `spliceai` parse
+    plugin declares only `SpliceAI_pred_DS_AG` in its `csq_fields`, so that is
+    the only SpliceAI column the pinned expected-columns sidecar carries — even
+    though the VCF holds all four. Gating each field on its own column would
+    hide three of the five options with the data present in the file."""
+    spliceai_fields = [
+        rf.SPLICEAI_AG_FIELD,
+        rf.SPLICEAI_AL_FIELD,
+        rf.SPLICEAI_DG_FIELD,
+        rf.SPLICEAI_DL_FIELD,
+        rf.SPLICEAI_ANY_FIELD,
+    ]
+    gated = vcf_results._with_display_panels(
+        _response_with_scores(spliceai_fields), None, None,
+        expected_columns={"SpliceAI_pred_DS_AG"},
+    )
+    assert gated.metadata.available_scores == spliceai_fields
+
+
+def test_scores_the_submission_did_not_select_are_dropped():
+    """The full-cache leak: the VCF may carry columns this job never asked for."""
+    gated = vcf_results._with_display_panels(
+        _response_with_scores(
+            [rf.CADD_PHRED_FIELD, rf.REVEL_FIELD, rf.SPLICEAI_ANY_FIELD]
+        ),
+        None, None,
+        expected_columns={"CADD_PHRED", "gnomAD_exomes_AF"},
+    )
+    assert gated.metadata.available_scores == [rf.CADD_PHRED_FIELD]
+
+
+def test_scores_untouched_without_a_pin():
+    """Older jobs (no expected-columns sidecar) keep what the VCF reported."""
+    fields = [rf.CADD_PHRED_FIELD, rf.EVE_FIELD]
+    gated = vcf_results._with_display_panels(
+        _response_with_scores(fields), None, None, expected_columns=None
+    )
+    assert gated.metadata.available_scores == fields
+
+
+def test_every_score_field_has_a_builder():
+    """A score added to SCORE_SPECS without a builder entry would 4xx at request
+    time rather than fail here."""
+    assert set(rf.SCORE_SPECS) <= set(rf._BUILDERS)
+
+
+def test_categorical_predictions_are_not_offered_as_numeric_scores():
+    """`am_class` and `EVE_CLASS` are categorical calls, not thresholds."""
+    tested = {column for spec in rf.SCORE_SPECS.values() for column in spec.columns}
+    assert "am_class" not in tested
+    assert "EVE_CLASS" not in tested
 
 
 def test_scan_cache_key_separates_filters_that_only_differ_by_no_score_choice(tmp_path):

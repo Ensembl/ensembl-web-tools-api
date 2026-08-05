@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Iterable, Iterator
+from typing import TYPE_CHECKING, Callable, Iterable, Iterator, NamedTuple
 
 from pydantic import BaseModel
 
@@ -46,15 +46,106 @@ GENE_SYMBOL_FIELD = "gene_symbol"
 GENE_ID_FIELD = "gene_id"
 TRANSCRIPT_GROUP_FIELD = "transcript_group"
 ALLELE_FREQUENCY_FIELD = "allele_frequency"
-# CADD is scored on two scales with different ranges — PHRED is roughly
-# 0-99 and scaled for interpretation, RAW is unbounded around -7 to +35 —
-# so they are separate fields rather than one with a picker. A threshold
-# means nothing without knowing which scale it is on.
+
+# --- Variant impact scores ----------------------------------------------------
+#
+# Every numeric impact-prediction score the job can carry is one field here.
+# Each score is its own field rather than one field with a source picker,
+# because a threshold means nothing without knowing which scale it sits on:
+# CADD PHRED is roughly 0-99 and scaled for interpretation while CADD RAW is
+# unbounded around -7 to +35; AlphaMissense, REVEL, ClinPred and SpliceAI are
+# 0-1 probabilities; popEVE is a log-scale score that is normally *negative*
+# (about -5.5 to -2.5 in real data). One picker over those would let a user
+# carry a threshold from one scale to another and get a silently meaningless
+# answer.
+#
+# Only *numeric* scores belong here. AlphaMissense's `am_class` and EVE's
+# `EVE_CLASS` are categorical calls (likely_benign / likely_pathogenic / …),
+# not thresholds, so they are deliberately absent.
 CADD_PHRED_FIELD = "cadd_phred"
 CADD_RAW_FIELD = "cadd_raw"
+ALPHAMISSENSE_FIELD = "alphamissense"
+REVEL_FIELD = "revel"
+CLINPRED_FIELD = "clinpred"
+EVE_FIELD = "eve"
+POPEVE_FIELD = "popeve"
+SPLICEAI_AG_FIELD = "spliceai_ag"
+SPLICEAI_AL_FIELD = "spliceai_al"
+SPLICEAI_DG_FIELD = "spliceai_dg"
+SPLICEAI_DL_FIELD = "spliceai_dl"
+SPLICEAI_ANY_FIELD = "spliceai_any"
 
-# The CSQ column each CADD field tests.
-CADD_COLUMNS = {CADD_PHRED_FIELD: "CADD_PHRED", CADD_RAW_FIELD: "CADD_RAW"}
+
+class ScoreSpec(NamedTuple):
+    """How one impact-score field is tested and how its availability is decided.
+
+    `columns` are the CSQ columns the predicate reads — usually one, but
+    `spliceai_any` reads all four SpliceAI delta scores at once.
+
+    `gate` is the single column that answers "did the plugin that produces this
+    score actually run for this job?", and it is deliberately NOT the same thing
+    as the tested columns. Availability is decided in two stages (see
+    vcf_results): the column must be in the output VCF's CSQ header, *and* it
+    must be in the job's pinned `expected_columns` — the second stage stops a
+    full-cache VCF leaking scores the submission never selected.
+
+    That second stage is why `gate` exists separately. `expected_columns` is
+    built from each parse plugin's `csq_fields`, which is a "did this plugin run
+    at all" sentinel and is deliberately under-declared: the `spliceai` plugin
+    declares only `SpliceAI_pred_DS_AG` even though it parses AL, DG and DL as
+    well. Confirmed against real artefacts — the output VCF's CSQ header carries
+    all four DS columns while `expected_columns.json` carries only the AG one.
+    So gating each SpliceAI field on its own column would hide three of the five
+    options with the data sitting right there in the file; gating them all on the
+    sentinel is the fix. Widening the spec's `csq_fields` instead is not an
+    option: that same list drives the runtime missing-expected-field check, so a
+    job where VEP omitted one column would go from working to a hard failure.
+    """
+
+    columns: tuple[str, ...]
+    gate: str
+
+
+def _score(*columns: str, gate: str | None = None) -> ScoreSpec:
+    """A score spec; the gate defaults to the first (usually only) column."""
+    return ScoreSpec(columns=columns, gate=gate or columns[0])
+
+
+_SPLICEAI_COLUMNS = (
+    "SpliceAI_pred_DS_AG",
+    "SpliceAI_pred_DS_AL",
+    "SpliceAI_pred_DS_DG",
+    "SpliceAI_pred_DS_DL",
+)
+# The sentinel the whole SpliceAI family is gated on — see ScoreSpec above.
+_SPLICEAI_GATE = _SPLICEAI_COLUMNS[0]
+
+# Field id -> the columns it tests and the column its availability is gated on.
+SCORE_SPECS: dict[str, ScoreSpec] = {
+    CADD_PHRED_FIELD: _score("CADD_PHRED"),
+    CADD_RAW_FIELD: _score("CADD_RAW"),
+    ALPHAMISSENSE_FIELD: _score("am_pathogenicity"),
+    REVEL_FIELD: _score("REVEL"),
+    CLINPRED_FIELD: _score("ClinPred"),
+    EVE_FIELD: _score("EVE_SCORE"),
+    # TODO: popEVE also emits `popEVE_gap_frequency` (present in the dev VCF,
+    # values ~0.03-0.99), which describes how well covered the position is by
+    # the model's alignment rather than how damaging the variant is. Offering a
+    # GAP-frequency filter is wanted but out of scope here — it is a different
+    # kind of question from "how bad is this variant", so it needs its own
+    # label and its own place in the UI rather than a twelfth score field.
+    POPEVE_FIELD: _score("popEVE_SCORE"),
+    SPLICEAI_AG_FIELD: _score("SpliceAI_pred_DS_AG", gate=_SPLICEAI_GATE),
+    SPLICEAI_AL_FIELD: _score("SpliceAI_pred_DS_AL", gate=_SPLICEAI_GATE),
+    SPLICEAI_DG_FIELD: _score("SpliceAI_pred_DS_DG", gate=_SPLICEAI_GATE),
+    SPLICEAI_DL_FIELD: _score("SpliceAI_pred_DS_DL", gate=_SPLICEAI_GATE),
+    # "Any splicing consequence": one threshold against all four delta scores,
+    # kept when any of them passes. SpliceAI's own documentation reads the four
+    # as a set (the recommended interpretation is the maximum), so asking a user
+    # to add four separate conditions to express the usual question would be
+    # busywork.
+    SPLICEAI_ANY_FIELD: _score(*_SPLICEAI_COLUMNS, gate=_SPLICEAI_GATE),
+}
 
 # Operators understood by the query builder.
 OPERATOR_IN = "in"  # "is any of"
@@ -85,10 +176,11 @@ class ResultsFilter(BaseModel):
     # match any/all of the tested AF columns.
     threshold: float | None = None
     match: str | None = None
-    # Score filters (CADD): whether an entry with no score is kept. Defaults to
+    # Impact-score filters: whether an entry with no score is kept. Defaults to
     # keeping it — a filter should not silently hide records the user has not
-    # asked to exclude, and a missing CADD score usually means the variant type
-    # is unscored (indels, non-SNVs) rather than that it scored badly.
+    # asked to exclude, and a missing score usually means the variant type is
+    # unscored (indels and non-SNVs for CADD, non-missense for the protein
+    # predictors) rather than that it scored badly.
     include_missing: bool = True
 
 
@@ -603,27 +695,41 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> Co
     )
 
 
-def _compile_cadd(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFilter | None":
-    """Keep entries whose CADD score passes the threshold.
+def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFilter | None":
+    """Keep entries whose impact score passes the threshold.
 
-    One column, unlike allele frequency: PHRED and RAW are separate fields
-    because their scales differ, so there is no any/all across sources here.
+    One code path for every score in SCORE_SPECS. Most read a single column, so
+    their `columns` is a list of length one; `spliceai_any` reads four. Rather
+    than a single-column variant plus a multi-column one, this borrows the shape
+    of `_compile_allele_frequency`, which already tests several columns: collect
+    the numeric values present, then decide. An entry is kept when ANY tested
+    column passes — for `spliceai_any` that is exactly SpliceAI's own reading of
+    its four delta scores as a set, and for a one-column score "any" and "all"
+    are the same statement.
 
     NO-DATA is the caller's choice (`include_missing`), which is why this does
-    not follow the AF filter's fixed "keep the unknowns". A missing CADD score
-    usually means the variant type is not scored at all rather than that it
-    scored low, and which of those a user wants depends on what they are
-    hunting — so it is a checkbox rather than a policy.
+    not follow the AF filter's fixed "keep the unknowns". A missing score usually
+    means the variant type is not scored at all (CADD does not score every indel;
+    AlphaMissense, REVEL and EVE are missense-only) rather than that it scored
+    low, and which of those a user wants depends on what they are hunting — so it
+    is a checkbox rather than a policy.
+
+    An entry counts as unscored only when EVERY tested column is absent, empty or
+    non-numeric. Treating "any column absent" as unscored would be wrong for
+    `spliceai_any`: a variant scored on three of the four deltas is scored, and
+    must be judged on the scores it has rather than handed to `include_missing`.
     """
     _require_operator(f, OPERATOR_LE, OPERATOR_GE)
     if f.threshold is None:
         return None  # nothing to compare against -> no-op
     threshold = f.threshold
 
-    column = CADD_COLUMNS[f.field]
-    index = index_map.get(column)
-    if index is None:
-        return None  # CADD wasn't run -> no-op rather than an empty result
+    spec = SCORE_SPECS[f.field]
+    indices = [index_map[c] for c in spec.columns if c in index_map]
+    if not indices:
+        # The plugin wasn't run for this job -> no-op rather than an empty
+        # result. The bound below is the max over the columns actually present.
+        return None
 
     compare = (
         (lambda value: value <= threshold)
@@ -633,18 +739,23 @@ def _compile_cadd(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFil
     include_missing = f.include_missing
 
     def keep_entry(entry: list[str]) -> bool:
-        if index >= len(entry) or entry[index] in ("", ".", None):
+        values: list[float] = []
+        for i in indices:
+            if i < len(entry) and entry[i] not in ("", ".", None):
+                try:
+                    values.append(float(entry[i]))
+                except ValueError:
+                    pass  # non-numeric -> no score in that column
+        if not values:
+            # Nothing numeric anywhere: this entry is unscored, so the user's
+            # choice decides.
             return include_missing
-        try:
-            return compare(float(entry[index]))
-        except ValueError:
-            # A non-numeric score is no score, and is treated as one.
-            return include_missing
+        return any(map(compare, values))
 
     return CompiledFilter(
         field=f.field,
         keep_entry=keep_entry,
-        max_csq_index=index,
+        max_csq_index=max(indices),
     )
 
 
@@ -655,13 +766,14 @@ _BUILDERS: dict[
     str, Callable[[ResultsFilter, dict[str, int]], CompiledFilter | None]
 ] = {
     CONSEQUENCE_FIELD: _compile_consequence,
-    CADD_PHRED_FIELD: _compile_cadd,
-    CADD_RAW_FIELD: _compile_cadd,
     TRANSCRIPT_FIELD: _compile_transcript,
     GENE_SYMBOL_FIELD: _compile_gene_symbol,
     GENE_ID_FIELD: _compile_gene_id,
     TRANSCRIPT_GROUP_FIELD: _compile_transcript_group,
     ALLELE_FREQUENCY_FIELD: _compile_allele_frequency,
+    # Every impact score shares one builder, so a score is added by adding a
+    # SCORE_SPECS entry and nothing else.
+    **{field: _compile_score for field in SCORE_SPECS},
 }
 
 

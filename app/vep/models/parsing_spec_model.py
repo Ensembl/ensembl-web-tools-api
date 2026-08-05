@@ -164,6 +164,24 @@ class PostOp(BaseModel):
             condition ClinVar gives no usable id for renders as plain text
             rather than a dead link.
 
+    mapped_link  build a link whose URL shape depends on which source an element
+            came from. `by` names the field that decides (for phenotypes, the
+            `source`), `templates` maps each of its values to a URL, and `into`
+            is the URL field to write. Unlike `curie_link` the key is a plain
+            field value rather than a prefix inside a CURIE, and the template is
+            filled from the element's *own* fields — `{id}` and `{external_id}`
+            are both available, which is the point: the Phenotypes plugin gives
+            every association both, and which one addresses the record differs
+            by source. G2P and the GWAS catalogue are keyed by `id` (an Ensembl
+            gene id, an rs id), while OMIM and Orphanet are keyed by
+            `external_id`, their own accession, with `id` holding the gene the
+            association hangs off.
+
+            A source absent from `templates`, or one whose template names a
+            field this element left empty, writes null — so an association from
+            a source with no known URL renders as plain text rather than a dead
+            link, exactly as `curie_link` does.
+
     collapse  merge elements differing *only* in the named fields, gathering
             those fields into a nested list. ClinVar files one submission
             against several conditions at once, so a variant's table can carry
@@ -211,7 +229,7 @@ class PostOp(BaseModel):
 
     op: Literal[
         "dedup", "sort", "exclude", "lookup", "concat", "curie_link", "collapse",
-        "only_if_differs", "default", "derive_if_empty",
+        "only_if_differs", "default", "derive_if_empty", "mapped_link",
     ]
     by: str | None = None
     desc: bool = False
@@ -253,8 +271,12 @@ class PostOp(BaseModel):
             raise ValueError("lookup requires `by`, `into` and `table`")
         if self.op == "curie_link" and not (self.by and self.into and self.templates):
             raise ValueError("curie_link requires `by`, `into` and `templates`")
-        if self.op != "curie_link" and (self.prefer or self.templates):
-            raise ValueError("`prefer`/`templates` belong to curie_link")
+        if self.op == "mapped_link" and not (self.by and self.into and self.templates):
+            raise ValueError("mapped_link requires `by`, `into` and `templates`")
+        if self.op not in ("curie_link", "mapped_link") and self.templates:
+            raise ValueError("`templates` belongs to curie_link or mapped_link")
+        if self.op != "curie_link" and self.prefer:
+            raise ValueError("`prefer` belongs to curie_link")
         if self.op != "lookup" and self.table:
             raise ValueError("`table` belongs to lookup")
         if self.op == "concat" and not (self.fields and self.into):
@@ -287,11 +309,11 @@ class PostOp(BaseModel):
             raise ValueError("`fields` belongs to concat or collapse")
         if self.op not in (
             "lookup", "concat", "curie_link", "collapse", "only_if_differs",
-            "derive_if_empty",
+            "derive_if_empty", "mapped_link",
         ) and self.into:
             raise ValueError(
-                "`into` belongs to lookup, concat, curie_link, collapse or "
-                "only_if_differs"
+                "`into` belongs to lookup, concat, curie_link, mapped_link, "
+                "collapse or only_if_differs"
             )
         return self
 

@@ -290,7 +290,14 @@ def test_phenotypes_requests_its_columns(monkeypatch, tmp_path):
             f"/Phenotypes.pm_homo_sapiens_116_{genome_build}.gvf.gz,"
             # No `clinvar_clin_sig`: ClinVar's clinical significance comes
             # from its own custom now, under the same Phenotypes option.
-            "cols=type&source&phenotype&id&risk_allele"
+            #
+            # `external_id` sits between `id` and `risk_allele` — the plugin's
+            # own column order, not ours, so it cannot be appended at the end.
+            # It is the accession that addresses the record at its source
+            # (the OMIM or Orphanet entry), where `id` is the gene or variant
+            # the association hangs off, and it is what the phenotype links
+            # are built from.
+            "cols=type&source&phenotype&id&external_id&risk_allele"
         ), line
 
 

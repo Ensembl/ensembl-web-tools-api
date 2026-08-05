@@ -73,7 +73,7 @@
           "name": "Phenotypes",
           "params": {
             "file": "{path}/Phenotypes.pm_homo_sapiens_116_GRCh37.gvf.gz",
-            "cols": "type&source&phenotype&id&risk_allele"
+            "cols": "type&source&phenotype&id&external_id&risk_allele"
           }
         },
         "forces_on": [

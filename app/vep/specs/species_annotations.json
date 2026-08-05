@@ -25,7 +25,7 @@
         "name": "Phenotypes",
         "params": {
           "file": "{path}/Phenotypes.pm_{production_name}_116.gvf.gz",
-          "cols": "type&source&phenotype&id&risk_allele&clinvar_clin_sig"
+          "cols": "type&source&phenotype&id&external_id&risk_allele"
         }
       }
     },

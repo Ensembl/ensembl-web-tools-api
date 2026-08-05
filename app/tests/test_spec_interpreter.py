@@ -758,11 +758,11 @@ def test_hgvs_empty_is_none():
 def test_phenotype_data_splits_entries_into_their_cols():
     # The Phenotypes plugin produces a single PHENOTYPES column: '&'-separated
     # entries, each '+'-separated into the fields named by the plugin's `cols`
-    # (type, source, phenotype, id, risk_allele). Absent trailing fields come
-    # back null.
+    # (type, source, phenotype, id, external_id, risk_allele). Absent trailing
+    # fields come back null.
     index_map = index_map_for("Allele", "PHENOTYPES")
-    gene = "Gene+GenCC+Parkinson_disease+ENSG00000145335+"
-    variation = "Variation+NHGRI-EBI_GWAS_catalog+Atrial_fibrillation+rs699+A"
+    gene = "Gene+GenCC+Parkinson_disease+ENSG00000145335++"
+    variation = "Variation+NHGRI-EBI_GWAS_catalog+Atrial_fibrillation+rs699++A"
     result = run("phenotype_data", ["A", f"{gene}&{variation}"], index_map)
     assert result["phenotypes"] == [
             {
@@ -770,39 +770,123 @@ def test_phenotype_data_splits_entries_into_their_cols():
                 "source": "GenCC",
                 "phenotype": "Parkinson_disease",
                 "id": "ENSG00000145335",
+                "external_id": None,
                 "risk_allele": None,
+                "source_url": None,
             },
             {
                 "type": "Variation",
                 "source": "NHGRI-EBI_GWAS_catalog",
                 "phenotype": "Atrial_fibrillation",
                 "id": "rs699",
+                "external_id": None,
                 "risk_allele": "A",
+                "source_url": "https://www.ebi.ac.uk/gwas/variants/rs699",
             },
         ]
 
 
 def test_phenotype_data_skips_entries_missing_a_required_field():
     """type / source / phenotype must all be present; an entry missing any of
-    them is dropped rather than rendered half-empty. (Entries with a different
-    field count are dropped for the same reason — the pattern must match,
-    which is what stopped every association parsing when `clinvar_clin_sig`
-    left the plugin's `cols` and every record became five fields.)"""
+    them is dropped rather than rendered half-empty.
+
+    A wrong field count is dropped for the same reason — the pattern must match.
+    That strictness has now bitten twice, in both directions: every association
+    stopped parsing when `clinvar_clin_sig` left the plugin's `cols` and records
+    became five fields, then again when `external_id` was added and they became
+    six. So the two live shapes are both accepted, `external_id` being optional:
+    a job submitted before the column arrived is still readable for the days its
+    results are retained. Counts that match neither shape stay dropped.
+    """
     index_map = index_map_for("PHENOTYPES")
-    good = "Gene+GenCC+Parkinson_disease+ENSG00000145335+"
+    good = "Gene+GenCC+Parkinson_disease+ENSG00000145335++"
     result = run(
         "phenotype_data",
         [
-            "Gene++Parkinson_disease+ENSG1+"  # no source
-            "&Gene+GenCC++ENSG2+"  # no phenotype
-            "&+GenCC+Parkinson_disease+ENSG3+"  # no type
-            "&Cancer_Gene_Census+cancer+ENSG4"  # 4 fields, not this shape
-            "&Gene+GenCC+Parkinson_disease+ENSG5++"  # 6, the shape before
+            "Gene++Parkinson_disease+ENSG1++"  # no source
+            "&Gene+GenCC++ENSG2++"  # no phenotype
+            "&+GenCC+Parkinson_disease+ENSG3++"  # no type
+            "&Cancer_Gene_Census+cancer+ENSG4"  # 3 fields, neither shape
             f"&{good}"
         ],
         index_map,
     )
     assert [p["id"] for p in result["phenotypes"]] == ["ENSG00000145335"]
+
+
+def test_phenotype_data_still_reads_the_pre_external_id_shape():
+    """A five-field entry (no `external_id`) parses, with the field null.
+
+    Results are retained for days, so a job submitted before the plugin's `cols`
+    gained `external_id` is still being read after the change. The alternative —
+    requiring six — would blank the phenotype panel for every one of those jobs,
+    which is exactly the failure this change is fixing.
+    """
+    result = run(
+        "phenotype_data",
+        ["A", "Variation+NHGRI-EBI_GWAS_catalog+Atrial_fibrillation+rs699+A"],
+        index_map_for("Allele", "PHENOTYPES"),
+    )
+    assert result["phenotypes"] == [
+        {
+            "type": "Variation",
+            "source": "NHGRI-EBI_GWAS_catalog",
+            "phenotype": "Atrial_fibrillation",
+            "id": "rs699",
+            "external_id": None,
+            "risk_allele": "A",
+            "source_url": "https://www.ebi.ac.uk/gwas/variants/rs699",
+        }
+    ]
+
+
+def test_phenotype_source_links_use_the_right_id_per_source():
+    """Each source is addressed by the id that actually identifies its record.
+
+    G2P and the GWAS catalogue are keyed by `id`, OMIM and Orphanet by
+    `external_id` — and the distinction is real rather than a fallback: a
+    MIM_morbid association carries *both*, `id` being the gene the association
+    hangs off (ENSG...) and `external_id` the OMIM entry. Keying it on `id`
+    would produce a confident link to the wrong page.
+    """
+    result = run(
+        "phenotype_data",
+        [
+            "A",
+            "Gene+MIM_morbid+Immunodeficiency_38+ENSG00000187608+616126+"
+            "&Gene+Orphanet+Mendelian_susceptibility+ENSG00000187608+431149+"
+            "&Gene+G2P+Retinal_dystrophy+ENSG00000187634+614756+"
+            "&Variation+NHGRI-EBI_GWAS_catalog+Lupus+rs2977608++A"
+            # No template for this source, so no link rather than a dead one.
+            "&Gene+Cancer_Gene_Census+Leukaemia+ENSG00000187608+123+",
+        ],
+        index_map_for("Allele", "PHENOTYPES"),
+    )
+    assert {p["source"]: p["source_url"] for p in result["phenotypes"]} == {
+        "MIM_morbid": "https://omim.org/entry/616126",
+        "Orphanet": "https://www.orpha.net/en/disease/detail/431149",
+        "G2P": "https://www.ebi.ac.uk/gene2phenotype/search?query=ENSG00000187634",
+        "NHGRI-EBI_GWAS_catalog": "https://www.ebi.ac.uk/gwas/variants/rs2977608",
+        "Cancer_Gene_Census": None,
+    }
+
+
+def test_phenotype_source_link_is_absent_when_its_id_is():
+    """A linkable source missing the id that addresses it gets no link.
+
+    Half a URL is worse than none: "https://omim.org/entry/" is a confident link
+    to OMIM's front door, presented as though it were this phenotype's record.
+    """
+    result = run(
+        "phenotype_data",
+        [
+            "A",
+            "Gene+MIM_morbid+Immunodeficiency_38+ENSG00000187608++"
+            "&Gene+G2P+Retinal_dystrophy++614756+",
+        ],
+        index_map_for("Allele", "PHENOTYPES"),
+    )
+    assert [p["source_url"] for p in result["phenotypes"]] == [None, None]
 
 
 def test_phenotype_data_leaves_clinvar_associations_alone():
@@ -1195,7 +1279,9 @@ def test_lookup_needs_all_three_of_by_into_and_table():
         PostOp.model_validate({"op": "dedup", "table": "go_namespaces"})
     # `into` is shared with concat and curie_link now, so it is rejected only for
     # the ops that write no field at all.
-    with pytest.raises(ValidationError, match="belongs to lookup, concat, curie_link, collapse or"):
+    with pytest.raises(
+        ValidationError, match="belongs to lookup, concat, curie_link, mapped_link"
+    ):
         PostOp.model_validate({"op": "dedup", "into": "namespace"})
 
 

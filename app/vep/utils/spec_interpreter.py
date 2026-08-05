@@ -156,6 +156,24 @@ def _lookup_key(value) -> str | None:
     return str(int(tail)) if tail.isdigit() else tail
 
 
+def _fill_template(template: str, row: dict) -> str | None:
+    """Fill a URL template's `{field}` placeholders from the element's own fields.
+
+    Returns None if any placeholder names a field this element left empty, which
+    is the whole reason this is not a plain `str.format`: a phenotype row from a
+    linkable source can still be missing the id that addresses it, and
+    "https://omim.org/entry/" is a worse outcome than no link at all. Same rule
+    `concat` follows for a missing part.
+    """
+    filled = template
+    for name in re.findall(r"\{(\w+)\}", template):
+        value = row.get(name)
+        if value in (None, ""):
+            return None
+        filled = filled.replace("{" + name + "}", str(value))
+    return filled
+
+
 def _resolve_curie(value, prefer, templates, sep):
     """One URL from a CURIE list, choosing which authority to trust.
 
@@ -315,6 +333,18 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                 row[operation.into] = url
                 if operation.label_into:
                     row[operation.label_into] = label
+            continue
+        if operation.op == "mapped_link":
+            for row in rows:
+                key = row.get(operation.by)
+                template = operation.templates.get(str(key)) if key else None
+                # An unmapped source, or a template naming a field this row left
+                # empty, means no link rather than a broken one: the phenotype
+                # then renders as plain text. `id` and `external_id` are both
+                # offered because which addresses the record differs by source.
+                row[operation.into] = (
+                    _fill_template(template, row) if template else None
+                )
             continue
         if operation.op == "dedup":
             # Keyed on the row's JSON rather than a tuple of its values: after a

@@ -297,7 +297,14 @@ def test_phenotypes_requests_its_columns(monkeypatch, tmp_path):
             # (the OMIM or Orphanet entry), where `id` is the gene or variant
             # the association hangs off, and it is what the phenotype links
             # are built from.
-            "cols=type&source&phenotype&id&external_id&risk_allele"
+            "cols=type&source&phenotype&id&external_id&risk_allele,"
+            # The sources this option does not surface. COSMIC and HGMD-PUBLIC
+            # are withheld deliberately — both carry licensing conditions — and
+            # ClinVar because its associations arrive through its own custom
+            # annotation, in far more detail than this plugin's one line. The
+            # parse pattern excludes ClinVar as well, so a job submitted before
+            # this was requested still shows it only once.
+            "exclude_sources=HGMD-PUBLIC&COSMIC&ClinVar"
         ), line
 
 

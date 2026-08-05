@@ -26,7 +26,8 @@ def get_prediction_index_map(csq_header: str) -> dict[str, int]:
 
 def csq_index_map_from_header(header_lines: list[str]) -> dict[str, int]:
     """CSQ column -> index, parsed from the raw ##INFO=<ID=CSQ ...> header line.
-    Used by the filter scan, which reads raw text rather than via vcfpy."""
+    Used by the filter scan and by the results reader, both of which work from
+    the raw header lines."""
     for line in header_lines:
         if line.startswith("##INFO=<ID=CSQ"):
             match = re.search(r'Description="([^"]*)"', line)

@@ -386,6 +386,23 @@ async def fetch_results(
                 content={"details": f"Invalid filters: {exc}"},
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
+
+        def _results(**kwargs):
+            """Build the page, turning a bad filter into the client error it is.
+
+            `parse_filters` above only checks the shape; whether a field accepts
+            an operator is not known until the filter is compiled, which happens
+            inside the results call. Without this, asking allele frequency for
+            `==` — which an older client may still do, since it was offered
+            until recently — came back as a 500.
+            """
+            try:
+                return _results_response(**kwargs)
+            except FilterError as exc:
+                return JSONResponse(
+                    content={"details": f"Invalid filters: {exc}"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
         # Temporary local-results mode: parse a VEP output VCF on disk directly,
         # bypassing the Seqera status lookup. Enabled by setting LOCAL_RESULTS_VCF.
         if LOCAL_RESULTS_VCF:
@@ -393,7 +410,7 @@ async def fetch_results(
             # blocking, CPU-bound job; run it in a worker thread so a large
             # filtered scan doesn't stall the event loop for every other request.
             return await run_in_threadpool(
-                _results_response,
+                _results,
                 vcf_path=FilePath(LOCAL_RESULTS_VCF),
                 page=page,
                 page_size=per_page,
@@ -408,7 +425,7 @@ async def fetch_results(
             results_file_path = get_vep_results_file_path(input_vcf_file)
             if results_file_path.exists():
                 return await run_in_threadpool(
-                    _results_response,
+                    _results,
                     vcf_path=results_file_path,
                     page=page,
                     page_size=per_page,

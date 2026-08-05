@@ -46,12 +46,22 @@ GENE_SYMBOL_FIELD = "gene_symbol"
 GENE_ID_FIELD = "gene_id"
 TRANSCRIPT_GROUP_FIELD = "transcript_group"
 ALLELE_FREQUENCY_FIELD = "allele_frequency"
+# CADD is scored on two scales with different ranges — PHRED is roughly
+# 0-99 and scaled for interpretation, RAW is unbounded around -7 to +35 —
+# so they are separate fields rather than one with a picker. A threshold
+# means nothing without knowing which scale it is on.
+CADD_PHRED_FIELD = "cadd_phred"
+CADD_RAW_FIELD = "cadd_raw"
+
+# The CSQ column each CADD field tests.
+CADD_COLUMNS = {CADD_PHRED_FIELD: "CADD_PHRED", CADD_RAW_FIELD: "CADD_RAW"}
 
 # Operators understood by the query builder.
 OPERATOR_IN = "in"  # "is any of"
-# Numeric comparisons (allele frequency): <=, ==, >=.
+# Numeric comparisons: <= and >=. There is deliberately no `==`: these are
+# floats, so equality is a question the data can rarely answer, and the UI
+# offered it only for allele frequency where it was never the useful test.
 OPERATOR_LE = "le"
-OPERATOR_EQ = "eq"
 OPERATOR_GE = "ge"
 
 # Allele-frequency match modes.
@@ -75,6 +85,11 @@ class ResultsFilter(BaseModel):
     # match any/all of the tested AF columns.
     threshold: float | None = None
     match: str | None = None
+    # Score filters (CADD): whether an entry with no score is kept. Defaults to
+    # keeping it — a filter should not silently hide records the user has not
+    # asked to exclude, and a missing CADD score usually means the variant type
+    # is unscored (indels, non-SNVs) rather than that it scored badly.
+    include_missing: bool = True
 
 
 class FilterError(ValueError):
@@ -548,7 +563,7 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> Co
     variants — so keeping the unknowns is what the user is actually asking for.
     Dropping them did the opposite, hiding the novel variants such a search is
     usually hunting."""
-    _require_operator(f, OPERATOR_LE, OPERATOR_EQ, OPERATOR_GE)
+    _require_operator(f, OPERATOR_LE, OPERATOR_GE)
     if f.threshold is None:
         return None  # nothing to compare against -> no-op
     threshold = f.threshold
@@ -560,12 +575,11 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> Co
         return None  # no AF columns to test (e.g. AF not run) -> no-op
     highest_af_index = max(indices)
 
-    if f.operator == OPERATOR_LE:
-        compare = lambda value: value <= threshold
-    elif f.operator == OPERATOR_GE:
-        compare = lambda value: value >= threshold
-    else:
-        compare = lambda value: value == threshold
+    compare = (
+        (lambda value: value <= threshold)
+        if f.operator == OPERATOR_LE
+        else (lambda value: value >= threshold)
+    )
     match_all = f.match == AF_MATCH_ALL
 
     def keep_entry(entry: list[str]) -> bool:
@@ -589,6 +603,51 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> Co
     )
 
 
+def _compile_cadd(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFilter | None":
+    """Keep entries whose CADD score passes the threshold.
+
+    One column, unlike allele frequency: PHRED and RAW are separate fields
+    because their scales differ, so there is no any/all across sources here.
+
+    NO-DATA is the caller's choice (`include_missing`), which is why this does
+    not follow the AF filter's fixed "keep the unknowns". A missing CADD score
+    usually means the variant type is not scored at all rather than that it
+    scored low, and which of those a user wants depends on what they are
+    hunting — so it is a checkbox rather than a policy.
+    """
+    _require_operator(f, OPERATOR_LE, OPERATOR_GE)
+    if f.threshold is None:
+        return None  # nothing to compare against -> no-op
+    threshold = f.threshold
+
+    column = CADD_COLUMNS[f.field]
+    index = index_map.get(column)
+    if index is None:
+        return None  # CADD wasn't run -> no-op rather than an empty result
+
+    compare = (
+        (lambda value: value <= threshold)
+        if f.operator == OPERATOR_LE
+        else (lambda value: value >= threshold)
+    )
+    include_missing = f.include_missing
+
+    def keep_entry(entry: list[str]) -> bool:
+        if index >= len(entry) or entry[index] in ("", ".", None):
+            return include_missing
+        try:
+            return compare(float(entry[index]))
+        except ValueError:
+            # A non-numeric score is no score, and is treated as one.
+            return include_missing
+
+    return CompiledFilter(
+        field=f.field,
+        keep_entry=keep_entry,
+        max_csq_index=index,
+    )
+
+
 # Field id -> builder that compiles a ResultsFilter into a CompiledFilter (or None
 # for a no-op). Adding a filter is a matter of adding an entry here plus its
 # builder.
@@ -596,6 +655,8 @@ _BUILDERS: dict[
     str, Callable[[ResultsFilter, dict[str, int]], CompiledFilter | None]
 ] = {
     CONSEQUENCE_FIELD: _compile_consequence,
+    CADD_PHRED_FIELD: _compile_cadd,
+    CADD_RAW_FIELD: _compile_cadd,
     TRANSCRIPT_FIELD: _compile_transcript,
     GENE_SYMBOL_FIELD: _compile_gene_symbol,
     GENE_ID_FIELD: _compile_gene_id,

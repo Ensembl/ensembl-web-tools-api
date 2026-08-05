@@ -644,16 +644,19 @@ def test_af_le_all_requires_every_value():
     assert kept[0] == lines[1]
 
 
-def test_af_ge_and_eq():
+def test_af_ge():
     line = _af_record(1, [_af_entry("0.3", "0.01", "0.5")])
     kept_ge, _ = rf.apply_filter_pipeline(
         [line], rf.compile_filters([_af_filter("ge", 0.4, "any")], AF_INDEX_MAP)
     )
     assert len(kept_ge) == 1  # aou 0.5 >= 0.4
-    kept_eq, _ = rf.apply_filter_pipeline(
-        [line], rf.compile_filters([_af_filter("eq", 0.01, "any")], AF_INDEX_MAP)
-    )
-    assert len(kept_eq) == 1  # nfe == 0.01
+
+
+def test_af_rejects_equality():
+    """`==` is gone: these are floats, so equality is a question the data can
+    rarely answer, and it was never the useful test for a frequency."""
+    with pytest.raises(rf.FilterError):
+        rf.compile_filters([_af_filter("eq", 0.01, "any")], AF_INDEX_MAP)
 
 
 def test_af_specific_columns_only():
@@ -681,7 +684,7 @@ def test_af_no_data_is_kept_whatever_the_comparison():
     """Keeping is about having nothing to compare, not about which way the
     comparison points -- a `ge` filter must not start dropping them again."""
     lines = [_af_record(1, [_af_entry(".", "", "")])]
-    for operator in ("le", "ge", "eq"):
+    for operator in ("le", "ge"):
         compiled = rf.compile_filters([_af_filter(operator, 0.05, "any")], AF_INDEX_MAP)
         kept, _ = rf.apply_filter_pipeline(lines, compiled)
         assert len(kept) == 1, operator
@@ -1052,3 +1055,130 @@ def test_the_cache_is_bounded(tmp_path):
             10, 1, FilePath(vcf_path), [_consequence_filter(f"term_{i}")]
         )
     assert len(vcf_results._scan_cache) <= vcf_results._SCAN_CACHE_MAX_ENTRIES
+
+
+# --- CADD score filters -------------------------------------------------------
+#
+# PHRED and RAW are separate fields because their scales differ (PHRED is ~0-99
+# and scaled for interpretation, RAW is unbounded around -7 to +35), so a
+# threshold means nothing without knowing which one it is on.
+
+CADD_COLUMNS_HEADER = ["Allele", "Consequence", "Feature", "CADD_PHRED", "CADD_RAW"]
+CADD_INDEX_MAP = {name: i for i, name in enumerate(CADD_COLUMNS_HEADER)}
+
+
+def _cadd_entry(phred: str, raw: str) -> str:
+    return "|".join(["T", "missense_variant", "ENST_1", phred, raw])
+
+
+def _cadd_record(pos: int, entries: list[str]) -> str:
+    return f"chr1\t{100 + pos}\tid_{pos:02d}\tC\tT\t.\t.\tCSQ={','.join(entries)}\n"
+
+
+def _cadd_filter(field, operator, threshold, include_missing=True):
+    return rf.ResultsFilter(
+        field=field,
+        operator=operator,
+        threshold=threshold,
+        include_missing=include_missing,
+    )
+
+
+def _run_cadd(entries, *filters):
+    lines = [_cadd_record(1, entries)]
+    kept, _ = rf.apply_filter_pipeline(
+        lines, rf.compile_filters(list(filters), CADD_INDEX_MAP)
+    )
+    return kept
+
+
+def test_cadd_phred_ge_keeps_only_scores_at_or_above():
+    assert _run_cadd([_cadd_entry("25.3", "3.1")],
+                     _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20))
+    assert _run_cadd([_cadd_entry("12.0", "3.1")],
+                     _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20)) == []
+
+
+def test_cadd_phred_le_keeps_only_scores_at_or_below():
+    assert _run_cadd([_cadd_entry("12.0", "3.1")],
+                     _cadd_filter(rf.CADD_PHRED_FIELD, "le", 20))
+    assert _run_cadd([_cadd_entry("25.3", "3.1")],
+                     _cadd_filter(rf.CADD_PHRED_FIELD, "le", 20)) == []
+
+
+def test_cadd_raw_is_its_own_scale():
+    """The reason these are two fields: a threshold of 3 means one thing on the
+    raw scale and something else entirely on PHRED."""
+    entries = [_cadd_entry("25.3", "3.1")]
+    assert _run_cadd(entries, _cadd_filter(rf.CADD_RAW_FIELD, "ge", 3))
+    assert _run_cadd(entries, _cadd_filter(rf.CADD_RAW_FIELD, "ge", 20)) == []
+
+
+def test_cadd_missing_score_is_kept_by_default():
+    """A missing CADD score usually means the variant type is not scored at all
+    rather than that it scored low, so the filter does not hide it unasked."""
+    for empty in ("", "."):
+        assert _run_cadd([_cadd_entry(empty, "3.1")],
+                         _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20))
+
+
+def test_cadd_missing_score_can_be_excluded():
+    assert _run_cadd(
+        [_cadd_entry("", "3.1")],
+        _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False),
+    ) == []
+
+
+def test_cadd_unparseable_score_counts_as_missing():
+    """Whatever it is, it is not a number to compare against — so it follows the
+    same choice the user made about absent scores rather than a third rule."""
+    assert _run_cadd([_cadd_entry("NA", "3.1")],
+                     _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20))
+    assert _run_cadd(
+        [_cadd_entry("NA", "3.1")],
+        _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False),
+    ) == []
+
+
+def test_cadd_filter_is_a_no_op_when_cadd_was_not_run():
+    """No column means the plugin never ran; that must not empty the results."""
+    without = {"Allele": 0, "Consequence": 1, "Feature": 2}
+    assert rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20)], without
+    ) == []
+
+
+def test_cadd_rejects_operators_other_than_ge_and_le():
+    for operator in ("eq", "in"):
+        with pytest.raises(rf.FilterError):
+            rf.compile_filters(
+                [_cadd_filter(rf.CADD_PHRED_FIELD, operator, 20)], CADD_INDEX_MAP
+            )
+
+
+def test_scan_cache_key_separates_filters_that_only_differ_by_no_score_choice(tmp_path):
+    """Two CADD filters alike but for `include_missing` select different records,
+    so they must not share a cached scan. They did: the key was built from
+    field/operator/values/threshold/match, and the second request was served the
+    first's match set — 13 variants either way, where the real answers are 13
+    and 31."""
+    vcf_path = _write_vcf(tmp_path, [_cadd_record(1, [_cadd_entry("25", "3")])])
+    keys = {
+        vcf_results._scan_cache_key(
+            vcf_path,
+            [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=include)],
+        )
+        for include in (True, False)
+    }
+    assert len(keys) == 2
+
+
+def test_scan_cache_key_separates_filters_that_only_differ_by_match_mode(tmp_path):
+    """The same hazard for allele frequency's any/all, which was already in the
+    key — pinned so it stays there."""
+    vcf_path = _write_vcf(tmp_path, [_af_record(1, [_af_entry("0.3", "0.01", "0.5")])])
+    keys = {
+        vcf_results._scan_cache_key(vcf_path, [_af_filter("le", 0.01, match)])
+        for match in ("any", "all")
+    }
+    assert len(keys) == 2

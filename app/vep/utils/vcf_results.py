@@ -580,8 +580,13 @@ def _scan_cache_key(
     identity = _file_identity(vcf_path)
     if identity is None:
         return None
+    # Every field a filter's behaviour depends on has to be in here. `match` and
+    # `include_missing` both change which records pass without changing the
+    # field or the threshold, so leaving either out serves one filter's results
+    # for the other — which is exactly what happened to `include_missing`.
     condition = tuple(
-        (f.field, f.operator, tuple(f.values), f.threshold, f.match) for f in filters
+        (f.field, f.operator, tuple(f.values), f.threshold, f.match, f.include_missing)
+        for f in filters
     )
     return identity + (condition,)
 
@@ -983,6 +988,13 @@ def _with_display_panels(
             for source in response.metadata.available_af_sources
             if source.key in expected_columns
         ]
+        # Same full-cache leak as the AF sources: the VCF may carry CADD
+        # columns this submission never selected.
+        response.metadata.available_cadd_scores = [
+            field
+            for field in response.metadata.available_cadd_scores
+            if results_filters.CADD_COLUMNS[field] in expected_columns
+        ]
         _gate_af_columns(alleles, spec, expected_columns)
     # Decode each All of Us annotation's max-subpopulation code(s) to a label,
     # after any gating (a gated job nulls an unselected max, so a leaked one is
@@ -1311,12 +1323,21 @@ def _get_results_from_vcfpy(
         if descriptor
     ]
 
+    # Which CADD scores this output carries. Selection is applied later, with
+    # the AF gate, since only the pinned expected columns know what was chosen.
+    available_cadd_scores = [
+        field
+        for field, column in results_filters.CADD_COLUMNS.items()
+        if column in prediction_index_map
+    ]
+
     return model.VepResultsResponse(
         metadata=model.Metadata(
             pagination=model.PaginationMetadata(
                 page=page, per_page=page_size, total=total
             ),
             available_af_sources=available_af_sources,
+            available_cadd_scores=available_cadd_scores,
         ),
         variants=variants,
     )

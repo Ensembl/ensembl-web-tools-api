@@ -254,7 +254,8 @@
           "name": "Phenotypes",
           "params": {
             "file": "{path}/Phenotypes.pm_homo_sapiens_116_GRCh38.gvf.gz",
-            "cols": "type&source&phenotype&id&external_id&risk_allele"
+            "cols": "type&source&phenotype&id&external_id&risk_allele",
+            "exclude_sources": "HGMD-PUBLIC&COSMIC&ClinVar"
           }
         },
         "forces_on": [

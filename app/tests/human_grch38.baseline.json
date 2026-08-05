@@ -254,7 +254,7 @@
           "name": "Phenotypes",
           "params": {
             "file": "{path}/Phenotypes.pm_homo_sapiens_116_GRCh38.gvf.gz",
-            "cols": "type&source&phenotype&id&risk_allele"
+            "cols": "type&source&phenotype&id&external_id&risk_allele"
           }
         },
         "forces_on": [
@@ -2420,7 +2420,7 @@
             "from": "PHENOTYPES",
             "transform": "regex",
             "each": true,
-            "pattern": "^(?P<type>[^+]+)\\+(?!ClinVar\\+)(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?P<risk_allele>[^+]*)$",
+            "pattern": "^(?P<type>[^+]+)\\+(?!ClinVar\\+)(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?:(?P<external_id>[^+]*)\\+)?(?P<risk_allele>[^+]*)$",
             "as": [
               {
                 "field": "type",
@@ -2436,6 +2436,10 @@
               },
               {
                 "field": "id",
+                "type": "string"
+              },
+              {
+                "field": "external_id",
                 "type": "string"
               },
               {
@@ -2458,7 +2462,9 @@
               "source",
               "phenotype",
               "id",
-              "risk_allele"
+              "external_id",
+              "risk_allele",
+              "source_url"
             ],
             "post": [
               {
@@ -2469,6 +2475,17 @@
                   "not_specified",
                   "not_provided"
                 ]
+              },
+              {
+                "op": "mapped_link",
+                "by": "source",
+                "into": "source_url",
+                "templates": {
+                  "NHGRI-EBI_GWAS_catalog": "https://www.ebi.ac.uk/gwas/variants/{id}",
+                  "G2P": "https://www.ebi.ac.uk/gene2phenotype/search?query={id}",
+                  "MIM_morbid": "https://omim.org/entry/{external_id}",
+                  "Orphanet": "https://www.orpha.net/en/disease/detail/{external_id}"
+                }
               },
               {
                 "op": "dedup"
@@ -3371,7 +3388,12 @@
                       {
                         "label": "Phenotype",
                         "from": "phenotype",
-                        "format": "phenotype"
+                        "format": "phenotype",
+                        "link": {
+                          "kind": "external",
+                          "template": "{value}"
+                        },
+                        "link_from": "source_url"
                       },
                       {
                         "label": "Source",
@@ -3400,7 +3422,12 @@
                       {
                         "label": "Phenotype",
                         "from": "phenotype",
-                        "format": "phenotype"
+                        "format": "phenotype",
+                        "link": {
+                          "kind": "external",
+                          "template": "{value}"
+                        },
+                        "link_from": "source_url"
                       },
                       {
                         "label": "Source",

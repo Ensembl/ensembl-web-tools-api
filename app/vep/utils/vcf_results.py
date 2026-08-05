@@ -988,12 +988,16 @@ def _with_display_panels(
             for source in response.metadata.available_af_sources
             if source.key in expected_columns
         ]
-        # Same full-cache leak as the AF sources: the VCF may carry CADD
-        # columns this submission never selected.
-        response.metadata.available_cadd_scores = [
+        # Same full-cache leak as the AF sources: the VCF may carry impact-score
+        # columns this submission never selected. The gate is the score's
+        # sentinel column, not the column the filter tests — a plugin's
+        # `csq_fields` (and so `expected_columns`) is deliberately
+        # under-declared, e.g. SpliceAI declares only its AG column while
+        # emitting all four (see results_filters.ScoreSpec).
+        response.metadata.available_scores = [
             field
-            for field in response.metadata.available_cadd_scores
-            if results_filters.CADD_COLUMNS[field] in expected_columns
+            for field in response.metadata.available_scores
+            if results_filters.SCORE_SPECS[field].gate in expected_columns
         ]
         _gate_af_columns(alleles, spec, expected_columns)
     # Decode each All of Us annotation's max-subpopulation code(s) to a label,
@@ -1323,12 +1327,14 @@ def _get_results_from_vcfpy(
         if descriptor
     ]
 
-    # Which CADD scores this output carries. Selection is applied later, with
-    # the AF gate, since only the pinned expected columns know what was chosen.
-    available_cadd_scores = [
+    # Which impact scores this output carries: a field is offered when any of
+    # the columns its predicate reads is in the CSQ header. That is stage one of
+    # two — selection is applied later, with the AF gate, since only the pinned
+    # expected columns know what the submission actually chose.
+    available_scores = [
         field
-        for field, column in results_filters.CADD_COLUMNS.items()
-        if column in prediction_index_map
+        for field, spec in results_filters.SCORE_SPECS.items()
+        if any(column in prediction_index_map for column in spec.columns)
     ]
 
     return model.VepResultsResponse(
@@ -1337,7 +1343,7 @@ def _get_results_from_vcfpy(
                 page=page, per_page=page_size, total=total
             ),
             available_af_sources=available_af_sources,
-            available_cadd_scores=available_cadd_scores,
+            available_scores=available_scores,
         ),
         variants=variants,
     )

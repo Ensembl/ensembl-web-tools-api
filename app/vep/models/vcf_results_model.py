@@ -172,11 +172,12 @@ class Metadata(BaseModel):
     # AF columns present in this result set (the AF options chosen at input),
     # so the frontend can populate the allele-frequency filter.
     available_af_sources: list[AfSource] = []
-    # Which CADD scores this job carries ("cadd_phred" / "cadd_raw"), so the
-    # frontend offers those filters only where there is something to filter on.
-    # Same rule as the AF sources above: present in the output *and* selected at
-    # input, since a full cache can carry columns the submission never asked for.
-    available_cadd_scores: list[str] = []
+    # Which variant impact scores this job carries ("cadd_phred", "revel",
+    # "spliceai_any", …; see results_filters.SCORE_SPECS), so the frontend offers
+    # those filters only where there is something to filter on. Same rule as the
+    # AF sources above: present in the output *and* selected at input, since a
+    # full cache can carry columns the submission never asked for.
+    available_scores: list[str] = []
     # The option panels this job was submitted against, pinned at submission.
     # None for jobs that predate the pin — the results view then falls back to
     # the live form-config panels, as it did before.

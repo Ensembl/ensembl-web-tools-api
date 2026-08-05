@@ -7,6 +7,7 @@ index needed).
 """
 
 import gzip
+import json
 
 import pytest
 from pydantic import FilePath
@@ -1319,6 +1320,28 @@ def test_spliceai_any_with_no_data_at_all_follows_include_missing():
     assert _run_score(
         empty, _score_filter(rf.SPLICEAI_ANY_FIELD, "ge", 0.5, include_missing=False)
     ) == []
+
+
+def test_include_missing_defaults_to_dropping_unscored_entries():
+    """A payload that omits `include_missing` drops the unscored entries.
+
+    The wire default, which nothing else covers: every other test constructs the
+    model with the flag set explicitly. It is False rather than True because a
+    missing impact score means the variant was never scored, which says nothing
+    about how damaging it is — the opposite of a missing allele frequency, which
+    is itself evidence of rarity and so is always kept.
+    """
+    parsed = rf.parse_filters(
+        json.dumps([{"field": rf.CADD_PHRED_FIELD, "operator": "ge", "threshold": 20}])
+    )
+    assert parsed[0].include_missing is False
+
+    unscored = [_score_entry(CADD_PHRED="")]
+    assert _run_score(unscored, parsed[0]) == []
+    # ...and the flag is what decides it, not the threshold.
+    assert _run_score(
+        unscored, _score_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=True)
+    )
 
 
 def test_spliceai_any_reads_only_the_present_columns():

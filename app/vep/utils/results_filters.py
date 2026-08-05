@@ -177,11 +177,15 @@ class ResultsFilter(BaseModel):
     threshold: float | None = None
     match: str | None = None
     # Impact-score filters: whether an entry with no score is kept. Defaults to
-    # keeping it — a filter should not silently hide records the user has not
-    # asked to exclude, and a missing score usually means the variant type is
-    # unscored (indels and non-SNVs for CADD, non-missense for the protein
-    # predictors) rather than that it scored badly.
-    include_missing: bool = True
+    # dropping it, which is the opposite of the allele-frequency filter's fixed
+    # "keep the unknowns" — deliberately, because absence means a different thing
+    # in each. A variant with no allele frequency is absent from the reference
+    # set, which is itself evidence of rarity and usually what the query is
+    # after. A variant with no impact score was merely never scored (indels and
+    # non-SNVs for CADD, non-missense for the protein predictors) and so implies
+    # nothing about how damaging it is; carrying those through would dilute a
+    # search for damaging variants with variants nothing has judged.
+    include_missing: bool = False
 
 
 class FilterError(ValueError):

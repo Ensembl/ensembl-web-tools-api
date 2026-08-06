@@ -32,6 +32,7 @@ from vep.models.config_spec_model import (
 from vep.models.display_spec_model import (
     DisplayGroupBlock,
     DisplayListBlock,
+    DisplayMapRowsBlock,
     DisplayPayload,
     DisplayRowsBlock,
     DisplaySpec,
@@ -611,6 +612,16 @@ class MergedSpec(BaseModel):
                             nested = (list_field, column.source)
                             errors += column_errors(oid, plugin, nested, column.items)
                             check_items(oid, plugin, nested, column.items)
+                elif isinstance(block, DisplayMapRowsBlock):
+                    # Every ref is a scalar-or-dict `plugin.field`; the rows
+                    # themselves come from a vocabulary the response ships, so
+                    # there is nothing here to check them against — a wrong
+                    # `vocabulary`/`scope` yields no rows, which the equivalence
+                    # check catches rather than the spec loader.
+                    for ref in block.field_refs():
+                        err = scalar_ref_error(oid, ref)
+                        if err:
+                            errors.append(err)
                 elif isinstance(block, DisplayRowsBlock):
                     for row in block.rows:
                         for ref in row.field_refs():

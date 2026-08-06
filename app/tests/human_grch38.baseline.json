@@ -3975,11 +3975,11 @@
             },
             "columns": [
               {
-                "label": "Disease association",
+                "label": "Disease",
                 "from": "disease_label"
               },
               {
-                "label": "Target Gene",
+                "label": "Gene",
                 "from": "gene_id",
                 "mono": true
               },
@@ -3989,7 +3989,7 @@
                 "align": "right"
               },
               {
-                "label": "beta",
+                "label": "beta coefficient",
                 "from": "beta",
                 "format": "num"
               },
@@ -4013,7 +4013,7 @@
                 "from": "biosample"
               },
               {
-                "label": "Target Gene",
+                "label": "Gene",
                 "from": "gene_id",
                 "mono": true
               },
@@ -4023,7 +4023,7 @@
                 "align": "right"
               },
               {
-                "label": "beta",
+                "label": "beta coefficient",
                 "from": "beta",
                 "format": "num"
               }

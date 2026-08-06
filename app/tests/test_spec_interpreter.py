@@ -86,6 +86,7 @@ def test_bundled_spec_validates():
         "spdi",
         "loeuf",
         "gerp",
+        "geno2mp",
         "nmd",
         "nearest_gene",
         "nearest_exon_jb",

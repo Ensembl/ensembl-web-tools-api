@@ -61,6 +61,8 @@ SPEC_DRIVEN_OPTIONS = {
     "intact",
     # a fields-less gff-overlap custom (new Regulatory panel)
     "gencode_promoters",
+    # a count linked through a sibling field (`link_from` on a row)
+    "geno2mp",
     # `map_rows`: rows discovered from the job's own population vocabulary
     # rather than written into the spec. These were the last options drawn by
     # hand-written frontend components instead of the display spec.

@@ -348,7 +348,9 @@
       {
         "id": "geno2mp",
         "order": 44,
-        "parsed_as": [],
+        "parsed_as": [
+          "geno2mp"
+        ],
         "config": {
           "emit": "plugin",
           "name": "Geno2MP",

@@ -362,7 +362,9 @@
       {
         "id": "geno2mp",
         "order": 44,
-        "parsed_as": [],
+        "parsed_as": [
+          "geno2mp"
+        ],
         "config": {
           "emit": "plugin",
           "name": "Geno2MP",
@@ -2873,6 +2875,32 @@
         ]
       },
       {
+        "plugin": "geno2mp",
+        "scope": "allele",
+        "output": "geno2mp",
+        "csq_fields": [
+          "Geno2MP_HPO_count",
+          "Geno2MP_URL"
+        ],
+        "require_any_output": [
+          "hpo_profile_count"
+        ],
+        "targets": [
+          {
+            "field": "hpo_profile_count",
+            "from": "Geno2MP_HPO_count",
+            "transform": "scalar",
+            "type": "int"
+          },
+          {
+            "field": "url",
+            "from": "Geno2MP_URL",
+            "transform": "scalar",
+            "type": "string"
+          }
+        ]
+      },
+      {
         "plugin": "loeuf",
         "scope": "transcript",
         "output": "loeuf",
@@ -3258,6 +3286,26 @@
                 "label": "GERP conservation score",
                 "from": "gerp.score",
                 "format": "num"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "option_id": "geno2mp",
+        "blocks": [
+          {
+            "kind": "rows",
+            "rows": [
+              {
+                "label": "HPO profiles",
+                "from": "geno2mp.hpo_profile_count",
+                "format": "num",
+                "link": {
+                  "kind": "external",
+                  "template": "{value}"
+                },
+                "link_from": "geno2mp.url"
               }
             ]
           }

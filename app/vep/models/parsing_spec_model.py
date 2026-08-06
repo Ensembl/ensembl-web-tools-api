@@ -394,7 +394,9 @@ class TargetSpec(BaseModel):
                    how gnomAD's per-ancestry AF columns work).
       chunk        one column -> list of objects, taking `size` '&'-items per
                    object (ProtVar's interaction interfaces are partner & score
-                   repeating).
+                   repeating). `record_sep` marks the boundary between objects
+                   where the source states one; without it the items are one
+                   flat run, cut every `size`.
       positional   one column -> one object, `as` assigned to '&'-items strictly
                    by index. Items beyond `as` are ignored; missing ones are
                    null. Use `wrap: "list"` where the output is a
@@ -461,6 +463,19 @@ class TargetSpec(BaseModel):
     of: list[StackGroup] | None = None
     # `chunk` only: how many '&'-items make up one object.
     size: int | None = None
+    # `chunk` only: a separator *between* objects, above `sep`.
+    #
+    # Without it a chunk target reads one flat run of items and cuts it every
+    # `size`, which is right only while every object is exactly that long — a
+    # source that ever writes a short one silently shifts every later object's
+    # fields along by the difference. With it, each record is chunked on its own,
+    # so a malformed one damages only itself.
+    #
+    # Both are read, deliberately: ProtVar moved from the flat run to '+' between
+    # pockets, and a job submitted before that change is still being read for a
+    # week afterwards (see the class docstring on VEP's separator rewriting —
+    # '+' is one of the few characters it leaves alone).
+    record_sep: str | None = None
     # `positional` only: emit the single object inside a list.
     wrap: Literal["list"] | None = None
     # `key_value` only.
@@ -543,6 +558,14 @@ class TargetSpec(BaseModel):
                 raise ValueError(
                     f"`as` is only valid for zip/regex/chunk/positional, not {self.transform}"
                 )
+        # Checked outside the chain above, which each branch leaves early.
+        if self.record_sep is not None:
+            if self.transform != "chunk":
+                raise ValueError(
+                    f"`record_sep` is only valid for chunk, not {self.transform}"
+                )
+            if self.record_sep == self.sep:
+                raise ValueError("chunk `record_sep` must differ from `sep`")
         return self
 
 

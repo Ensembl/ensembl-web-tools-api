@@ -461,17 +461,53 @@ def test_protvar_shape_is_as_expected():
 
 
 def test_protvar_multiple_pockets():
-    """ProtVar_pocket packs one 7-field pocket after another; each must become
-    its own item (chunk of 7), not just the first."""
+    """ProtVar separates its pockets with '+', each 7 '&'-fields."""
     two = (
         "P4&897.5&83.3&0.36&0.79&7.6&res4"
-        "&P12&515.8&87.7&0.33&0.75&4.3&res12"
+        "+P12&515.8&87.7&0.33&0.75&4.3&res12"
     )
     pockets = run("protvar", row_list(ProtVar_pocket=two))["pockets"]
     assert [p["pocket_id"] for p in pockets] == ["P4", "P12"]
     assert pockets[0]["score"] == 0.36
     assert pockets[1]["score"] == 0.33
     assert pockets[1]["radius_of_gyration"] == 4.3
+    # `raw` is the pocket's own fields, not the whole column.
+    assert pockets[1]["raw"] == "P12&515.8&87.7&0.33&0.75&4.3&res12"
+
+
+def test_protvar_multiple_pockets_in_one_flat_run():
+    """The shape ProtVar wrote before it separated pockets with '+': one run of
+    items, cut every 7. Results outlive a pipeline change by a week, so a job
+    submitted before it is still read after — this must keep working."""
+    two = (
+        "P4&897.5&83.3&0.36&0.79&7.6&res4"
+        "&P12&515.8&87.7&0.33&0.75&4.3&res12"
+    )
+    pockets = run("protvar", row_list(ProtVar_pocket=two))["pockets"]
+    assert [p["pocket_id"] for p in pockets] == ["P4", "P12"]
+    assert pockets[1]["score"] == 0.33
+
+
+def test_protvar_short_record_does_not_shift_the_next_pocket():
+    """What the record separator buys: a pocket missing a field damages only
+    itself. Cutting a flat run every 7 would read the next pocket's id as this
+    one's residues and report every later field under the wrong name."""
+    two = "P4&897.5&83.3&0.36&0.79&7.6+P12&515.8&87.7&0.33&0.75&4.3&res12"
+    pockets = run("protvar", row_list(ProtVar_pocket=two))["pockets"]
+
+    assert [p["pocket_id"] for p in pockets] == ["P4", "P12"]
+    assert pockets[0]["radius_of_gyration"] == 7.6
+    assert pockets[1]["score"] == 0.33
+
+
+def test_protvar_multiple_interaction_interfaces():
+    """Interfaces take the same separator. Only ever seen one per row so far,
+    so this pins the convention rather than an observed value."""
+    result = run("protvar", row_list(ProtVar_int="PARTNER1&0.9+PARTNER2&0.8"))
+    assert result["interaction_interfaces"] == [
+        {"partner": "PARTNER1", "score": 0.9, "raw": "PARTNER1&0.9"},
+        {"partner": "PARTNER2", "score": 0.8, "raw": "PARTNER2&0.8"},
+    ]
 
 
 def test_protvar_odd_interaction_token_count():

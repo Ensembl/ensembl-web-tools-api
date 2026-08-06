@@ -526,19 +526,32 @@ def _build_object(tokens: list[str], field_specs, source_text: str) -> dict:
 
 
 def _apply_chunk(csq_values, index_map, target: TargetSpec) -> list[dict]:
-    """Fixed-size groups of '&'-items -> a list of objects."""
+    """Fixed-size groups of '&'-items -> a list of objects.
+
+    `record_sep` divides the value into objects first, and each is then chunked
+    on its own. Both levels are read because ProtVar publishes both: it used to
+    write one flat run of items, and now separates its pockets with '+'. Cutting
+    a flat run every `size` is only right while every object is exactly that
+    long — one short record shifts every later object's fields along by the
+    difference — so where the source marks the boundary, it is honoured, and a
+    malformed record damages only itself.
+    """
     raw = _column(csq_values, target.source, index_map)
-    tokens = raw.split(target.sep) if raw else []
+    if not raw:
+        return _apply_post([], target.post)
+    records = raw.split(target.record_sep) if target.record_sep else [raw]
 
     rows = []
-    for start in range(0, len(tokens), target.size):
-        group = tokens[start : start + target.size]
-        row = _build_object(
-            group, target.as_fields, target.sep.join(t for t in group if t)
-        )
-        if _should_drop(row, target.drop_when, csq_values, index_map):
-            continue
-        rows.append(row)
+    for record in records:
+        tokens = record.split(target.sep)
+        for start in range(0, len(tokens), target.size):
+            group = tokens[start : start + target.size]
+            row = _build_object(
+                group, target.as_fields, target.sep.join(t for t in group if t)
+            )
+            if _should_drop(row, target.drop_when, csq_values, index_map):
+                continue
+            rows.append(row)
     return _apply_post(rows, target.post)
 
 

@@ -1175,6 +1175,7 @@
             "from": "ProtVar_pocket",
             "transform": "chunk",
             "size": 7,
+            "record_sep": "+",
             "as": [
               {
                 "field": "pocket_id",
@@ -1215,6 +1216,7 @@
             "from": "ProtVar_int",
             "transform": "chunk",
             "size": 2,
+            "record_sep": "+",
             "as": [
               {
                 "field": "partner",

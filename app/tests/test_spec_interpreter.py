@@ -171,9 +171,11 @@ def test_mutfunc_partial_keeps_absent_scores_as_null():
 
 MAVEDB_MULTI = dict(
     MaveDB_score="1.5&2.5&NA",
-    MaveDB_urn="urn:1&urn:2&urn:3",
-    MaveDB_doi="10.1/a&NA&10.1/c",
-    MaveDB_nt="c.1A>G&NA",
+    MaveDB_accession=(
+        "urn:mavedb:00000045-a-1#1"
+        "&urn:mavedb:00000045-b-1#2"
+        "&urn:mavedb:00000045-c-1#3"
+    ),
     MaveDB_pro="p.Lys1Arg&NA",
 )
 
@@ -181,11 +183,36 @@ MAVEDB_MULTI = dict(
 def test_mavedb_multi_assay_shape_is_as_expected():
     result = run("mavedb", row_list(**MAVEDB_MULTI))
     assert result["protein_variant"] == "p.Lys1Arg"
-    assert [(a["urn"], a["score"]) for a in result["assays"]] == [
-        ("urn:1", 1.5),
-        ("urn:2", 2.5),
-        ("urn:3", None),  # NA score, but a real urn -> assay kept
+    assert [(a["accession"], a["score"]) for a in result["assays"]] == [
+        ("urn:mavedb:00000045-a-1#1", 1.5),
+        ("urn:mavedb:00000045-b-1#2", 2.5),
+        # NA score, but a real accession -> assay kept
+        ("urn:mavedb:00000045-c-1#3", None),
     ]
+
+
+def test_mavedb_accession_splits_into_the_score_set_urn():
+    """The accession names a score set *and* a variant within it. The link needs
+    both — the score set in its path, the whole accession in its query — so the
+    score-set half is split out while the accession is kept intact."""
+    result = run("mavedb", row_list(**MAVEDB_MULTI))
+
+    assert [a["urn"] for a in result["assays"]] == [
+        "urn:mavedb:00000045-a-1",
+        "urn:mavedb:00000045-b-1",
+        "urn:mavedb:00000045-c-1",
+    ]
+    assert result["assays"][0]["accession"] == "urn:mavedb:00000045-a-1#1"
+
+
+def test_mavedb_accession_without_a_variant_still_names_its_score_set():
+    """An accession with no '#' is a score set and no variant within it: the urn
+    is the whole value, so the link still resolves to the score set."""
+    csq = row_list(MaveDB_score="1.5", MaveDB_accession="urn:mavedb:00000045-a-1")
+    assay = run("mavedb", csq)["assays"][0]
+
+    assert assay["urn"] == "urn:mavedb:00000045-a-1"
+    assert assay["accession"] == "urn:mavedb:00000045-a-1"
 
 
 def test_mavedb_empty_is_none():
@@ -193,29 +220,48 @@ def test_mavedb_empty_is_none():
 
 
 def test_mavedb_uneven_columns_pad_rather_than_truncate():
-    """Fewer scores than urns: `align: max` must pad, not truncate."""
-    csq = row_list(MaveDB_score="1.5", MaveDB_urn="urn:1&urn:2")
+    """Fewer scores than accessions: `align: max` must pad, not truncate."""
+    csq = row_list(
+        MaveDB_score="1.5",
+        MaveDB_accession="urn:mavedb:00000045-a-1#1&urn:mavedb:00000045-b-1#2",
+    )
     assert run("mavedb", csq) == {
         "protein_variant": None,
         "assays": [
-            {"score": 1.5, "urn": "urn:1"},
-            {"score": None, "urn": "urn:2"},
+            {
+                "score": 1.5,
+                "accession": "urn:mavedb:00000045-a-1#1",
+                "urn": "urn:mavedb:00000045-a-1",
+            },
+            {
+                "score": None,
+                "accession": "urn:mavedb:00000045-b-1#2",
+                "urn": "urn:mavedb:00000045-b-1",
+            },
         ],
     }
 
 
 def test_mavedb_protein_variant_only_is_none():
-    """pro present but no score/urn -> no assays -> whole annotation is None
-    (require_any_output)."""
+    """pro present but no score/accession -> no assays -> whole annotation is
+    None (require_any_output)."""
     assert run("mavedb", row_list(MaveDB_pro="p.Lys1Arg")) is None
 
 
 def test_mavedb_all_na_assay_dropped():
-    """A position where both score and urn are NA is dropped entirely."""
-    csq = row_list(MaveDB_score="1.5&NA", MaveDB_urn="urn:1&NA")
+    """A position where both score and accession are NA is dropped entirely."""
+    csq = row_list(
+        MaveDB_score="1.5&NA", MaveDB_accession="urn:mavedb:00000045-a-1#1&NA"
+    )
     assert run("mavedb", csq) == {
         "protein_variant": None,
-        "assays": [{"score": 1.5, "urn": "urn:1"}],
+        "assays": [
+            {
+                "score": 1.5,
+                "accession": "urn:mavedb:00000045-a-1#1",
+                "urn": "urn:mavedb:00000045-a-1",
+            }
+        ],
     }
 
 

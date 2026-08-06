@@ -145,6 +145,16 @@ class PostOp(BaseModel):
             annotation files move independently, so an unknown term is a normal
             state, not a broken spec.
 
+    split_field  the inverse of `concat`: cut a field at the first `sep` and
+            write one side of it to `into`, keeping the original intact. A
+            source that packs two identifiers into one column needs both —
+            MaveDB's accession is `urn:mavedb:00000045-a-1#2010`, the score set
+            and the variant within it, and the link wants the score set in its
+            path and the whole accession in its query. `by` is the field to cut,
+            `keep` which side ("before" by default). A value with no `sep` in it
+            is all "before" and no "after", so the missing half writes null and
+            whatever depends on it drops.
+
     concat  join two or more fields into a new one — OpenTargets publishes a
             p-value as a mantissa and an exponent in separate columns, and
             `3.32` + `e` + `-28` is the number a reader wants. `fields` names
@@ -230,6 +240,7 @@ class PostOp(BaseModel):
     op: Literal[
         "dedup", "sort", "exclude", "lookup", "concat", "curie_link", "collapse",
         "only_if_differs", "default", "derive_if_empty", "mapped_link",
+        "split_field",
     ]
     by: str | None = None
     desc: bool = False
@@ -243,6 +254,8 @@ class PostOp(BaseModel):
     fields: list[str] | None = None
     # `default` only: what to put where the source left the field empty.
     value: str | None = None
+    # `split_field` only: which side of the separator to write.
+    keep: Literal["before", "after"] = "before"
     # `derive_if_empty` only: the regex whose named groups become the fields.
     pattern: str | None = None
     # `only_if_differs` only.
@@ -291,6 +304,8 @@ class PostOp(BaseModel):
             )
         if self.op != "derive_if_empty" and self.pattern:
             raise ValueError("`pattern` belongs to derive_if_empty")
+        if self.op == "split_field" and not (self.by and self.into and self.sep):
+            raise ValueError("split_field requires `by`, `into` and `sep`")
         if self.op == "default" and not (self.by and self.value):
             raise ValueError("default requires `by` and `value`")
         if self.op != "default" and self.value is not None:
@@ -309,11 +324,11 @@ class PostOp(BaseModel):
             raise ValueError("`fields` belongs to concat or collapse")
         if self.op not in (
             "lookup", "concat", "curie_link", "collapse", "only_if_differs",
-            "derive_if_empty", "mapped_link",
+            "derive_if_empty", "mapped_link", "split_field",
         ) and self.into:
             raise ValueError(
                 "`into` belongs to lookup, concat, curie_link, mapped_link, "
-                "collapse or only_if_differs"
+                "split_field, collapse or only_if_differs"
             )
         return self
 

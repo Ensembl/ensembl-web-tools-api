@@ -757,9 +757,11 @@ def test_genes_and_transcripts_options_are_grouped_into_three_categories():
     """Every option in the panel carries a category, so it renders as three
     sub-headings rather than an unlabelled run followed by one heading.
 
-    Conservation & constraint used to be a panel of its own; it is now one of the
-    three, grouped the way Variant impact predictions groups Missense / Splicing
-    / Genome wide.
+    Constraint used to be a panel of its own ("Conservation & constraint"); it is
+    now one of the three, grouped the way Variant impact predictions groups
+    Missense / Splicing / Genome wide. It lost the "Conservation" half of its
+    name when GERP moved to Genome wide: what is left measures a gene's
+    tolerance to variation, not a position's conservation.
     """
     panels = get_visible_panels(
         species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
@@ -775,7 +777,7 @@ def test_genes_and_transcripts_options_are_grouped_into_three_categories():
         grouped.setdefault(option.get("category"), []).append(option["id"])
 
     assert None not in grouped, "every option should be categorised"
-    assert list(grouped) == ["Locations", "Annotations", "Conservation & constraint"]
+    assert list(grouped) == ["Locations", "Annotations", "Constraint"]
     assert grouped["Locations"] == [
         "tss_distance",
         "nearest_gene",
@@ -783,11 +785,26 @@ def test_genes_and_transcripts_options_are_grouped_into_three_categories():
         "updownstream_distance",
     ]
     assert grouped["Annotations"] == ["utrannotator", "nmd", "riboseqorfs", "go"]
-    assert grouped["Conservation & constraint"] == [
-        "loeuf",
-        "dosage_sensitivity",
-        "gerp",
-    ]
+    assert grouped["Constraint"] == ["loeuf", "dosage_sensitivity"]
+
+
+def test_gerp_sits_with_cadd_under_genome_wide():
+    """GERP scores a position's conservation across species, which is a
+    genome-wide measure like CADD — not a gene's tolerance to variation, which
+    is what the Constraint group it used to sit in now means."""
+    panels = get_visible_panels(
+        species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
+    )
+    impact = next(
+        panel for panel in panels if panel["id"] == "variant_impact_predictions"
+    )
+    grouped: dict[str, list[str]] = {}
+    for option in impact["options"]:
+        grouped.setdefault(option.get("category"), []).append(option["id"])
+
+    assert grouped["Genome wide"] == ["cadd", "gerp"]
+    genes = next(panel for panel in panels if panel["id"] == "genes_and_transcripts")
+    assert "gerp" not in {option["id"] for option in genes["options"]}
 
 
 def test_a_species_with_fewer_options_keeps_the_same_category_names():

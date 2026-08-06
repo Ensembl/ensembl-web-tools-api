@@ -41,7 +41,7 @@ _ALWAYS_VISIBLE_PANELS: list[dict] = [
             # Positional output: where the variant sits relative to nearby
             # features. Categorised, like the rest of this panel — the options
             # added for human 37/38 and GRCh38 carry "Annotations" and
-            # "Conservation & constraint".
+            # "Constraint".
             {
                 "id": "tss_distance",
                 "label": "Distance to TSS",
@@ -123,24 +123,28 @@ _HUMAN_37_38_GENES_OPTIONS: list[dict] = [
      "category": "Annotations"},
     {"id": "nmd", "label": "NMD", "type": "boolean", "default": False,
      "category": "Annotations"},
-    # Conservation & constraint was a panel of its own; it is now a sub-section
-    # of Genes & transcripts, grouped by `category` the way Variant impact
-    # predictions groups Missense / Splicing / Genome wide.
+    # Constraint was a panel of its own ("Conservation & constraint"); it is now
+    # a sub-section of Genes & transcripts, grouped by `category` the way Variant
+    # impact predictions groups Missense / Splicing / Genome wide.
+    #
+    # Just "Constraint" since GERP left: what remains measures a *gene's*
+    # tolerance to variation, where GERP scored a position's conservation across
+    # species and now sits with CADD under Genome wide.
     #
     # Every option in this panel is categorised, across all three tiers that
     # contribute to it (base = Locations, here, and the GRCh38-only appends), so
     # there is no unlabelled group. `groupByCategory` merges by name wherever an
     # option is declared, so the GRCh38 additions join these groups rather than
     # starting new ones; group order follows each category's first appearance,
-    # which gives Locations -> Annotations -> Conservation & constraint.
+    # which gives Locations -> Annotations -> Constraint.
     {"id": "loeuf", "label": "LOEUF", "type": "boolean", "default": False,
-     "category": "Conservation & constraint"},
+     "category": "Constraint"},
     {
         "id": "dosage_sensitivity",
         "label": "Dosage sensitivity",
         "type": "boolean",
         "default": False,
-        "category": "Conservation & constraint",
+        "category": "Constraint",
         "sub_options": [
             {"id": "dosage_sensitivity_cover", "label": "Require full transcript overlap", "type": "boolean", "default": False},
         ],
@@ -632,11 +636,6 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
         # GO plugin (human GRCh38 for now; other species to follow).
         {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False,
          "category": "Annotations"},
-        # GERP conservation scores (human GRCh38 for now; other species to
-        # follow — each needs its own per-species bigwig, so the config entry's
-        # path becomes `by_assembly` when the next one lands).
-        {"id": "gerp", "label": "GERP conservation score", "type": "boolean", "default": False,
-         "category": "Conservation & constraint"},
     ])
 
     # Protein & functional: Protein (protein + ProtVar) / Functional (MaveDB,
@@ -660,11 +659,23 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
          "sub_options": copy.deepcopy(_MUTFUNC_SUBOPTIONS)},
     ])
 
-    # Variant impact predictions panel: EVE (Missense).
+    # Variant impact predictions panel: EVE (Missense), GERP (Genome wide).
+    #
+    # GERP scores a *position*'s conservation across species, not a gene's
+    # tolerance to variation — so it belongs beside CADD, which is the other
+    # genome-wide score, rather than with LOEUF and dosage sensitivity. Those
+    # two are constraint measures of a gene, which is why the category they are
+    # left in is now just "Constraint".
+    #
+    # GERP is human GRCh38 for now; other species to follow — each needs its own
+    # per-species bigwig, so the config entry's path becomes `by_assembly` when
+    # the next one lands.
     if "variant_impact_predictions" in by_id:
-        by_id["variant_impact_predictions"]["options"].append(
-            {"id": "eve", "label": "EVE & popEVE", "type": "boolean", "default": False, "category": "Missense"}
-        )
+        by_id["variant_impact_predictions"]["options"].extend([
+            {"id": "eve", "label": "EVE & popEVE", "type": "boolean", "default": False, "category": "Missense"},
+            {"id": "gerp", "label": "GERP conservation score", "type": "boolean", "default": False,
+             "category": "Genome wide"},
+        ])
 
     # Phenotype & disease associations: Phenotypes, then OpenTargets. That order
     # is deliberate — GRCh37 and the other species have Phenotypes without

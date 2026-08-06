@@ -534,6 +534,77 @@ class DisplayRowsBlock(_GatedBlock):
     rows: list[DisplayRow]
 
 
+class MapRowLabelSuffix(BaseModel):
+    """A parenthesised suffix on one row's value, read from a sibling scalar.
+
+    All of Us publishes a `max` frequency without saying, in the value itself,
+    which subpopulation it came from — that is a separate field. The number alone
+    is the one frequency a reader cannot attribute, so it renders as
+    `0.000167 (European)`.
+    """
+
+    # `populate_by_name` because the pinned sidecar is written with
+    # `model_dump_json()` — by field name, not by alias — so an aliased field
+    # must read back under its own name or the whole spec fails to load.
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    key: str
+    source: str = Field(alias="from")
+
+
+class DisplayMapRowsBlock(_GatedBlock):
+    """One row per entry of a per-job *vocabulary*, values read from a dict field.
+
+    The blocks above all name their fields up front. This one cannot: an allele
+    frequency's populations are a dict whose keys are chosen per submission, and
+    whose human labels are decoded by the backend rather than carried in the
+    annotation. So the rows come from a named vocabulary the response already
+    ships — `available_af_sources`, gated to the populations the job selected and
+    carrying a decoded label for each.
+
+    Taking the rows from the vocabulary rather than the data is what makes the
+    two views work the way every other option's do, with no second code path:
+    the default view drops a population the variant has no value for, and
+    "Show all" lists every selected population with a dash where there is none.
+    That is the `sub_option` row rule (see DisplayRow.sub_option), applied to a
+    row set that is discovered instead of written down.
+
+    `overall_from` is the scalar the vocabulary's "" entry reads — the parse
+    keeps a source's all-ancestry figure beside the population dict rather than
+    inside it, so without this the "All" row would have nowhere to read from.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    kind: Literal["map_rows"]
+    requires: str | None = None
+    # The dict-valued `<plugin>.<field>` the values come from.
+    source: str = Field(alias="from")
+    # The scalar for the vocabulary's "" entry (a source's overall figure).
+    overall_from: str | None = None
+    # Which vocabulary shipped on the response supplies the rows.
+    vocabulary: str
+    # Which slice of it — an AF vocabulary covers every source at once.
+    scope: str
+    format: RowFormat | None = None
+    label_suffix: MapRowLabelSuffix | None = None
+
+    def field_refs(self) -> list[str]:
+        """The `<plugin>.<field>` refs that must resolve to a parse target.
+
+        `label_suffix.from` is deliberately absent. It names a field the backend
+        attaches to the annotation at response time rather than one the parse
+        produces — All of Us's `max_subpopulation_label` is the decoded form of
+        the `max_subpopulation` code (see `_label_af_max_subpopulation`) — so
+        checking it against the parse targets would reject a ref that is correct.
+        Its plugin is already counted through `source`, which names the same one.
+        """
+        refs = [self.source]
+        if self.overall_from:
+            refs.append(self.overall_from)
+        return refs
+
+
 class RowFilter(BaseModel):
     """Keep only the list elements whose `field` equals `value`.
 
@@ -886,11 +957,12 @@ class DisplayGroupBlock(_GatedBlock):
     blocks: list["DisplayBlock"]
 
 
-# A block is a fixed set of rows, a repeated list, a table, or a group of
-# sub-blocks, discriminated on `kind`.
+# A block is a fixed set of rows, rows discovered from a vocabulary, a repeated
+# list, a table, or a group of sub-blocks, discriminated on `kind`.
 DisplayBlock = Annotated[
     Union[
         DisplayRowsBlock,
+        DisplayMapRowsBlock,
         DisplayListBlock,
         DisplayTableBlock,
         DisplayGroupBlock,
@@ -952,6 +1024,9 @@ class DisplayOptionSpec(BaseModel):
                 for row in block.rows:
                     for ref in row.field_refs():
                         refs.add(ref.partition(".")[0])
+            elif isinstance(block, DisplayMapRowsBlock):
+                for ref in block.field_refs():
+                    refs.add(ref.partition(".")[0])
             elif isinstance(block, DisplayListBlock):
                 refs.add(block.list_ref()[0])
             elif isinstance(block, DisplayTableBlock):

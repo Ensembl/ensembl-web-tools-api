@@ -61,6 +61,10 @@ SPEC_DRIVEN_OPTIONS = {
     "intact",
     # a fields-less gff-overlap custom (new Regulatory panel)
     "gencode_promoters",
+    # `map_rows`: rows discovered from the job's own population vocabulary
+    # rather than written into the spec. These were the last options drawn by
+    # hand-written frontend components instead of the display spec.
+    "gnomad_exomes", "gnomad_genomes", "allofus", "gnomad_sv", "gnomad_cnv",
 }
 
 
@@ -109,6 +113,39 @@ def _display(*rows, **block):
 def test_bundled_spec_has_a_display_section_for_the_moved_options():
     assert SPEC.display is not None
     assert {o.option_id for o in SPEC.display.options} == SPEC_DRIVEN_OPTIONS
+
+
+def test_af_map_rows_blocks_declare_the_plugin_they_read():
+    """`plugin_refs` decides which options a genome's assembled spec offers — an
+    option is included only when every plugin it reads is present. A `map_rows`
+    block that contributed no refs would put gnomAD SV (GRCh38-only) into a spec
+    for an assembly that has no such plugin, and the option would render empty
+    rather than being absent."""
+    by_id = {o.option_id: o for o in SPEC.display.options}
+
+    for option_id, plugin in (
+        ("gnomad_exomes", "gnomad_exomes"),
+        ("gnomad_genomes", "gnomad_genomes"),
+        ("allofus", "all_of_us"),
+        ("gnomad_sv", "gnomad_sv"),
+        ("gnomad_cnv", "gnomad_cnv"),
+    ):
+        assert plugin in by_id[option_id].plugin_refs(), option_id
+
+
+def test_af_map_rows_reads_the_overall_beside_the_population_dict():
+    """The two halves of a source's frequencies live in different targets — the
+    all-ancestry figure is a scalar, the rest a dict — so the block names both.
+    Without `overall_from` the vocabulary's "All" row has nowhere to read."""
+    option = next(
+        o for o in SPEC.display.options if o.option_id == "gnomad_genomes"
+    )
+    block = next(b for b in option.iter_blocks() if b.kind == "map_rows")
+
+    assert block.source == "gnomad_genomes.populations"
+    assert block.overall_from == "gnomad_genomes.overall"
+    assert block.vocabulary == "af_populations"
+    assert block.scope == "gnomad_genomes"
 
 
 def test_bundled_display_references_resolve():

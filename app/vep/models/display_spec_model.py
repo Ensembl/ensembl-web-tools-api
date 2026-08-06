@@ -217,6 +217,12 @@ class DisplayRow(BaseModel):
     # A trailing link on the value (a named `builder` — ProtVar's link icon on
     # each row). Builder links contribute no field refs.
     link: LinkSpec | None = None
+    # Build that link from a *sibling* field rather than from the value's own
+    # text — the same thing a table column or a list item's cell can already do,
+    # and needed for the same reason: the reader wants to see one thing and
+    # follow another. Geno2MP reports a count of HPO profiles plus the URL of
+    # the variant's page, and no template can derive the second from the first.
+    link_from: str | None = None
     # A row whose `from` is a *list*: one rendered line per element, stacked as
     # the row's value under a single label. The same element shape a list block
     # repeats, borrowed so a stacked value needs no vocabulary of its own —
@@ -245,9 +251,13 @@ class DisplayRow(BaseModel):
         raise ValueError("row needs exactly one of `from` or `compose`")
 
     def field_refs(self) -> list[str]:
-        if self.source:
-            return [self.source]
-        return self.compose.field_refs() if self.compose else []
+        refs = [self.source] if self.source else (
+            self.compose.field_refs() if self.compose else []
+        )
+        # The href is read from the annotation like any other value, so a typo
+        # in it must fail the display↔parsing check rather than silently
+        # produce a row that cannot be followed.
+        return refs + [self.link_from] if self.link_from else refs
 
     def list_ref(self) -> tuple[str, str] | None:
         """The `(plugin, listField)` this row stacks, if it stacks one."""

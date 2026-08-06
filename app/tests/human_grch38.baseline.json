@@ -1101,14 +1101,12 @@
         "output": "mavedb",
         "csq_fields": [
           "MaveDB_score",
-          "MaveDB_urn",
-          "MaveDB_doi",
-          "MaveDB_nt",
+          "MaveDB_accession",
           "MaveDB_pro"
         ],
         "require_any_input": [
           "MaveDB_score",
-          "MaveDB_urn",
+          "MaveDB_accession",
           "MaveDB_pro"
         ],
         "require_any_output": [
@@ -1125,7 +1123,7 @@
             "field": "assays",
             "from": [
               "MaveDB_score",
-              "MaveDB_urn"
+              "MaveDB_accession"
             ],
             "transform": "zip",
             "align": "max",
@@ -1135,15 +1133,25 @@
                 "type": "float"
               },
               {
-                "field": "urn",
+                "field": "accession",
                 "type": "string"
               }
             ],
             "drop_when": {
               "all_null": true
             },
+            "post": [
+              {
+                "op": "split_field",
+                "by": "accession",
+                "sep": "#",
+                "keep": "before",
+                "into": "urn"
+              }
+            ],
             "item_fields": [
               "score",
+              "accession",
               "urn"
             ]
           }
@@ -3828,7 +3836,7 @@
                   "from": "urn",
                   "link": {
                     "kind": "external",
-                    "template": "https://www.mavedb.org/score-sets/{urn}"
+                    "template": "https://www.mavedb.org/score-sets/{urn}?calibration&variant={accession}"
                   }
                 },
                 {

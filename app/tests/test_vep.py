@@ -24,7 +24,7 @@ TARGET_COLUMNS = [
     "ProtVar_stability", "ProtVar_int", "ProtVar_pocket",
     "IntAct_feature_ac", "IntAct_feature_type", "IntAct_interaction_ac",
     "mutfunc_motif", "mutfunc_int", "mutfunc_mod", "mutfunc_exp",
-    "MaveDB_score", "MaveDB_urn", "MaveDB_doi", "MaveDB_nt", "MaveDB_pro",
+    "MaveDB_score", "MaveDB_accession", "MaveDB_pro",
 ]
 from app.vep.utils.vcf_results import (
     _set_allele_type,

@@ -42,7 +42,7 @@ ALL_COLS = [
     # mutfunc
     "mutfunc_motif", "mutfunc_int", "mutfunc_mod", "mutfunc_exp",
     # MaveDB
-    "MaveDB_score", "MaveDB_urn", "MaveDB_doi", "MaveDB_nt", "MaveDB_pro",
+    "MaveDB_score", "MaveDB_accession", "MaveDB_pro",
     # popEVE
     "popEVE_SCORE", "popEVE_EVE", "popEVE_ESM1v", "popEVE_pop_adjusted_EVE",
     "popEVE_pop_adjusted_ESM1v", "popEVE_gene", "popEVE_protein",
@@ -176,7 +176,7 @@ def test_get_alt_allele_details_transcript_row_populates_annotations():
         IntAct_feature_type="mutation",
         mutfunc_motif="0.1",
         MaveDB_score="1.5",
-        MaveDB_urn="urn:1",
+        MaveDB_accession="urn:mavedb:00000001-a-1#7",
         am_class="likely_pathogenic",
         am_pathogenicity="0.9",
         pHaplo="0.95",

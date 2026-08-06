@@ -233,6 +233,21 @@ def _apply_post(rows: list[dict], post) -> list[dict]:
                     else operation.sep.join(str(part) for part in parts)
                 )
             continue
+        if operation.op == "split_field":
+            for row in rows:
+                raw = row.get(operation.by)
+                if raw is None or raw == "":
+                    row[operation.into] = None
+                    continue
+                before, found, after = str(raw).partition(operation.sep)
+                # No separator means the field is all of one part and none of
+                # the other, rather than "the whole thing, twice": a MaveDB
+                # accession with no '#' names a score set and no variant within
+                # it, so the variant half must come out empty and drop its link.
+                row[operation.into] = (
+                    before if operation.keep == "before" else (after if found else None)
+                )
+            continue
         if operation.op == "derive_if_empty":
             compiled = re.compile(operation.pattern)
             for row in rows:

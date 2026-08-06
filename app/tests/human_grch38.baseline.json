@@ -3296,6 +3296,7 @@
         "blocks": [
           {
             "kind": "rows",
+            "heading": "Geno2MP",
             "rows": [
               {
                 "label": "HPO profiles",

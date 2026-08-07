@@ -91,6 +91,13 @@ def _matches(row: dict, match, csq_values=None, index_map=None) -> bool:
             if csq_values is not None and index_map is not None
             else None
         )
+        if expected is not None and match.column_pattern:
+            found = re.search(match.column_pattern, str(expected))
+            # No match means the column does not hold the thing being compared,
+            # which is not the same as holding something different -- but both
+            # end in "not equal", and returning None keeps `_same`'s rule that
+            # an absent side never matches.
+            expected = found.group("key") if found else None
     else:
         expected = match.equals
     return _same(row.get(match.field), expected)
@@ -916,14 +923,44 @@ def _pattern_columns(
     )
 
 
+def _match_columns(spec: PluginSpec) -> list[str]:
+    """Every CSQ column a predicate of this plugin compares against.
+
+    These belong in the cache key even though the plugin does not *read* them as
+    input. The key exists because a plugin's output is the same on every CSQ row
+    of a variant — true while it depends only on its own columns, and false the
+    moment a `drop_when` narrows the output against a column that varies per row.
+
+    `Gene` is exactly that case: two rows carrying identical `PHENOTYPES` produce
+    different results, and keying on `PHENOTYPES` alone would serve the first
+    row's answer to every later one — the very mis-attribution the rule removes,
+    now invisible. (`applies_to` needs no entry here: it is evaluated *before*
+    the cache, which is why ClinVar's row gate has always been correct.)
+    """
+    columns: list[str] = []
+    for target in spec.targets:
+        drop_when = target.drop_when
+        if drop_when is None:
+            continue
+        for match in (drop_when.unless_matches, drop_when.only_if):
+            if match is not None and match.equals_column:
+                columns.append(match.equals_column)
+    for join in spec.joins or []:
+        if join.where is not None and join.where.equals_column:
+            columns.append(join.where.equals_column)
+    return columns
+
+
 def compile_plugin(index_map: dict[str, int], spec: PluginSpec) -> PluginPlan:
     """Resolve one plugin against a CSQ header. See PluginPlan."""
+    # Deduplicated, and in declaration order, so the key is stable across runs.
+    key_columns = list(dict.fromkeys([*spec.csq_fields, *_match_columns(spec)]))
     return PluginPlan(
         runnable=has_any_column(index_map, *spec.csq_fields),
         # Absent columns simply drop out: `_column` returned None for them, so
         # they never distinguished one row from another anyway.
         key_indices=tuple(
-            index_map[column] for column in spec.csq_fields if column in index_map
+            index_map[column] for column in key_columns if column in index_map
         ),
         input_indices=tuple(
             index_map[column]

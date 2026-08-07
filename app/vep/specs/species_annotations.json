@@ -18,7 +18,8 @@
       "id": "phenotypes",
       "order": 30,
       "parsed_as": [
-        "phenotype_data"
+        "phenotype_data",
+        "phenotype_gene"
       ],
       "config": {
         "emit": "plugin",

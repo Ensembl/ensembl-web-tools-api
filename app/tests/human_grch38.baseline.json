@@ -247,7 +247,8 @@
         "id": "phenotypes",
         "order": 30,
         "parsed_as": [
-          "phenotype_data"
+          "phenotype_data",
+          "phenotype_gene"
         ],
         "config": {
           "emit": "plugin",
@@ -2433,7 +2434,7 @@
             "from": "PHENOTYPES",
             "transform": "regex",
             "each": true,
-            "pattern": "^(?P<type>[^+]+)\\+(?!ClinVar\\+)(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?:(?P<external_id>[^+]*)\\+)?(?P<risk_allele>[^+]*)$",
+            "pattern": "^(?!Gene\\+)(?P<type>[^+]+)\\+(?!ClinVar\\+)(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?:(?P<external_id>[^+]*)\\+)?(?P<risk_allele>[^+]*)$",
             "as": [
               {
                 "field": "type",
@@ -2468,6 +2469,93 @@
               "only_if": {
                 "field": "type",
                 "equals": "Variation"
+              }
+            },
+            "item_fields": [
+              "type",
+              "source",
+              "phenotype",
+              "id",
+              "external_id",
+              "risk_allele",
+              "source_url"
+            ],
+            "post": [
+              {
+                "op": "exclude",
+                "by": "phenotype",
+                "values": [
+                  "ClinVar:_phenotype_not_specified",
+                  "not_specified",
+                  "not_provided"
+                ]
+              },
+              {
+                "op": "mapped_link",
+                "by": "source",
+                "into": "source_url",
+                "templates": {
+                  "NHGRI-EBI_GWAS_catalog": "https://www.ebi.ac.uk/gwas/variants/{id}",
+                  "G2P": "https://www.ebi.ac.uk/gene2phenotype/search?query={id}",
+                  "MIM_morbid": "https://omim.org/entry/{external_id}",
+                  "Orphanet": "https://www.orpha.net/en/disease/detail/{external_id}"
+                }
+              },
+              {
+                "op": "dedup"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "plugin": "phenotype_gene",
+        "scope": "transcript",
+        "output": "phenotype_gene",
+        "csq_fields": [
+          "PHENOTYPES"
+        ],
+        "require_any_output": [
+          "phenotypes"
+        ],
+        "targets": [
+          {
+            "field": "phenotypes",
+            "from": "PHENOTYPES",
+            "transform": "regex",
+            "each": true,
+            "pattern": "^(?P<type>Gene)\\+(?!ClinVar\\+)(?P<source>[^+]+)\\+(?P<phenotype>[^+]+)\\+(?P<id>[^+]*)\\+(?:(?P<external_id>[^+]*)\\+)?(?P<risk_allele>[^+]*)$",
+            "as": [
+              {
+                "field": "type",
+                "type": "string"
+              },
+              {
+                "field": "source",
+                "type": "string"
+              },
+              {
+                "field": "phenotype",
+                "type": "string"
+              },
+              {
+                "field": "id",
+                "type": "string"
+              },
+              {
+                "field": "external_id",
+                "type": "string"
+              },
+              {
+                "field": "risk_allele",
+                "type": "string"
+              }
+            ],
+            "drop_when": {
+              "unless_matches": {
+                "field": "id",
+                "equals_column": "Gene",
+                "column_pattern": "^(?P<key>ENSG\\d+)"
               }
             },
             "item_fields": [
@@ -3436,11 +3524,7 @@
                 "blocks": [
                   {
                     "kind": "table",
-                    "from": "phenotype_data.phenotypes",
-                    "where": {
-                      "field": "type",
-                      "equals": "Gene"
-                    },
+                    "from": "phenotype_gene.phenotypes",
                     "truncate": {
                       "visible_count": 3
                     },
@@ -3471,10 +3555,6 @@
                   {
                     "kind": "table",
                     "from": "phenotype_data.phenotypes",
-                    "where": {
-                      "field": "type",
-                      "not_equals": "Gene"
-                    },
                     "truncate": {
                       "visible_count": 3
                     },

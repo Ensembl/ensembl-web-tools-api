@@ -72,6 +72,16 @@ class Match(BaseModel):
     # spec pinned to a job before the merge still spells it that way. Accepted
     # as an alias so those keep loading -- see the sidecar compatibility tests.
     equals_column: str | None = Field(default=None, alias="column")
+    # Applied to the *column's* value before comparing, taking the comparable
+    # part from a `key` group -- the same device `RowScope.item_pattern` and a
+    # join's `right_key_pattern` use, and needed for the same reason.
+    #
+    # VEP writes a versioned gene id in `Gene` (`ENSG00000121879.8`) while a
+    # plugin's own payload carries the bare accession (`ENSG00000121879`). Those
+    # are the same gene and must compare equal; without this they never do, and
+    # the failure is silent in the worst direction -- `_same` returns False, so
+    # an `unless_matches` rule would drop every element rather than none.
+    column_pattern: str | None = None
 
     @model_validator(mode="after")
     def _one_right_hand_side(self) -> "Match":
@@ -81,6 +91,17 @@ class Match(BaseModel):
                 f"column (`equals_column`), not both or neither; field "
                 f"{self.field!r}"
             )
+        if self.column_pattern is not None:
+            if self.equals_column is None:
+                raise ValueError(
+                    "`column_pattern` extracts part of a CSQ column's value, so "
+                    f"it needs `equals_column`; field {self.field!r}"
+                )
+            if "(?P<key>" not in self.column_pattern:
+                raise ValueError(
+                    "`column_pattern` needs a `key` group naming the part to "
+                    f"compare; field {self.field!r}"
+                )
         return self
 
 

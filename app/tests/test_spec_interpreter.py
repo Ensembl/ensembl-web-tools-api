@@ -91,6 +91,7 @@ def test_bundled_spec_validates():
         "nearest_gene",
         "nearest_exon_jb",
         "phenotype_data",
+        "phenotype_gene",
         "dosage_sensitivity",
         "intact",
         "popeve",
@@ -838,25 +839,23 @@ def test_hgvs_empty_is_none():
     assert run("hgvs", ["", "", ""], index_map) is None
 
 
+GENE_ENTRY = "Gene+GenCC+Parkinson_disease+ENSG00000145335++"
+VARIATION_ENTRY = "Variation+NHGRI-EBI_GWAS_catalog+Atrial_fibrillation+rs699++A"
+
+
 def test_phenotype_data_splits_entries_into_their_cols():
     # The Phenotypes plugin produces a single PHENOTYPES column: '&'-separated
     # entries, each '+'-separated into the fields named by the plugin's `cols`
     # (type, source, phenotype, id, external_id, risk_allele). Absent trailing
     # fields come back null.
+    #
+    # This plugin takes the entries that are about the *variant*; the Gene ones
+    # are read by `phenotype_gene`, which files each under its own gene.
     index_map = index_map_for("Allele", "PHENOTYPES")
-    gene = "Gene+GenCC+Parkinson_disease+ENSG00000145335++"
-    variation = "Variation+NHGRI-EBI_GWAS_catalog+Atrial_fibrillation+rs699++A"
-    result = run("phenotype_data", ["A", f"{gene}&{variation}"], index_map)
+    result = run(
+        "phenotype_data", ["A", f"{GENE_ENTRY}&{VARIATION_ENTRY}"], index_map
+    )
     assert result["phenotypes"] == [
-            {
-                "type": "Gene",
-                "source": "GenCC",
-                "phenotype": "Parkinson_disease",
-                "id": "ENSG00000145335",
-                "external_id": None,
-                "risk_allele": None,
-                "source_url": None,
-            },
             {
                 "type": "Variation",
                 "source": "NHGRI-EBI_GWAS_catalog",
@@ -867,6 +866,54 @@ def test_phenotype_data_splits_entries_into_their_cols():
                 "source_url": "https://www.ebi.ac.uk/gwas/variants/rs699",
             },
         ]
+
+
+def test_phenotype_gene_takes_only_the_gene_entries_for_this_row_gene():
+    """A gene-associated phenotype belongs to the gene its `id` names.
+
+    VEP repeats the whole PHENOTYPES column on every CSQ row of a variant, so a
+    variant overlapping two genes served both genes' associations against each —
+    3:179,234,297 A>G carries 268 associations, all PIK3CA's, and KCNMB3's rows
+    carried them too. The `id` is an Ensembl gene id in every gene-associated
+    entry the plugin emits, so the row's own `Gene` decides.
+    """
+    index_map = index_map_for("Allele", "Gene", "PHENOTYPES")
+    column = f"{GENE_ENTRY}&{VARIATION_ENTRY}"
+
+    # `Gene` is versioned and the association's id is bare — the whole reason
+    # the match needs `column_pattern`.
+    mine = run("phenotype_gene", ["A", "ENSG00000145335.12", column], index_map)
+    assert [p["phenotype"] for p in mine["phenotypes"]] == ["Parkinson_disease"]
+
+    # The neighbouring gene gets nothing, rather than the other gene's list.
+    theirs = run("phenotype_gene", ["A", "ENSG00000171121.18", column], index_map)
+    assert theirs is None
+
+
+def test_phenotype_gene_is_not_served_from_a_neighbours_cached_parse():
+    """Two rows differing only in `Gene` must not share a cached result.
+
+    `apply_plugin_spec` caches on the columns a plugin reads, because a plugin's
+    output is otherwise identical on every CSQ row of a variant. Narrowing
+    against `Gene` breaks that assumption, and keying on PHENOTYPES alone would
+    hand the first row's answer to every later one — re-creating the exact
+    mis-attribution this narrowing removes, but invisibly.
+    """
+    index_map = index_map_for("Allele", "Gene", "PHENOTYPES")
+    spec = SPEC.plugin("phenotype_gene")
+    plan = compile_plugin(index_map, spec)
+    cache: dict = {}
+
+    def parse(gene: str):
+        return apply_plugin_spec(
+            ["A", gene, GENE_ENTRY], index_map, spec, cache, plan
+        )
+
+    assert parse("ENSG00000145335.12") is not None
+    assert parse("ENSG00000171121.18") is None
+    # …and back again, so the second row cannot have simply overwritten it.
+    assert parse("ENSG00000145335.12") is not None
+    assert index_map["Gene"] in plan.key_indices
 
 
 def test_phenotype_data_skips_entries_missing_a_required_field():
@@ -881,20 +928,21 @@ def test_phenotype_data_skips_entries_missing_a_required_field():
     a job submitted before the column arrived is still readable for the days its
     results are retained. Counts that match neither shape stay dropped.
     """
-    index_map = index_map_for("PHENOTYPES")
-    good = "Gene+GenCC+Parkinson_disease+ENSG00000145335++"
+    index_map = index_map_for("Allele", "PHENOTYPES")
+    good = "Variation+GenCC+Parkinson_disease+rs0++A"
     result = run(
         "phenotype_data",
         [
-            "Gene++Parkinson_disease+ENSG1++"  # no source
-            "&Gene+GenCC++ENSG2++"  # no phenotype
-            "&+GenCC+Parkinson_disease+ENSG3++"  # no type
-            "&Cancer_Gene_Census+cancer+ENSG4"  # 3 fields, neither shape
+            "A",
+            "Variation++Parkinson_disease+rs1++A"  # no source
+            "&Variation+GenCC++rs2++A"  # no phenotype
+            "&+GenCC+Parkinson_disease+rs3++A"  # no type
+            "&Cancer_Gene_Census+cancer+rs4"  # 3 fields, neither shape
             f"&{good}"
         ],
         index_map,
     )
-    assert [p["id"] for p in result["phenotypes"]] == ["ENSG00000145335"]
+    assert [p["id"] for p in result["phenotypes"]] == ["rs0"]
 
 
 def test_phenotype_data_still_reads_the_pre_external_id_shape():
@@ -932,23 +980,28 @@ def test_phenotype_source_links_use_the_right_id_per_source():
     hangs off (ENSG...) and `external_id` the OMIM entry. Keying it on `id`
     would produce a confident link to the wrong page.
     """
-    result = run(
-        "phenotype_data",
-        [
-            "A",
-            "Gene+MIM_morbid+Immunodeficiency_38+ENSG00000187608+616126+"
-            "&Gene+Orphanet+Mendelian_susceptibility+ENSG00000187608+431149+"
-            "&Gene+G2P+Retinal_dystrophy+ENSG00000187634+614756+"
-            "&Variation+NHGRI-EBI_GWAS_catalog+Lupus+rs2977608++A"
-            # No template for this source, so no link rather than a dead one.
-            "&Gene+Cancer_Gene_Census+Leukaemia+ENSG00000187608+123+",
-        ],
-        index_map_for("Allele", "PHENOTYPES"),
+    column = (
+        "Gene+MIM_morbid+Immunodeficiency_38+ENSG00000187608+616126+"
+        "&Gene+Orphanet+Mendelian_susceptibility+ENSG00000187608+431149+"
+        "&Gene+G2P+Retinal_dystrophy+ENSG00000187608+614756+"
+        "&Variation+NHGRI-EBI_GWAS_catalog+Lupus+rs2977608++A"
+        # No template for this source, so no link rather than a dead one.
+        "&Gene+Cancer_Gene_Census+Leukaemia+ENSG00000187608+123+"
     )
-    assert {p["source"]: p["source_url"] for p in result["phenotypes"]} == {
+    genes = run(
+        "phenotype_gene",
+        ["A", "ENSG00000187608.9", column],
+        index_map_for("Allele", "Gene", "PHENOTYPES"),
+    )
+    variants = run(
+        "phenotype_data", ["A", column], index_map_for("Allele", "PHENOTYPES")
+    )
+    links = {p["source"]: p["source_url"] for p in genes["phenotypes"]}
+    links |= {p["source"]: p["source_url"] for p in variants["phenotypes"]}
+    assert links == {
         "MIM_morbid": "https://omim.org/entry/616126",
         "Orphanet": "https://www.orpha.net/en/disease/detail/431149",
-        "G2P": "https://www.ebi.ac.uk/gene2phenotype/search?query=ENSG00000187634",
+        "G2P": "https://www.ebi.ac.uk/gene2phenotype/search?query=ENSG00000187608",
         "NHGRI-EBI_GWAS_catalog": "https://www.ebi.ac.uk/gwas/variants/rs2977608",
         "Cancer_Gene_Census": None,
     }
@@ -961,15 +1014,15 @@ def test_phenotype_source_link_is_absent_when_its_id_is():
     to OMIM's front door, presented as though it were this phenotype's record.
     """
     result = run(
-        "phenotype_data",
+        "phenotype_gene",
         [
             "A",
-            "Gene+MIM_morbid+Immunodeficiency_38+ENSG00000187608++"
-            "&Gene+G2P+Retinal_dystrophy++614756+",
+            "ENSG00000187608.9",
+            "Gene+MIM_morbid+Immunodeficiency_38+ENSG00000187608++",
         ],
-        index_map_for("Allele", "PHENOTYPES"),
+        index_map_for("Allele", "Gene", "PHENOTYPES"),
     )
-    assert [p["source_url"] for p in result["phenotypes"]] == [None, None]
+    assert [p["source_url"] for p in result["phenotypes"]] == [None]
 
 
 def test_phenotype_data_leaves_clinvar_associations_alone():
@@ -986,15 +1039,13 @@ def test_phenotype_data_leaves_clinvar_associations_alone():
         [
             "A",
             "Variation+ClinVar+Parkinson_disease+rs1+A"
-            "&Variation+NHGRI-EBI_GWAS_catalog+Albumin_levels+rs2+A"
-            "&Gene+GenCC+Parkinson_disease+ENSG1+",
+            "&Variation+NHGRI-EBI_GWAS_catalog+Albumin_levels+rs2+A",
         ],
         index_map_for("Allele", "PHENOTYPES"),
     )
     assert "clinvar_phenotypes" not in result
     assert [p["source"] for p in result["phenotypes"]] == [
         "NHGRI-EBI_GWAS_catalog",
-        "GenCC",
     ]
 
 
@@ -1006,7 +1057,8 @@ def test_phenotype_data_variation_is_scoped_to_its_risk_allele():
     each of them (rs139548132, alts C/G/T). `drop_when.unless_matches` keeps only
     the associations whose risk allele is this row's `Allele`; an association
     with no risk allele never matches, so it drops too. A gene association
-    carries no allele at all and must survive — `only_if` scopes the rule.
+    carries no allele at all, and is read by `phenotype_gene` next door — which
+    narrows by gene rather than by allele, so this rule never reaches it.
     """
     index_map = index_map_for("Allele", "PHENOTYPES")
     entries = (
@@ -1019,18 +1071,24 @@ def test_phenotype_data_variation_is_scoped_to_its_risk_allele():
         out = run("phenotype_data", [allele, entries], index_map)
         return [
             (p["type"], p["risk_allele"], p["phenotype"])
-            for p in out["phenotypes"]
+            for p in (out or {}).get("phenotypes", [])
         ]
-    assert kept("C") == [
-        ("Variation", "C", "Neurodevelopmental_disorder"),
-        ("Gene", None, "Parkinson_disease"),
-    ]
-    assert kept("G") == [
-        ("Variation", "G", "Inborn_genetic_diseases"),
-        ("Gene", None, "Parkinson_disease"),
-    ]
-    # an allele none of the associations name keeps only the gene one
-    assert kept("T") == [("Gene", None, "Parkinson_disease")]
+    assert kept("C") == [("Variation", "C", "Neurodevelopmental_disorder")]
+    assert kept("G") == [("Variation", "G", "Inborn_genetic_diseases")]
+    # an allele none of the associations name keeps nothing at all
+    assert kept("T") == []
+
+    # The gene association survives next door, on every allele — the allele rule
+    # is not what decides its fate.
+    for allele in ("C", "G", "T"):
+        genes = run(
+            "phenotype_gene",
+            [allele, "ENSG00000145335.12", entries],
+            index_map_for("Allele", "Gene", "PHENOTYPES"),
+        )
+        assert [p["phenotype"] for p in genes["phenotypes"]] == [
+            "Parkinson_disease"
+        ]
 
 
 def test_phenotype_data_drops_placeholder_phenotypes():
@@ -1044,16 +1102,26 @@ def test_phenotype_data_drops_placeholder_phenotypes():
         [
             "A",
             "Variation+NHGRI-EBI_GWAS_catalog+ClinVar:_phenotype_not_specified+rs1+A"
-            "&Variation+NHGRI-EBI_GWAS_catalog+Neurodevelopmental_disorder+rs1+A"
-            "&Gene+GenCC+Not_provided+ENSG1+"
-            "&Gene+GenCC+Parkinson_disease+ENSG1+",
+            "&Variation+NHGRI-EBI_GWAS_catalog+Neurodevelopmental_disorder+rs1+A",
         ],
         index_map,
     )
     assert [p["phenotype"] for p in result["phenotypes"]] == [
         "Neurodevelopmental_disorder",
-        "Parkinson_disease",
     ]
+
+    # Same rule, same post-op, on the gene-associated side.
+    genes = run(
+        "phenotype_gene",
+        [
+            "A",
+            "ENSG00000145335.12",
+            "Gene+GenCC+Not_provided+ENSG00000145335+"
+            "&Gene+GenCC+Parkinson_disease+ENSG00000145335+",
+        ],
+        index_map_for("Allele", "Gene", "PHENOTYPES"),
+    )
+    assert [p["phenotype"] for p in genes["phenotypes"]] == ["Parkinson_disease"]
 
 
 def test_phenotype_data_all_placeholders_is_none():
@@ -2017,6 +2085,42 @@ def test_a_join_must_write_exactly_one_thing():
         JoinSpec(**base)
     with pytest.raises(ValidationError, match="not both or neither"):
         JoinSpec(**base, **{"as": "records", "count_into": "n"})
+
+
+def test_a_column_pattern_needs_a_column_and_a_key_group():
+    """Both mistakes are silent at runtime, so they are caught at load.
+
+    A `column_pattern` without `equals_column` has nothing to extract from; one
+    without a `key` group extracts nothing. Either way `_matches` would compare
+    against None, `_same` would return False for every element, and an
+    `unless_matches` rule would drop the lot — a spec that quietly parses to
+    nothing rather than one that fails.
+    """
+    from pydantic import ValidationError
+
+    from app.vep.models.parsing_spec_model import Match
+
+    with pytest.raises(ValidationError, match="needs `equals_column`"):
+        Match(field="id", equals="x", column_pattern="^(?P<key>ENSG\\d+)")
+    with pytest.raises(ValidationError, match="needs a `key` group"):
+        Match(field="id", equals_column="Gene", column_pattern="^ENSG\\d+")
+
+
+def test_a_column_pattern_takes_the_comparable_part_of_the_column():
+    """`ENSG…​.8` and the bare accession are the same gene."""
+    from app.vep.models.parsing_spec_model import Match
+
+    from app.vep.utils.spec_interpreter import _matches
+
+    index_map = index_map_for("Gene")
+    match = Match(
+        field="id", equals_column="Gene", column_pattern="^(?P<key>ENSG\\d+)"
+    )
+    row = {"id": "ENSG00000121879"}
+    assert _matches(row, match, ["ENSG00000121879.8"], index_map)
+    assert not _matches(row, match, ["ENSG00000171121.18"], index_map)
+    # A column holding something else entirely is "not equal", not a crash.
+    assert not _matches(row, match, ["-"], index_map)
 
 
 # --- narrowing a plugin to the rows it is about -----------------------------

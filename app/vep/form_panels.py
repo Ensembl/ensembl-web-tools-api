@@ -629,13 +629,20 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
     """
     by_id = {panel["id"]: panel for panel in panels}
 
-    # Genes & transcripts: RiboSeqORFs + Gene Ontology + GERP.
+    # Genes & transcripts: RiboSeqORFs + Gene Ontology + pLI.
     by_id["genes_and_transcripts"]["options"].extend([
         {"id": "riboseqorfs", "label": "RiboSeqORFs", "type": "boolean", "default": False,
          "category": "Annotations"},
         # GO plugin (human GRCh38 for now; other species to follow).
         {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False,
          "category": "Annotations"},
+        # pLI, GRCh38 only — there is one data file and it is that assembly's.
+        # Scored per *transcript*, unlike LOEUF and dosage sensitivity in the
+        # same group, which are gene-level; hence the `transcript` argument on
+        # its config line. It joins the Constraint group rather than starting a
+        # new one, since `groupByCategory` merges by name across tiers.
+        {"id": "pli", "label": "pLI", "type": "boolean", "default": False,
+         "category": "Constraint"},
     ])
 
     # Protein & functional: Protein (protein + ProtVar) / Functional (MaveDB,

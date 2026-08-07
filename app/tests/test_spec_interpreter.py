@@ -85,6 +85,7 @@ def test_bundled_spec_validates():
         "hgvsg",
         "spdi",
         "loeuf",
+        "pli",
         "gerp",
         "geno2mp",
         "nmd",

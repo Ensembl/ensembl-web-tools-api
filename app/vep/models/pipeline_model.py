@@ -216,6 +216,10 @@ class ConfigIniParams(BaseModel):
     protvar_pocket: bool = True
     protvar_int: bool = True
     loeuf: bool = False
+    # Probability of being loss-of-function intolerant (pLI plugin), scored per
+    # transcript rather than per gene — see the `transcript` argument its config
+    # line passes.
+    pli: bool = False
     # GERP conservation score (Conservation plugin; human GRCh38 for now).
     gerp: bool = False
     phenotypes: bool = False

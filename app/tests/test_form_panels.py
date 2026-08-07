@@ -785,7 +785,9 @@ def test_genes_and_transcripts_options_are_grouped_into_three_categories():
         "updownstream_distance",
     ]
     assert grouped["Annotations"] == ["utrannotator", "nmd", "riboseqorfs", "go"]
-    assert grouped["Constraint"] == ["loeuf", "dosage_sensitivity"]
+    # pLI is GRCh38-only, so it arrives with the GRCh38 additions and lands
+    # after the two the 37/38 tier contributes — same group, appended.
+    assert grouped["Constraint"] == ["loeuf", "dosage_sensitivity", "pli"]
 
 
 def test_gerp_sits_with_cadd_under_genome_wide():

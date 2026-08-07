@@ -460,6 +460,21 @@
         }
       },
       {
+        "id": "pli",
+        "order": 49,
+        "parsed_as": [
+          "pli"
+        ],
+        "config": {
+          "emit": "plugin",
+          "name": "pLI",
+          "args": [
+            "{path}/pli_transcript.txt",
+            "transcript"
+          ]
+        }
+      },
+      {
         "id": "tss_distance",
         "order": 50,
         "parsed_as": [
@@ -3008,6 +3023,25 @@
         ]
       },
       {
+        "plugin": "pli",
+        "scope": "transcript",
+        "output": "pli",
+        "csq_fields": [
+          "pLI_transcript_value"
+        ],
+        "require_any_output": [
+          "score"
+        ],
+        "targets": [
+          {
+            "field": "score",
+            "from": "pLI_transcript_value",
+            "transform": "scalar",
+            "type": "float"
+          }
+        ]
+      },
+      {
         "plugin": "nmd",
         "scope": "transcript",
         "output": "nmd",
@@ -3409,6 +3443,21 @@
               {
                 "label": "LOEUF",
                 "from": "loeuf.score",
+                "format": "num"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "option_id": "pli",
+        "blocks": [
+          {
+            "kind": "rows",
+            "rows": [
+              {
+                "label": "pLI",
+                "from": "pli.score",
                 "format": "num"
               }
             ]

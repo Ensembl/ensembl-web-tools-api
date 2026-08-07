@@ -45,6 +45,21 @@
         }
       },
       {
+        "id": "pli",
+        "order": 49,
+        "parsed_as": [
+          "pli"
+        ],
+        "config": {
+          "emit": "plugin",
+          "name": "pLI",
+          "args": [
+            "{path}/pli_transcript.txt",
+            "transcript"
+          ]
+        }
+      },
+      {
         "id": "opentargets",
         "order": 22,
         "parsed_as": [

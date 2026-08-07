@@ -2578,17 +2578,17 @@
                       {
                         "label": "Phenotype",
                         "from": "phenotype",
-                        "format": "phenotype",
+                        "format": "phenotype"
+                      },
+                      {
+                        "label": "Source",
+                        "from": "source",
+                        "format": "humanize",
                         "link": {
                           "kind": "external",
                           "template": "{value}"
                         },
                         "link_from": "source_url"
-                      },
-                      {
-                        "label": "Source",
-                        "from": "source",
-                        "format": "humanize"
                       }
                     ]
                   }
@@ -2608,17 +2608,17 @@
                       {
                         "label": "Phenotype",
                         "from": "phenotype",
-                        "format": "phenotype",
+                        "format": "phenotype"
+                      },
+                      {
+                        "label": "Source",
+                        "from": "source",
+                        "format": "humanize",
                         "link": {
                           "kind": "external",
                           "template": "{value}"
                         },
                         "link_from": "source_url"
-                      },
-                      {
-                        "label": "Source",
-                        "from": "source",
-                        "format": "humanize"
                       }
                     ]
                   }

@@ -64,27 +64,9 @@ _ALWAYS_VISIBLE_PANELS: list[dict] = [
                     },
                 ],
             },
-            {
-                "id": "nearest_exon_jb",
-                "label": "Nearest exon junction boundary",
-                "type": "boolean",
-                "default": False,
-                "category": "Locations",
-                "sub_options": [
-                    {
-                        "id": "nearest_exon_jb_max_range",
-                        "label": "Max search range (bp)",
-                        "type": "number",
-                        "default": 10000,
-                    },
-                    {
-                        "id": "nearest_exon_jb_intronic",
-                        "label": "Intronic",
-                        "type": "boolean",
-                        "default": False,
-                    },
-                ],
-            },
+            # `nearest_exon_jb` is not missing — it is declared by its own config
+            # entry (base.json), and placed here by `_place_spec_options` at the
+            # `order` that block states. Same for `pli` further down.
             {
                 # Up/downstream distance for consequence calling (VEP `distance`).
                 # A toggle revealing a numeric field (bp) that overrides VEP's
@@ -636,13 +618,9 @@ def _add_human_grch38_options(panels: list[dict]) -> None:
         # GO plugin (human GRCh38 for now; other species to follow).
         {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False,
          "category": "Annotations"},
-        # pLI, GRCh38 only — there is one data file and it is that assembly's.
-        # Scored per *transcript*, unlike LOEUF and dosage sensitivity in the
-        # same group, which are gene-level; hence the `transcript` argument on
-        # its config line. It joins the Constraint group rather than starting a
-        # new one, since `groupByCategory` merges by name across tiers.
-        {"id": "pli", "label": "pLI", "type": "boolean", "default": False,
-         "category": "Constraint"},
+        # pLI is declared by its own config entry (human_grch38.json), which is
+        # also what makes it GRCh38-only: no entry for GRCh37, so nothing to
+        # place there. See `_place_spec_options`.
     ])
 
     # Protein & functional: Protein (protein + ProtVar) / Functional (MaveDB,
@@ -983,44 +961,71 @@ def _add_species_annotation_options(panels: list[dict], assembly_name: str | Non
 # three places (the always-visible base, the human-only additions, and the
 # per-species ones created on demand) and the order a panel happens to be
 # appended in is not a decision anyone should have to trace.
-def _spec_form_options(assembly_name: str | None) -> dict[str, dict]:
-    """The options declared by their own config entry, by id.
+# The step between two options this module still writes out. A `form.order`
+# lands between them (150 sits between the 2nd and 3rd), so an entry can place
+# itself without the coded list being renumbered.
+_CODED_OPTION_STEP = 100
 
-    PROOF OF CONCEPT. Two entries carry a `form` block today
-    (`nearest_exon_jb`, `pli`); everything below still comes from the literals
-    in this module. The point is to test the model against a plain toggle and
-    one with a number and a boolean beneath it, before 47 more nodes move.
 
-    Read through the assembled spec rather than the raw documents, so an option
-    is offered exactly where its entry is — `pli` is declared only by
-    `human_grch38.json`, so it is absent for GRCh37 without anything here
-    saying so. That is already how the parse plugin and display option are
-    selected (see `_select_library`).
+def _spec_form_options(
+    assembly_name: str | None,
+) -> list[tuple[str, int, dict]]:
+    """Options declared by their own config entry: `(panel id, order, option)`.
+
+    Two entries carry a `form` block today — `nearest_exon_jb` and `pli`;
+    everything else still comes from the literals above. See
+    docs/form-panels-to-json.md for where this goes.
+
+    Read through the *assembled* spec rather than the raw documents, so an
+    option is offered exactly where its entry is: `pli` is declared only by
+    `human_grch38.json`, so GRCh37 has nothing to place and nothing here says
+    so. That is already how the parse plugin and display option are selected
+    (see `_select_library`), and it is the per-assembly branching this module
+    exists to do.
     """
     spec = resolve_merged_spec(assembly_name or "")
-    return {
-        entry.id: entry.form.as_panel_option(entry.id)
+    return [
+        (entry.form.panel, entry.form.order, entry.form.as_panel_option(entry.id))
         for entry in spec.config.entries
         if entry.form is not None
-    }
+    ]
 
 
-def _overlay_spec_options(panels: list[dict], assembly_name: str | None) -> None:
-    """Replace each coded option with its entry's version, where it has one.
+def _place_spec_options(panels: list[dict], assembly_name: str | None) -> None:
+    """Place each declared option into its panel, at the order it states.
 
-    In place, so position is untouched: this proves the option's *shape* round
-    trips through the spec, not yet that the spec can place it. Placement is
-    checked separately — the `form` block states its panel and category, and a
-    test asserts those agree with where this module put it.
+    The coded options keep their relative order and are spaced by
+    `_CODED_OPTION_STEP`; a declared option sorts in among them by its own
+    `order`. Nothing here knows what the options *are* — only where they go.
     """
     declared = _spec_form_options(assembly_name)
     if not declared:
         return
+
+    by_panel: dict[str, list[tuple[int, dict]]] = {}
+    for panel_id, order, option in declared:
+        by_panel.setdefault(panel_id, []).append((order, option))
+
     for panel in panels:
-        for index, option in enumerate(panel["options"]):
-            replacement = declared.get(option.get("id"))
-            if replacement is not None:
-                panel["options"][index] = copy.deepcopy(replacement)
+        extra = by_panel.pop(panel["id"], None)
+        if not extra:
+            continue
+        placed = [
+            (index * _CODED_OPTION_STEP, option)
+            for index, option in enumerate(panel["options"])
+        ]
+        placed += [(order, copy.deepcopy(option)) for order, option in extra]
+        placed.sort(key=lambda pair: pair[0])
+        panel["options"] = [option for _order, option in placed]
+
+    if by_panel:
+        # An entry naming a panel this genome does not show would otherwise
+        # drop its control silently — the failure mode that keeps costing
+        # afternoons elsewhere in this spec.
+        raise ValueError(
+            "form options declare panels that are not shown for "
+            f"{assembly_name!r}: {sorted(by_panel)}"
+        )
 
 
 _PANEL_ORDER = (
@@ -1064,9 +1069,9 @@ def get_visible_panels(
         # Every other species: whichever of GO / Phenotypes it has data for.
         _add_species_annotation_options(panels, assembly_name)
 
-    # Two options are declared by their own config entry now; swap those in
-    # before ordering (see _overlay_spec_options).
-    _overlay_spec_options(panels, assembly_name)
+    # Two options are declared by their own config entry rather than above;
+    # place them before the panels are ordered (see _place_spec_options).
+    _place_spec_options(panels, assembly_name)
 
     # A panel not named above keeps its relative position at the end rather than
     # disappearing or landing arbitrarily — a new panel shows up, and is then

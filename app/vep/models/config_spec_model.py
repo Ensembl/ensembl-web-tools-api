@@ -406,6 +406,19 @@ class FormOption(BaseModel):
     type: Literal["boolean", "number", "select"] = "boolean"
     default: bool | int | str = False
     sub_options: list[FormSubOption] = []
+    # Where in its panel the control sits.
+    #
+    # Sparse (…, 150, 850, …) against the step `form_panels` gives the options
+    # it still owns, so an entry can be placed *between* two coded ones without
+    # renumbering anything. It is deliberately not the entry's `order`, which
+    # sequences the generated config.ini and has no reason to agree with the
+    # order a reader wants to see the controls in.
+    #
+    # While the migration is half done these numbers are relative to a list this
+    # module still writes, so adding a coded option above one of them shifts the
+    # scale — the golden-file test is what catches that. Once every option is
+    # declared, the coded side goes and the numbers stand on their own.
+    order: int
 
     def as_panel_option(self, option_id: str) -> dict:
         """The option dict `form_config` serves, in the shape the form expects.

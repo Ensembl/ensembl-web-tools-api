@@ -53,6 +53,7 @@
         "form": {
           "panel": "genes_and_transcripts",
           "category": "Constraint",
+          "order": 850,
           "label": "pLI",
           "type": "boolean",
           "default": false

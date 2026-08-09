@@ -106,6 +106,7 @@
         "form": {
           "panel": "genes_and_transcripts",
           "category": "Locations",
+          "order": 150,
           "label": "Nearest exon junction boundary",
           "type": "boolean",
           "default": false,

@@ -5,6 +5,24 @@
         "id": "updownstream_distance",
         "order": 5,
         "parsed_as": [],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Locations",
+          "order": 300,
+          "label": "Up/downstream distance",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "updownstream_distance_bp",
+              "label": "Distance (bp)",
+              "type": "number",
+              "default": 5000,
+              "min": 0,
+              "max": 1000000
+            }
+          ]
+        },
         "config": {
           "emit": "setting",
           "keyword": "distance",
@@ -20,6 +38,13 @@
         "parsed_as": [
           "hgvs"
         ],
+        "form": {
+          "panel": "variant_representations",
+          "order": 0,
+          "label": "HGVS",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "flag",
           "keyword": "hgvs"
@@ -43,6 +68,13 @@
         "parsed_as": [
           "spdi"
         ],
+        "form": {
+          "panel": "variant_representations",
+          "order": 100,
+          "label": "SPDI",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "flag",
           "keyword": "spdi"
@@ -54,6 +86,13 @@
         "parsed_as": [
           "protein"
         ],
+        "form": {
+          "panel": "protein_and_functional",
+          "order": 0,
+          "label": "Protein ID",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "flag",
           "keyword": "protein"
@@ -65,6 +104,14 @@
         "parsed_as": [
           "tss_distance"
         ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Locations",
+          "order": 0,
+          "label": "Distance to TSS",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "TSSDistance",
@@ -79,6 +126,22 @@
         "parsed_as": [
           "nearest_gene"
         ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Locations",
+          "order": 100,
+          "label": "Nearest gene",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "nearest_gene_both_directions",
+              "label": "Both directions",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
         "config": {
           "emit": "plugin",
           "name": "NearestGene",
@@ -106,7 +169,7 @@
         "form": {
           "panel": "genes_and_transcripts",
           "category": "Locations",
-          "order": 150,
+          "order": 200,
           "label": "Nearest exon junction boundary",
           "type": "boolean",
           "default": false,

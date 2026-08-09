@@ -11,6 +11,14 @@
         "parsed_as": [
           "mavedb"
         ],
+        "form": {
+          "panel": "protein_and_functional",
+          "category": "Functional",
+          "order": 200,
+          "label": "MaveDB",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "MaveDB",
@@ -25,6 +33,14 @@
         "parsed_as": [
           "riboseq_orfs"
         ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Annotations",
+          "order": 800,
+          "label": "RiboSeqORFs",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "RiboseqORFs",
@@ -39,6 +55,14 @@
         "parsed_as": [
           "nmd"
         ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Annotations",
+          "order": 500,
+          "label": "NMD",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "NMD"
@@ -53,7 +77,7 @@
         "form": {
           "panel": "genes_and_transcripts",
           "category": "Constraint",
-          "order": 850,
+          "order": 1000,
           "label": "pLI",
           "type": "boolean",
           "default": false
@@ -73,6 +97,13 @@
         "parsed_as": [
           "opentargets"
         ],
+        "form": {
+          "panel": "phenotype_and_disease_associations",
+          "order": 200,
+          "label": "OpenTargets",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "OpenTargets",
@@ -88,6 +119,14 @@
           "eve",
           "popeve"
         ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Missense",
+          "order": 500,
+          "label": "EVE & popEVE",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "EVE",
@@ -106,6 +145,34 @@
         "forces_on": [
           "hgvsg"
         ],
+        "form": {
+          "panel": "protein_and_functional",
+          "category": "Protein",
+          "order": 100,
+          "label": "ProtVar",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "protvar_stability",
+              "label": "Protein Structure Stability",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "id": "protvar_pocket",
+              "label": "Protein Pockets",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "id": "protvar_int",
+              "label": "Protein-Protein Interaction Interface",
+              "type": "boolean",
+              "default": true
+            }
+          ]
+        },
         "config": {
           "emit": "plugin",
           "name": "ProtVar",
@@ -132,6 +199,46 @@
         "parsed_as": [
           "intact"
         ],
+        "form": {
+          "panel": "protein_and_functional",
+          "category": "Functional",
+          "order": 300,
+          "label": "IntAct",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "intact_feature_ac",
+              "label": "Feature AC",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_feature_short_label",
+              "label": "Feature short label",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_ap_ac",
+              "label": "Affected protein AC",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_interaction_participants",
+              "label": "Interaction participants",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_pmid",
+              "label": "PubMed ID",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
         "config": {
           "emit": "plugin",
           "name": "IntAct",
@@ -171,6 +278,41 @@
         "parsed_as": [
           "mutfunc"
         ],
+        "form": {
+          "panel": "protein_and_functional",
+          "category": "Functional",
+          "order": 400,
+          "label": "mutfunc",
+          "type": "boolean",
+          "default": false,
+          "requires_any_sub_option": true,
+          "sub_options": [
+            {
+              "id": "mutfunc_motif",
+              "label": "Linear motifs",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "id": "mutfunc_int",
+              "label": "Protein interactions",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "id": "mutfunc_mod",
+              "label": "Protein structure",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "id": "mutfunc_exp",
+              "label": "Protein structure (exp.)",
+              "type": "boolean",
+              "default": true
+            }
+          ]
+        },
         "config": {
           "emit": "plugin",
           "name": "mutfunc",
@@ -207,6 +349,22 @@
         "parsed_as": [
           "dosage_sensitivity"
         ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Constraint",
+          "order": 700,
+          "label": "Dosage sensitivity",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "dosage_sensitivity_cover",
+              "label": "Require full transcript overlap",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
         "config": {
           "emit": "plugin",
           "name": "DosageSensitivity",
@@ -226,6 +384,13 @@
           "phenotype_data",
           "phenotype_gene"
         ],
+        "form": {
+          "panel": "phenotype_and_disease_associations",
+          "order": 100,
+          "label": "Phenotypes",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "Phenotypes",
@@ -245,6 +410,14 @@
         "parsed_as": [
           "go"
         ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Annotations",
+          "order": 900,
+          "label": "Gene Ontology",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "GO",
@@ -259,6 +432,14 @@
         "parsed_as": [
           "alphamissense"
         ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Missense",
+          "order": 0,
+          "label": "AlphaMissense",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "AlphaMissense",
@@ -278,6 +459,14 @@
         "parsed_as": [
           "cadd"
         ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Genome wide",
+          "order": 400,
+          "label": "CADD",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "CADD",
@@ -303,6 +492,14 @@
         "parsed_as": [
           "revel"
         ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Missense",
+          "order": 100,
+          "label": "REVEL",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "REVEL",
@@ -322,6 +519,14 @@
         "parsed_as": [
           "clinpred"
         ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Missense",
+          "order": 200,
+          "label": "ClinPred",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "ClinPred",
@@ -341,6 +546,14 @@
         "parsed_as": [
           "gerp"
         ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Genome wide",
+          "order": 600,
+          "label": "GERP conservation score",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "Conservation",
@@ -355,6 +568,14 @@
         "parsed_as": [
           "loeuf"
         ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Constraint",
+          "order": 600,
+          "label": "LOEUF",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "LOEUF",
@@ -375,6 +596,13 @@
         "parsed_as": [
           "geno2mp"
         ],
+        "form": {
+          "panel": "phenotype_and_disease_associations",
+          "order": 0,
+          "label": "Geno2MP",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "Geno2MP",
@@ -394,6 +622,14 @@
         "parsed_as": [
           "spliceai"
         ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Splicing",
+          "order": 300,
+          "label": "SpliceAI",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "SpliceAI",
@@ -425,6 +661,14 @@
         "parsed_as": [
           "utr_annotation"
         ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Annotations",
+          "order": 400,
+          "label": "UTRAnnotator",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "UTRAnnotator",
@@ -918,6 +1162,13 @@
         "parsed_as": [
           "clinvar_sv"
         ],
+        "form": {
+          "panel": "phenotype_and_disease_associations",
+          "order": 300,
+          "label": "ClinVar structural variants",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "custom",
           "params": {
@@ -940,6 +1191,13 @@
         "parsed_as": [
           "gencode_promoter"
         ],
+        "form": {
+          "panel": "regulatory",
+          "order": 0,
+          "label": "GENCODE promoter",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "custom",
           "params": {
@@ -949,6 +1207,25 @@
             "short_name": "GENCODE_Promoter",
             "type": "overlap"
           }
+        }
+      },
+      {
+        "id": "protein",
+        "order": 13,
+        "parsed_as": [
+          "protein"
+        ],
+        "form": {
+          "panel": "protein_and_functional",
+          "category": "Protein",
+          "order": 0,
+          "label": "Protein ID",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "flag",
+          "keyword": "protein"
         }
       }
     ]

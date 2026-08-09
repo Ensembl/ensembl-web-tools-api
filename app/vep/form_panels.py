@@ -11,7 +11,7 @@ carry a `category` label which the form uses to group them within a panel.
 
 import copy
 
-from vep.utils.spec_loader import species_annotation_entry
+from vep.utils.spec_loader import resolve_merged_spec, species_annotation_entry
 
 # Always-visible panels/options.
 _ALWAYS_VISIBLE_PANELS: list[dict] = [
@@ -983,6 +983,46 @@ def _add_species_annotation_options(panels: list[dict], assembly_name: str | Non
 # three places (the always-visible base, the human-only additions, and the
 # per-species ones created on demand) and the order a panel happens to be
 # appended in is not a decision anyone should have to trace.
+def _spec_form_options(assembly_name: str | None) -> dict[str, dict]:
+    """The options declared by their own config entry, by id.
+
+    PROOF OF CONCEPT. Two entries carry a `form` block today
+    (`nearest_exon_jb`, `pli`); everything below still comes from the literals
+    in this module. The point is to test the model against a plain toggle and
+    one with a number and a boolean beneath it, before 47 more nodes move.
+
+    Read through the assembled spec rather than the raw documents, so an option
+    is offered exactly where its entry is — `pli` is declared only by
+    `human_grch38.json`, so it is absent for GRCh37 without anything here
+    saying so. That is already how the parse plugin and display option are
+    selected (see `_select_library`).
+    """
+    spec = resolve_merged_spec(assembly_name or "")
+    return {
+        entry.id: entry.form.as_panel_option(entry.id)
+        for entry in spec.config.entries
+        if entry.form is not None
+    }
+
+
+def _overlay_spec_options(panels: list[dict], assembly_name: str | None) -> None:
+    """Replace each coded option with its entry's version, where it has one.
+
+    In place, so position is untouched: this proves the option's *shape* round
+    trips through the spec, not yet that the spec can place it. Placement is
+    checked separately — the `form` block states its panel and category, and a
+    test asserts those agree with where this module put it.
+    """
+    declared = _spec_form_options(assembly_name)
+    if not declared:
+        return
+    for panel in panels:
+        for index, option in enumerate(panel["options"]):
+            replacement = declared.get(option.get("id"))
+            if replacement is not None:
+                panel["options"][index] = copy.deepcopy(replacement)
+
+
 _PANEL_ORDER = (
     "variant_representations",
     "variant_impact_predictions",
@@ -1023,6 +1063,10 @@ def get_visible_panels(
     else:
         # Every other species: whichever of GO / Phenotypes it has data for.
         _add_species_annotation_options(panels, assembly_name)
+
+    # Two options are declared by their own config entry now; swap those in
+    # before ordering (see _overlay_spec_options).
+    _overlay_spec_options(panels, assembly_name)
 
     # A panel not named above keeps its relative position at the end rather than
     # disappearing or landing arbitrarily — a new panel shows up, and is then

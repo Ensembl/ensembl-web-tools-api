@@ -63,14 +63,14 @@
         "id": "tss_distance",
         "order": 50,
         "parsed_as": [
-            "tss_distance"
-          ],
+          "tss_distance"
+        ],
         "config": {
           "emit": "plugin",
           "name": "TSSDistance",
-              "params": {
-                "both_direction": "1"
-              }
+          "params": {
+            "both_direction": "1"
+          }
         }
       },
       {
@@ -103,6 +103,27 @@
         "parsed_as": [
           "nearest_exon_jb"
         ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Locations",
+          "label": "Nearest exon junction boundary",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "nearest_exon_jb_max_range",
+              "label": "Max search range (bp)",
+              "type": "number",
+              "default": 10000
+            },
+            {
+              "id": "nearest_exon_jb_intronic",
+              "label": "Intronic",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
         "config": {
           "emit": "plugin",
           "name": "NearestExonJB",

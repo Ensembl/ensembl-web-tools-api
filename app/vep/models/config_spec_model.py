@@ -357,6 +357,83 @@ ConfigEmitter = Annotated[
 # Document.                                                                    #
 # --------------------------------------------------------------------------- #
 
+# --------------------------------------------------------------------------- #
+# The form control an entry presents — PROOF OF CONCEPT, two entries only.     #
+#                                                                              #
+# Every form option is already a config entry (35 of 35 for GRCh38; the only   #
+# entries without one are `clinvar_short`, which Phenotypes forces on, and the #
+# hidden `hgvsg`). So the option's presentation belongs on the entry it        #
+# already has, rather than in a second document keyed by the same id.          #
+#                                                                              #
+# Two entries carry this today — `nearest_exon_jb` and `pli` — to test the     #
+# model against a plain toggle and one with a number + boolean beneath it.     #
+# `form_panels.py` still owns every other option, and a test asserts the       #
+# panels come out identical either way. See                                    #
+# docs/form-panels-to-json.md (outside the repo) for where this is going.      #
+# --------------------------------------------------------------------------- #
+
+class FormSubOption(BaseModel):
+    """A control nested under an option. Not a config entry of its own: a
+    sub-option is a `ConfigIniParams` field that the parent's emitter reads
+    through `from_option` (NearestExonJB's max_range), so it is declared here
+    rather than as a sibling entry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    label: str
+    type: Literal["boolean", "number", "select"] = "boolean"
+    # bool for a toggle, int for a number — the same union the form emits today.
+    default: bool | int | str = False
+    min: int | None = None
+    max: int | None = None
+
+
+class FormOption(BaseModel):
+    """How an entry appears on the input form.
+
+    `panel` and `category` say where it belongs; the rest is the control itself.
+    An entry with no `form` block presents no control at all, which is exactly
+    what `clinvar_short` and `hgvsg` need — so their absence is the declaration,
+    not an omission to be caught.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    panel: str
+    label: str
+    category: str | None = None
+    type: Literal["boolean", "number", "select"] = "boolean"
+    default: bool | int | str = False
+    sub_options: list[FormSubOption] = []
+
+    def as_panel_option(self, option_id: str) -> dict:
+        """The option dict `form_config` serves, in the shape the form expects.
+
+        Keys are omitted where the hand-written panels omit them, so a
+        spec-declared option is indistinguishable from a coded one — which is
+        what the equivalence test checks.
+        """
+        option: dict = {
+            "id": option_id,
+            "label": self.label,
+            "type": self.type,
+            "default": self.default,
+        }
+        if self.category is not None:
+            option["category"] = self.category
+        if self.sub_options:
+            option["sub_options"] = [
+                {
+                    key: value
+                    for key, value in sub.model_dump().items()
+                    if value is not None or key not in ("min", "max")
+                }
+                for sub in self.sub_options
+            ]
+        return option
+
+
 class ConfigEntry(BaseModel):
     """One option's config rule. `id` matches the ConfigIniParams field / form
     option id, so a selected option finds its emitter. `order` is the position
@@ -390,6 +467,8 @@ class ConfigEntry(BaseModel):
     # cannot emit the custom on its own. Unlike `forces_on` this only gates
     # emission; it never turns another option on.
     requires: list[str] = []
+    # The control this option presents, where it presents one (see FormOption).
+    form: FormOption | None = None
     config: ConfigEmitter
 
     def requirements_met(self, options: dict) -> bool:

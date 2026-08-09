@@ -3,12 +3,14 @@ from typing import Callable
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     DirectoryPath,
     FilePath,
     model_serializer,
     Field,
     AliasPath,
     field_serializer,
+    model_validator,
 )
 from requests import HTTPError
 
@@ -191,294 +193,66 @@ def base_config_lines(
 
 
 class ConfigIniParams(BaseModel):
+    """One submission: the job's own fields, and the options it selected.
+
+    The options used to be 199 boolean/number/select fields declared here, one
+    per control. None of them was ever read by attribute — they arrived as
+    `ConfigIniParams(**payload)` and left as `.model_dump()` — so they were a
+    third statement of what the config entries already say, after the form
+    panels and the `fields=` clause, and the only one that could not tell one
+    assembly's options from another's.
+
+    They are now a map, validated against the spec for this submission's
+    assembly (see `submission_options`). `extra="forbid"` so a caller still
+    passing an option as a keyword fails loudly rather than having it dropped.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     genome_id: str
+    # VEP invariants, not options: always emitted, never chosen.
     force_overwrite: int = 1
     transcript_version: int = 1
     canonical: int = 1
-    # HGVS notations (client-selectable). `hgvs` implies HGVSc + HGVSp; `hgvsg`
-    # is the genomic notation and is selected independently.
-    hgvs: bool = False  # HGVSc + HGVSp (linked); off by default
-    hgvsg: bool = False
-    # Annotation plugins (client-selectable); each enabled flag appends its
-    # `plugin ...` line via the config spec (config_specs → config_interpreter).
-    mavedb: bool = False
-    revel: bool = False
-    clinpred: bool = False  # ClinPred pathogenicity score (human GRCh37/38)
-    riboseqorfs: bool = False
-    alphamissense: bool = False
-    opentargets: bool = False
-    eve: bool = False
-    cadd: bool = False
-    spliceai: bool = False
-    protvar: bool = False
-    # ProtVar sub-features (only used when protvar is on); default all on.
-    protvar_stability: bool = True
-    protvar_pocket: bool = True
-    protvar_int: bool = True
-    loeuf: bool = False
-    # Probability of being loss-of-function intolerant (pLI plugin), scored per
-    # transcript rather than per gene — see the `transcript` argument its config
-    # line passes.
-    pli: bool = False
-    # GERP conservation score (Conservation plugin; human GRCh38 for now).
-    gerp: bool = False
-    phenotypes: bool = False
-    # Gene Ontology terms (GO plugin; human GRCh38 for now).
-    go: bool = False
-    # SPDI variant notation (flag line, like hgvs/hgvsg).
-    spdi: bool = False
-    # Protein ID (VEP --protein, adds the Ensembl protein id). Flag line.
-    protein: bool = False
-    # Distance to TSS (TSSDistance plugin); direction radio defaults to upstream.
-    tss_distance: bool = False  # TSSDistance plugin (upstream distance to TSS)
-    # Nearest gene (NearestGene plugin).
-    nearest_gene: bool = False
-    nearest_gene_both_directions: bool = False
-    # Nearest exon junction boundary (NearestExonJB plugin).
-    nearest_exon_jb: bool = False
-    nearest_exon_jb_max_range: int = 10000  # max search range (bp)
-    nearest_exon_jb_intronic: bool = False
-    # Up/downstream distance for consequence calling (VEP `distance <bp>`). A
-    # config-only setting (no output); emitted only when the toggle is on.
-    updownstream_distance: bool = False
-    updownstream_distance_bp: int = Field(default=5000, ge=0, le=1_000_000)
-    # Geno2MP variant associations (assembly-specific; see *_BY_ASSEMBLY).
-    geno2mp: bool = False
-    # UTRAnnotator 5' UTR variants (assembly-specific; see *_BY_ASSEMBLY).
-    utrannotator: bool = False
-    # NMD escape prediction (NMD plugin; no params). Human GRCh37/38.
-    nmd: bool = False
-    # Dosage sensitivity (DosageSensitivity plugin); `cover` sub-flag.
-    dosage_sensitivity: bool = False
-    dosage_sensitivity_cover: bool = False
-    # IntAct molecular interactions (human GRCh38). Sub-flags default off.
-    intact: bool = False
-    intact_feature_ac: bool = False
-    intact_feature_short_label: bool = False
-    intact_feature_annotation: bool = False
-    intact_ap_ac: bool = False
-    intact_interaction_participants: bool = False
-    intact_pmid: bool = False
-    # mutfunc (human GRCh38). The sub-flags default ON, and the config names
-    # only the ones switched *off*: the plugin does everything when told
-    # nothing, so an empty flag list already means all (VariadicFlags
-    # .implicit_all). That is also why none-selected is not a state -- the form
-    # switches the master off instead.
-    mutfunc: bool = False
-    mutfunc_motif: bool = True
-    mutfunc_int: bool = True
-    mutfunc_mod: bool = True
-    mutfunc_exp: bool = True
-    # gnomAD exomes v4.1 frequencies (human GRCh38). Rendered as a VEP `custom`
-    # line whose `fields` list is built from the selected genetic-ancestry groups
-    # x sexes (and whether UK Biobank samples are included). Field grammar:
-    # AF[_non_ukb][_<ancestry>][_XX|_XY] (XX=female, XY=male; base = both sexes).
-    gnomad_exomes: bool = False
-    gnomad_exomes_include_ukb: bool = True  # False -> the _non_ukb subset fields
-    # Ancestry toggles ("all" pre-selected so enabling the option yields fields=AF).
-    gnomad_exomes_all: bool = True
-    gnomad_exomes_afr: bool = False
-    gnomad_exomes_amr: bool = False
-    gnomad_exomes_asj: bool = False
-    gnomad_exomes_eas: bool = False
-    gnomad_exomes_fin: bool = False
-    gnomad_exomes_mid: bool = False
-    gnomad_exomes_nfe: bool = False
-    # Per-ancestry sex sub-options (Both defaults on = the base combined-sex field).
-    gnomad_exomes_all_both: bool = True
-    gnomad_exomes_all_female: bool = False
-    gnomad_exomes_all_male: bool = False
-    gnomad_exomes_afr_both: bool = True
-    gnomad_exomes_afr_female: bool = False
-    gnomad_exomes_afr_male: bool = False
-    gnomad_exomes_amr_both: bool = True
-    gnomad_exomes_amr_female: bool = False
-    gnomad_exomes_amr_male: bool = False
-    gnomad_exomes_asj_both: bool = True
-    gnomad_exomes_asj_female: bool = False
-    gnomad_exomes_asj_male: bool = False
-    gnomad_exomes_eas_both: bool = True
-    gnomad_exomes_eas_female: bool = False
-    gnomad_exomes_eas_male: bool = False
-    gnomad_exomes_fin_both: bool = True
-    gnomad_exomes_fin_female: bool = False
-    gnomad_exomes_fin_male: bool = False
-    gnomad_exomes_mid_both: bool = True
-    gnomad_exomes_mid_female: bool = False
-    gnomad_exomes_mid_male: bool = False
-    gnomad_exomes_nfe_both: bool = True
-    gnomad_exomes_nfe_female: bool = False
-    gnomad_exomes_nfe_male: bool = False
-    # gnomAD exomes v2 (human GRCh37) extra fields. v2 differs from v4: prefix
-    # subsets chosen from a list (not the UK-Biobank toggle), Other + South Asian
-    # ancestries, a plain popmax, and NFE/EAS sub-populations. The shared
-    # ancestry/sex fields above (all/afr/amr/asj/eas/fin/nfe + their sexes) are
-    # reused; these are the v2-only additions (ignored by the v4 builder).
-    gnomad_exomes_subset_full: bool = True  # the full dataset (no subset prefix)
-    gnomad_exomes_subset_controls: bool = False
-    gnomad_exomes_subset_non_neuro: bool = False
-    gnomad_exomes_subset_non_topmed: bool = False
-    gnomad_exomes_subset_non_cancer: bool = False
-    gnomad_exomes_popmax: bool = False  # plain toggle, no sex split
-    gnomad_exomes_oth: bool = False
-    gnomad_exomes_oth_both: bool = True
-    gnomad_exomes_oth_female: bool = False
-    gnomad_exomes_oth_male: bool = False
-    gnomad_exomes_sas: bool = False
-    gnomad_exomes_sas_both: bool = True
-    gnomad_exomes_sas_female: bool = False
-    gnomad_exomes_sas_male: bool = False
-    gnomad_exomes_eas_kor: bool = False  # EAS sub-populations (no sex split)
-    gnomad_exomes_eas_jpn: bool = False
-    gnomad_exomes_eas_oea: bool = False
-    gnomad_exomes_nfe_seu: bool = False  # NFE sub-populations (no sex split)
-    gnomad_exomes_nfe_bgr: bool = False
-    gnomad_exomes_nfe_onf: bool = False
-    gnomad_exomes_nfe_swe: bool = False
-    gnomad_exomes_nfe_nwe: bool = False
-    gnomad_exomes_nfe_est: bool = False
-    # gnomAD genomes v4.1 frequencies (human GRCh38). Same custom-line grammar as
-    # exomes but with no UK Biobank subset (no _non_ukb), extra ancestry groups
-    # (Amish, Remaining) and grpmax (max across groups; no XX/XY split).
-    gnomad_genomes: bool = False
-    # Ancestry toggles ("all" pre-selected so enabling yields fields=AF).
-    gnomad_genomes_all: bool = True
-    gnomad_genomes_afr: bool = False
-    gnomad_genomes_amr: bool = False
-    gnomad_genomes_asj: bool = False
-    gnomad_genomes_eas: bool = False
-    gnomad_genomes_fin: bool = False
-    gnomad_genomes_mid: bool = False
-    gnomad_genomes_nfe: bool = False
-    gnomad_genomes_ami: bool = False
-    gnomad_genomes_remaining: bool = False
-    gnomad_genomes_grpmax: bool = True  # no sex sub-options (no XX/XY)
-    # Per-ancestry sex sub-options (Both on = base combined-sex field). grpmax has
-    # none.
-    gnomad_genomes_all_both: bool = True
-    gnomad_genomes_all_female: bool = False
-    gnomad_genomes_all_male: bool = False
-    gnomad_genomes_afr_both: bool = True
-    gnomad_genomes_afr_female: bool = False
-    gnomad_genomes_afr_male: bool = False
-    gnomad_genomes_amr_both: bool = True
-    gnomad_genomes_amr_female: bool = False
-    gnomad_genomes_amr_male: bool = False
-    gnomad_genomes_asj_both: bool = True
-    gnomad_genomes_asj_female: bool = False
-    gnomad_genomes_asj_male: bool = False
-    gnomad_genomes_eas_both: bool = True
-    gnomad_genomes_eas_female: bool = False
-    gnomad_genomes_eas_male: bool = False
-    gnomad_genomes_fin_both: bool = True
-    gnomad_genomes_fin_female: bool = False
-    gnomad_genomes_fin_male: bool = False
-    gnomad_genomes_mid_both: bool = True
-    gnomad_genomes_mid_female: bool = False
-    gnomad_genomes_mid_male: bool = False
-    gnomad_genomes_nfe_both: bool = True
-    gnomad_genomes_nfe_female: bool = False
-    gnomad_genomes_nfe_male: bool = False
-    gnomad_genomes_ami_both: bool = True
-    gnomad_genomes_ami_female: bool = False
-    gnomad_genomes_ami_male: bool = False
-    gnomad_genomes_remaining_both: bool = True
-    gnomad_genomes_remaining_female: bool = False
-    gnomad_genomes_remaining_male: bool = False
-    # gnomAD genomes v2 (human GRCh37) extra fields. As exomes v2 but with fewer
-    # values: no non_cancer subset, no South Asian, only four NFE sub-pops and no
-    # EAS sub-pops. Shared ancestry/sex fields above (all/afr/amr/asj/eas/fin/nfe)
-    # are reused; these are the v2-only additions.
-    gnomad_genomes_subset_full: bool = True
-    gnomad_genomes_subset_controls: bool = False
-    gnomad_genomes_subset_non_neuro: bool = False
-    gnomad_genomes_subset_non_topmed: bool = False
-    gnomad_genomes_popmax: bool = False
-    gnomad_genomes_oth: bool = False
-    gnomad_genomes_oth_both: bool = True
-    gnomad_genomes_oth_female: bool = False
-    gnomad_genomes_oth_male: bool = False
-    gnomad_genomes_nfe_seu: bool = False
-    gnomad_genomes_nfe_onf: bool = False
-    gnomad_genomes_nfe_nwe: bool = False
-    gnomad_genomes_nfe_est: bool = False
-    # NIH All of Us frequencies (human GRCh38). A VEP `custom` line whose `fields`
-    # list is built from the selected population toggles (no sex split).
-    allofus: bool = False
-    # Suggested defaults, and they must match form_panels: an untouched
-    # sub-option is never written into the submitted parameters, so the form's
-    # default only takes effect if the same default is set here too.
-    allofus_all: bool = True  # pre-selected so enabling yields fields=gvs_all_af
-    allofus_max: bool = True  # -> gvs_max_af + gvs_max_subpop
-    allofus_afr: bool = False
-    allofus_amr: bool = False
-    allofus_eas: bool = False
-    allofus_eur: bool = False
-    allofus_mid: bool = False
-    allofus_sas: bool = False
-    allofus_oth: bool = False
-    # gnomAD SV v4.1 (human GRCh38). A VEP `custom` vcf-exact line; the SV id +
-    # SVTYPE always ride along, the per-population AFs are toggles (overall on),
-    # and `overlap_cutoff` (80/90/100) tunes the reciprocal-overlap requirement.
-    gnomad_sv: bool = False
-    gnomad_sv_overlap_cutoff: str = "100"  # 80 | 90 | 100
-    gnomad_sv_af: bool = True  # overall AF pre-selected
-    gnomad_sv_af_afr: bool = False
-    gnomad_sv_af_ami: bool = False
-    gnomad_sv_af_amr: bool = False
-    gnomad_sv_af_asj: bool = False
-    gnomad_sv_af_eas: bool = False
-    gnomad_sv_af_fin: bool = False
-    gnomad_sv_af_mid: bool = False
-    gnomad_sv_af_nfe: bool = False
-    gnomad_sv_af_rmi: bool = False
-    gnomad_sv_af_sas: bool = False
-    # gnomAD SV v2.1 (human GRCh37) reuses the shared gnomad_sv master / overall /
-    # afr / amr / eas ids above; it only adds these two continental populations
-    # (European, Other). Its columns are prefix-named (`AFR_AF`) — see the GRCh37
-    # spec's gnomad_sv entry.
-    gnomad_sv_af_eur: bool = False
-    gnomad_sv_af_oth: bool = False
-    # gnomAD CNV v4.1 (human GRCh38). Like gnomAD SV but *sample* frequencies
-    # (SF) and no Amish; "remaining" spelled out.
-    gnomad_cnv: bool = False
-    gnomad_cnv_overlap_cutoff: str = "100"  # 80 | 90 | 100
-    gnomad_cnv_sf: bool = True  # overall SF pre-selected
-    gnomad_cnv_sf_afr: bool = False
-    gnomad_cnv_sf_amr: bool = False
-    gnomad_cnv_sf_asj: bool = False
-    gnomad_cnv_sf_eas: bool = False
-    gnomad_cnv_sf_fin: bool = False
-    gnomad_cnv_sf_mid: bool = False
-    gnomad_cnv_sf_nfe: bool = False
-    gnomad_cnv_sf_sas: bool = False
-    gnomad_cnv_sf_remaining: bool = False
-    # ClinVar. There is no `clinvar` master any more: once the germline data
-    # moved to Phenotypes it gated nothing but the structural custom, so
-    # `clinvar_sv` is a top-level option. A stored submission from before that
-    # still carries `clinvar`, which pydantic ignores as it does any extra.
-    # `clinvar_short` (the germline CLNSIG custom) has no form control: it is
-    # served under Phenotypes, whose config entry `forces_on` it. Hence the
-    # default is off — the only thing that turns it on is that force, and its
-    # entry additionally `requires: ["phenotypes"]` so a stale True restored by
-    # an edit/rerun cannot emit the custom on its own.
-    clinvar_short: bool = False
-    clinvar_sv: bool = False
-    # GENCODE promoter windows (human GRCh38). A VEP `custom` gff overlap line
-    # (no `fields=`; VEP emits the gff attributes itself).
-    gencode_promoters: bool = False
-    # Assembly name (from the selected species, e.g. "GRCh38"/"GRCh37"); used to
-    # pick assembly-specific plugin data files. Defaults to GRCh38.
     assembly_name: str = ""
-    # Species taxonomy id of the selected species (e.g. "9606" for human). Sent
-    # by the client alongside `assembly_name`, and used only to compute the
-    # option panels pinned to this job — the same species/assembly predicates
-    # /form_config uses (form_panels.is_human_grch37_or_38 / is_human_grch38).
-    # Without it every human-specific panel would be silently dropped from the
-    # pin. It emits no config.ini line.
+    # Sent so the form's panels can be pinned to this job — the same predicate
+    # /form_config uses. Without it every human-specific panel would be silently
+    # dropped from the pin. It emits no config.ini line.
     species_taxonomy_id: str = ""
     gff: str = ""
     fasta: str = ""
+    # {option id: value} for every option this genome offers, at the value the
+    # client sent or the default the spec declares. Filled in below, so a caller
+    # may pass only what it wants to change.
+    options: dict[str, bool | int | str] = {}
+
+    @model_validator(mode="after")
+    def _resolve_options(self) -> "ConfigIniParams":
+        """Complete the option map from the spec, and say so when the client
+        sent something this genome has no option for.
+
+        Dropped rather than rejected: a submission can be rerun for 28 days, so
+        a replayed payload may still name an option that has since been retired,
+        and failing that rerun would be worse than ignoring the option. Logging
+        it is the part that was missing — pydantic's `extra` default discarded
+        these without a word.
+        """
+        from vep.submission_options import option_values
+
+        values, unknown = option_values(
+            self.options,
+            species_taxonomy_id=self.species_taxonomy_id,
+            assembly_name=self.assembly_name,
+        )
+        if unknown:
+            logging.warning(
+                "submission for %s set options this genome does not offer, "
+                "ignoring them: %s",
+                self.assembly_name or "(no assembly)",
+                ", ".join(unknown),
+            )
+        self.options = values
+        return self
 
     def create_config_ini_file(self, directory, config_spec: ConfigSpec):
         """Write the VEP config.ini for this submission: the always-on base
@@ -514,7 +288,7 @@ class ConfigIniParams(BaseModel):
         plugin_path = _dev_plugin_path(assembly_name) if DUMP_INI else PLUGIN_PATH
         lines += emit_config_lines(
             config_spec,
-            self.model_dump(),
+            self.options,
             assembly=assembly,
             plugin_path=plugin_path,
             gff=self.gff,

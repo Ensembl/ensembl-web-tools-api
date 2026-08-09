@@ -18,10 +18,18 @@ SPEC = load_merged_spec("human_grch38")
 
 
 def _expected(**options):
-    """expected_csq_columns for a submission with these options set (over the
-    bundled spec), using ConfigIniParams so sub-option defaults are realistic."""
-    params = ConfigIniParams(genome_id="g", assembly_name="GRCh38", **options)
-    return SPEC.expected_csq_columns(params.model_dump())
+    """expected_csq_columns for a submission in this option state (over the
+    bundled spec), through ConfigIniParams so sub-option defaults are realistic.
+
+    Laid over the resolved map rather than replacing it, because a couple of the
+    states worth testing are not ones a *client* can send: `hgvsg` has no form
+    control and is switched on by ProtVar's `forces_on`, so it never appears in
+    a submitted payload but is very much a state the check must handle.
+    """
+    params = ConfigIniParams(
+        genome_id="g", assembly_name="GRCh38", options=options
+    )
+    return SPEC.expected_csq_columns({**params.options, **options})
 
 
 def _plugin(plugin_id, csq_fields, *, scope="transcript"):

@@ -87,7 +87,23 @@ async def submit_vep(request: Request):
         vep_job_parameters = request_streamer.parameters.value.decode()
         genome_id = request_streamer.genome_id.value.decode()
         vep_job_parameters_dict = json.loads(vep_job_parameters)
-        ini_parameters = ConfigIniParams(**vep_job_parameters_dict, genome_id=genome_id)
+        # The payload carries the job's own fields and the selected options in
+        # one flat object; the options are validated against the spec for this
+        # assembly rather than against a field per option (see
+        # submission_options), so they are separated here.
+        job_fields = {
+            key: value
+            for key, value in vep_job_parameters_dict.items()
+            if key in ConfigIniParams.model_fields
+        }
+        options = {
+            key: value
+            for key, value in vep_job_parameters_dict.items()
+            if key not in ConfigIniParams.model_fields
+        }
+        ini_parameters = ConfigIniParams(
+            **job_fields, genome_id=genome_id, options=options
+        )
 
         # Resolve and pin the merged spec (config + parsing) for this job's
         # assembly now, at submission, rather than waiting for results: it must
@@ -100,7 +116,7 @@ async def submit_vep(request: Request):
         # The CSQ columns these options require, pinned for the results-time
         # missing-expected-field check (a plugin the user enabled must produce
         # its columns; extras are ignored). See spec_loader / get_results_from_path.
-        expected_columns = merged_spec.expected_csq_columns(ini_parameters.model_dump())
+        expected_columns = merged_spec.expected_csq_columns(ini_parameters.options)
         # The option panels this submission was built against, pinned so the
         # results view renders the submitted layout rather than whatever
         # /form_config returns by the time the results are looked at. Computed

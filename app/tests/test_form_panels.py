@@ -575,19 +575,28 @@ def test_gnomad_cnv_option_is_grch38_allele_frequency():
     )
 
 
-def test_option_ids_are_valid_config_ini_parameters():
-    # GRCh38 is the superset of every option/sub-option; GRCh37 adds the gnomAD v2
-    # ids (subset/popmax/sub-population/sex), which must also be parameters.
-    config_fields = set(ConfigIniParams.model_fields)
+def test_option_ids_round_trip_into_a_submission():
+    """Every id the form offers is one a submission can set, and comes back out.
 
+    This used to assert each id was a `ConfigIniParams` field — one per option,
+    199 of them. The options are now a map validated against the spec for the
+    submission's assembly, so the contract is the round trip rather than the
+    field list, and it can be checked per assembly instead of against one flat
+    set that accepted everything for everyone.
+    """
     for assembly in ("GRCh38.p14", "GRCh37.p13"):
         panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name=assembly)
-        # locked_children (hgvs_c/hgvs_p) are display-only, not parameters, so
-        # they are excluded here; every real option/sub-option id is a parameter.
-        for option_id in option_ids(panels, include_sub_options=True):
-            assert option_id in config_fields, (
-                f"{option_id} ({assembly}) is not a ConfigIniParams field"
-            )
+        # locked_children (hgvs_c/hgvs_p) are display-only, not parameters.
+        offered = set(option_ids(panels, include_sub_options=True))
+
+        params = ConfigIniParams(
+            genome_id="g",
+            assembly_name=assembly,
+            species_taxonomy_id=HUMAN,
+            options={option_id: True for option_id in offered},
+        )
+        assert offered <= set(params.options), assembly
+        assert all(params.options[option_id] is True for option_id in offered)
 
 
 # ---------------------------------------------------------------------------

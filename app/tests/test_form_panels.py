@@ -833,3 +833,83 @@ def test_a_non_human_species_gets_neither_the_panel_nor_the_options():
     option_ids = {option["id"] for option in genes["options"]}
     assert "loeuf" not in option_ids and "dosage_sensitivity" not in option_ids
     assert "conservation_and_constraint" not in {panel["id"] for panel in panels}
+
+
+# --- options declared by their own config entry (proof of concept) ----------
+#
+# Two entries carry a `form` block; everything else still comes from the
+# literals in form_panels. See docs/form-panels-to-json.md for where this goes.
+
+SPEC_DECLARED = {"nearest_exon_jb", "pli"}
+
+
+def test_the_spec_really_is_declaring_those_options():
+    """Guards the equivalence test below from passing vacuously.
+
+    If the `form` blocks stopped being read — a renamed field, a spec that fails
+    to load — the overlay would replace nothing and the comparison would then be
+    of two identical coded outputs, which proves nothing at all.
+    """
+    assert set(form_panels._spec_form_options("GRCh38.p14")) == SPEC_DECLARED
+    # `pli` is declared only by human_grch38.json, so GRCh37 does not see it —
+    # the same selection that drops its parse plugin and display option.
+    assert set(form_panels._spec_form_options("GRCh37.p13")) == {"nearest_exon_jb"}
+
+
+def test_a_spec_declared_option_is_identical_to_the_coded_one(monkeypatch):
+    """The panels come out the same whether an option is declared by its config
+    entry or written out here — for both assemblies, including the one that
+    should not see `pli` at all."""
+    for assembly in ("GRCh38.p14", "GRCh37.p13"):
+        from_spec = get_visible_panels(
+            species_taxonomy_id=HUMAN, assembly_name=assembly
+        )
+        monkeypatch.setattr(form_panels, "_spec_form_options", lambda _assembly: {})
+        from_code = get_visible_panels(
+            species_taxonomy_id=HUMAN, assembly_name=assembly
+        )
+        monkeypatch.undo()
+        assert from_spec == from_code, assembly
+
+
+def test_a_form_block_states_where_its_option_belongs():
+    """The block carries panel and category, and they agree with where this
+    module puts the option.
+
+    The overlay deliberately replaces in place rather than placing from the
+    block, so this is what proves an entry could place itself — the next step,
+    and the one that lets `form_panels` shrink.
+    """
+    from app.vep.utils.spec_loader import resolve_merged_spec
+
+    panels = get_visible_panels(
+        species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
+    )
+    declared = {
+        entry.id: entry.form
+        for entry in resolve_merged_spec("GRCh38.p14").config.entries
+        if entry.form is not None
+    }
+    assert set(declared) == SPEC_DECLARED
+
+    for option_id, form in declared.items():
+        panel = next(
+            panel
+            for panel in panels
+            if any(option["id"] == option_id for option in panel["options"])
+        )
+        option = next(o for o in panel["options"] if o["id"] == option_id)
+        assert form.panel == panel["id"], option_id
+        assert form.category == option.get("category"), option_id
+
+
+def test_an_entry_with_no_control_declares_no_form_block():
+    """`clinvar_short` is forced on by Phenotypes and `hgvsg` is hidden pending
+    chromosome synonyms — neither has a control, and the absence of a `form`
+    block is how that is said. A stray one would put an unusable toggle on the
+    form."""
+    from app.vep.utils.spec_loader import resolve_merged_spec
+
+    entries = {e.id: e for e in resolve_merged_spec("GRCh38.p14").config.entries}
+    assert entries["clinvar_short"].form is None
+    assert entries["hgvsg"].form is None

@@ -50,6 +50,13 @@
         "parsed_as": [
           "pli"
         ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Constraint",
+          "label": "pLI",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "plugin",
           "name": "pLI",

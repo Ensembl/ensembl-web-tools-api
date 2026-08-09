@@ -140,14 +140,26 @@ def test_submission_pins_the_same_panels_form_config_serves():
     } <= panel_ids
 
 
-def test_missing_species_taxonomy_id_would_lose_the_human_panels():
-    """The regression this plumbing exists to prevent, stated explicitly."""
+def test_the_panels_no_longer_depend_on_species_taxonomy_id():
+    """This used to assert the opposite, and the change is the point.
+
+    The human panels were once lost if the client forgot to send
+    `species_taxonomy_id` — a real regression, which that assertion guarded. The
+    options now come from the config entries the *assembly* resolves to, exactly
+    as they do at submission (`resolve_merged_spec` has only ever had the
+    assembly to go on), so there is no longer a way for the two to disagree and
+    nothing left for the id to lose.
+
+    It is still sent, and still pins the job; it just no longer decides what the
+    form offers.
+    """
+    with_id = get_visible_panels(
+        species_taxonomy_id="9606", assembly_name="GRCh38.p14"
+    )
     without = get_visible_panels(species_taxonomy_id="", assembly_name="GRCh38.p14")
-    assert {panel["id"] for panel in without} == {
-        "variant_representations",
-        "genes_and_transcripts",
-        "protein_and_functional",
-    }
+    assert without == with_id
+    # ...and it is the full human form, not a stripped one.
+    assert "allele_frequencies" in {panel["id"] for panel in without}
 
 
 def test_species_taxonomy_id_emits_no_config_ini_line(tmp_path, monkeypatch):

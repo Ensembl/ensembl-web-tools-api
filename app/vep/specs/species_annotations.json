@@ -6,6 +6,14 @@
       "parsed_as": [
         "go"
       ],
+      "form": {
+        "panel": "genes_and_transcripts",
+        "category": "Annotations",
+        "order": 900,
+        "label": "Gene Ontology",
+        "type": "boolean",
+        "default": false
+      },
       "config": {
         "emit": "plugin",
         "name": "GO",
@@ -21,6 +29,13 @@
         "phenotype_data",
         "phenotype_gene"
       ],
+      "form": {
+        "panel": "phenotype_and_disease_associations",
+        "order": 100,
+        "label": "Phenotypes",
+        "type": "boolean",
+        "default": false
+      },
       "config": {
         "emit": "plugin",
         "name": "Phenotypes",
@@ -37,6 +52,14 @@
       "parsed_as": [
         "cadd"
       ],
+      "form": {
+        "panel": "variant_impact_predictions",
+        "category": "Genome wide",
+        "order": 400,
+        "label": "CADD",
+        "type": "boolean",
+        "default": false
+      },
       "config": {
         "emit": "plugin",
         "name": "CADD",

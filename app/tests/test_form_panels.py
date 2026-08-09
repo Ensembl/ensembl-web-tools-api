@@ -234,22 +234,22 @@ def test_calls_return_equal_but_independent_structures():
 
 
 def test_module_constants_are_not_mutated_between_calls():
-    # a GRCh38 call mutates its *copy* of the always-visible panels (adds
-    # categories, extra options); the module constants must be untouched.
-    get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14")
+    """The panel registry must not accumulate options.
 
-    assert len(form_panels._ALWAYS_VISIBLE_PANELS) == 3
-    protein_panel = next(
-        p
-        for p in form_panels._ALWAYS_VISIBLE_PANELS
-        if p["id"] == "protein_and_functional"
-    )
-    protein_option = protein_panel["options"][0]
-    assert protein_option["id"] == "protein"
-    # GRCh38 adds category="Protein" to the copy, not the constant
-    assert "category" not in protein_option
-    # ...and does not leave ProtVar/MaveDB/etc. on the constant
-    assert [o["id"] for o in protein_panel["options"]] == ["protein"]
+    It used to be possible to mutate the shared literals — a GRCh38 call added
+    ProtVar and friends to its *copy*, and a missing `deepcopy` would have left
+    them on the constant for the next species. The registry now carries no
+    options at all and each call builds its own lists, so the bug is gone by
+    construction; this is what says so.
+    """
+    get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14")
+    get_visible_panels(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
+
+    assert all("options" not in panel for panel in form_panels._PANELS)
+    assert [panel["id"] for panel in form_panels._PANELS][:2] == [
+        "variant_representations",
+        "variant_impact_predictions",
+    ]
 
 
 # --- 5. id contract: option ids are ConfigIniParams parameters --------------
@@ -840,7 +840,13 @@ def test_a_non_human_species_gets_neither_the_panel_nor_the_options():
 # Two entries carry a `form` block and are placed from it; form_panels still
 # writes out the other 33. See docs/form-panels-to-json.md.
 
-SPEC_DECLARED = {"nearest_exon_jb", "pli"}
+AF_OPTION_IDS = {
+    "gnomad_exomes",
+    "gnomad_genomes",
+    "allofus",
+    "gnomad_sv",
+    "gnomad_cnv",
+}
 
 GOLDEN_CASES = {
     "human_grch38": {"species_taxonomy_id": HUMAN, "assembly_name": "GRCh38.p14"},
@@ -868,10 +874,23 @@ def test_the_spec_really_is_declaring_those_options():
     diagnose. This says which.
     """
     declared = {option_id for option_id, _, _ in _declared_ids("GRCh38.p14")}
-    assert declared == SPEC_DECLARED
-    # `pli` is declared only by human_grch38.json, so GRCh37 has nothing to
-    # place — the same selection that drops its parse plugin and display option.
-    assert {i for i, _, _ in _declared_ids("GRCh37.p13")} == {"nearest_exon_jb"}
+    # Every option the form shows except the allele frequencies, which are still
+    # generated from their ancestry tables (see docs/form-panels-to-json.md).
+    # Counted from the golden rather than written down, so it cannot go stale.
+    shown = {
+        option["id"]
+        for panel in _golden()["human_grch38"]
+        for option in panel["options"]
+    }
+    assert declared == shown - AF_OPTION_IDS
+    assert {"hgvs", "pli", "nearest_exon_jb", "mutfunc", "protein"} <= declared
+
+    # `pli` and the rest of the GRCh38-only set are declared only by
+    # human_grch38.json, so GRCh37 does not see them — the same selection that
+    # drops their parse plugins and display options.
+    grch37 = {i for i, _, _ in _declared_ids("GRCh37.p13")}
+    assert "pli" not in grch37 and "eve" not in grch37
+    assert {"hgvs", "nearest_exon_jb", "loeuf"} <= grch37
 
 
 def _declared_ids(assembly: str):

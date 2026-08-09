@@ -406,6 +406,10 @@ class FormOption(BaseModel):
     type: Literal["boolean", "number", "select"] = "boolean"
     default: bool | int | str = False
     sub_options: list[FormSubOption] = []
+    # mutfunc does everything when told nothing, so a config line naming no
+    # sub-flag already means all of them: "none selected" is not a state the
+    # plugin can be asked for, and the form switches the option off instead.
+    requires_any_sub_option: bool = False
     # Where in its panel the control sits.
     #
     # Sparse (…, 150, 850, …) against the step `form_panels` gives the options
@@ -435,6 +439,8 @@ class FormOption(BaseModel):
         }
         if self.category is not None:
             option["category"] = self.category
+        if self.requires_any_sub_option:
+            option["requires_any_sub_option"] = True
         if self.sub_options:
             option["sub_options"] = [
                 {

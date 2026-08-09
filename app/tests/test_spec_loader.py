@@ -451,15 +451,34 @@ def test_a_genome_inherits_the_base_entries_without_restating_them():
     base_ids = {e.id for e in load_merged_spec("base").config.entries}
     assert base_ids
 
+    # `protein` is the one base entry a genome document restates, and it does so
+    # to say something it can only say there: human 37/38 file the control under
+    # a "Protein" category, every other genome leaves it uncategorised. That is
+    # the override the next test describes, used for its intended purpose — see
+    # docs/form-panels-to-json.md.
+    overridden = {"protein"}
+
     for genome in ("human_grch37", "human_grch38"):
         # the assembled spec still offers all of them...
         assembled = {e.id for e in load_merged_spec(genome).config.entries}
         assert base_ids <= assembled, genome
-        # ...but the document on disk does not name any of them
+        # ...and the document on disk names none of them but the override
         from app.vep.utils.spec_loader import SPEC_DIR
         document = json.loads((SPEC_DIR / f"{genome}.json").read_text())
         restated = base_ids & {e["id"] for e in document["config"]["entries"]}
-        assert not restated, f"{genome} restates base entries: {restated}"
+        assert restated == overridden, f"{genome} restates base entries: {restated}"
+
+        # An override earns its place by differing. A restated entry identical
+        # to the base one is a copy that will drift, which is what this test was
+        # written to stop.
+        for entry_id in restated:
+            base_entry = next(
+                e for e in load_merged_spec("base").config.entries if e.id == entry_id
+            )
+            genome_entry = next(
+                e for e in load_merged_spec(genome).config.entries if e.id == entry_id
+            )
+            assert genome_entry != base_entry, f"{genome} restates {entry_id} unchanged"
 
 
 def test_a_genome_can_override_a_base_entry():

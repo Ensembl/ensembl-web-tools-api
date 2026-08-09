@@ -11,149 +11,25 @@ carry a `category` label which the form uses to group them within a panel.
 
 import copy
 
-from vep.utils.spec_loader import resolve_merged_spec, species_annotation_entry
+from vep.utils.spec_loader import resolve_merged_spec
 
-# Always-visible panels/options.
-_ALWAYS_VISIBLE_PANELS: list[dict] = [
-    {
-        "id": "variant_representations",
-        "label": "Variant representations",
-        "options": [
-            # HGVS renders as a single control with linked HGVSc/HGVSp (the
-            # `hgvs` param). The frontend builds the linked UI; the panel just
-            # carries the `hgvs` option (default off).
-            #
-            # HGVSg (the `hgvsg` param) is HIDDEN for now — it has no control on
-            # the form and no row in the results — because its genomic notation
-            # names chromosomes in a form we cannot yet map. Everything behind it
-            # stays wired: the `hgvsg` config entry, its parse plugin, and
-            # ProtVar's `forces_on: ["hgvsg"]`, which is what silently computes
-            # it so the ProtVar link can be built from it. Re-expose the control
-            # and the display row once chromosome synonyms are available.
-            {"id": "hgvs", "label": "HGVS", "type": "boolean", "default": False},
-            {"id": "spdi", "label": "SPDI", "type": "boolean", "default": False},
-        ],
-    },
-    {
-        "id": "genes_and_transcripts",
-        "label": "Genes & transcripts",
-        "options": [
-            # Positional output: where the variant sits relative to nearby
-            # features. Categorised, like the rest of this panel — the options
-            # added for human 37/38 and GRCh38 carry "Annotations" and
-            # "Constraint".
-            {
-                "id": "tss_distance",
-                "label": "Distance to TSS",
-                "type": "boolean",
-                "default": False,
-                "category": "Locations",
-            },
-            {
-                "id": "nearest_gene",
-                "label": "Nearest gene",
-                "type": "boolean",
-                "default": False,
-                "category": "Locations",
-                "sub_options": [
-                    {
-                        "id": "nearest_gene_both_directions",
-                        "label": "Both directions",
-                        "type": "boolean",
-                        "default": False,
-                    },
-                ],
-            },
-            # `nearest_exon_jb` is not missing — it is declared by its own config
-            # entry (base.json), and placed here by `_place_spec_options` at the
-            # `order` that block states. Same for `pli` further down.
-            {
-                # Up/downstream distance for consequence calling (VEP `distance`).
-                # A toggle revealing a numeric field (bp) that overrides VEP's
-                # default of 5000; no output, nothing parsed.
-                "id": "updownstream_distance",
-                "label": "Up/downstream distance",
-                "type": "boolean",
-                "default": False,
-                "category": "Locations",
-                "sub_options": [
-                    {
-                        "id": "updownstream_distance_bp",
-                        "label": "Distance (bp)",
-                        "type": "number",
-                        "default": 5000,
-                        "min": 0,
-                        "max": 1000000,
-                    },
-                ],
-            },
-        ],
-    },
-    {
-        "id": "protein_and_functional",
-        "label": "Protein & functional",
-        "options": [
-            {"id": "protein", "label": "Protein ID", "type": "boolean", "default": False},
-        ],
-    },
-]
-
-
-# Options added to the existing Genes & transcripts panel for human GRCh37/38.
-_HUMAN_37_38_GENES_OPTIONS: list[dict] = [
-    {"id": "utrannotator", "label": "UTRAnnotator", "type": "boolean", "default": False,
-     "category": "Annotations"},
-    {"id": "nmd", "label": "NMD", "type": "boolean", "default": False,
-     "category": "Annotations"},
-    # Constraint was a panel of its own ("Conservation & constraint"); it is now
-    # a sub-section of Genes & transcripts, grouped by `category` the way Variant
-    # impact predictions groups Missense / Splicing / Genome wide.
-    #
-    # Just "Constraint" since GERP left: what remains measures a *gene's*
-    # tolerance to variation, where GERP scored a position's conservation across
-    # species and now sits with CADD under Genome wide.
-    #
-    # Every option in this panel is categorised, across all three tiers that
-    # contribute to it (base = Locations, here, and the GRCh38-only appends), so
-    # there is no unlabelled group. `groupByCategory` merges by name wherever an
-    # option is declared, so the GRCh38 additions join these groups rather than
-    # starting new ones; group order follows each category's first appearance,
-    # which gives Locations -> Annotations -> Constraint.
-    {"id": "loeuf", "label": "LOEUF", "type": "boolean", "default": False,
-     "category": "Constraint"},
-    {
-        "id": "dosage_sensitivity",
-        "label": "Dosage sensitivity",
-        "type": "boolean",
-        "default": False,
-        "category": "Constraint",
-        "sub_options": [
-            {"id": "dosage_sensitivity_cover", "label": "Require full transcript overlap", "type": "boolean", "default": False},
-        ],
-    },
-]
-
-# Extra panels shown only for human GRCh37/38. Variant-impact-prediction options
-# carry a `category` label used to group them within the panel.
-_HUMAN_37_38_PANELS: list[dict] = [
-    {
-        "id": "variant_impact_predictions",
-        "label": "Variant impact predictions",
-        "options": [
-            {"id": "alphamissense", "label": "AlphaMissense", "type": "boolean", "default": False, "category": "Missense"},
-            {"id": "revel", "label": "REVEL", "type": "boolean", "default": False, "category": "Missense"},
-            {"id": "clinpred", "label": "ClinPred", "type": "boolean", "default": False, "category": "Missense"},
-            {"id": "spliceai", "label": "SpliceAI", "type": "boolean", "default": False, "category": "Splicing"},
-            {"id": "cadd", "label": "CADD", "type": "boolean", "default": False, "category": "Genome wide"},
-        ],
-    },
-    {
-        "id": "phenotype_and_disease_associations",
-        "label": "Phenotype & disease associations",
-        "options": [
-            {"id": "geno2mp", "label": "Geno2MP", "type": "boolean", "default": False},
-        ],
-    },
+# Every panel the form can show, in the order it shows them.
+#
+# Panels only; their options are declared by the config entries themselves (see
+# `_place_spec_options`) apart from the allele frequencies, which are generated
+# from the ancestry tables below. A panel with nothing in it for this genome is
+# dropped, so this list does not need to say which species see which panel —
+# that follows from which entries exist, exactly as it does for the parse
+# plugins and the display options.
+_PANELS: list[dict] = [
+    {"id": "variant_representations", "label": "Variant representations"},
+    {"id": "variant_impact_predictions", "label": "Variant impact predictions"},
+    {"id": "allele_frequencies", "label": "Allele frequencies"},
+    {"id": "genes_and_transcripts", "label": "Genes & transcripts"},
+    {"id": "protein_and_functional", "label": "Protein & functional"},
+    {"id": "regulatory", "label": "Regulatory"},
+    {"id": "phenotype_and_disease_associations",
+     "label": "Phenotype & disease associations"},
 ]
 
 
@@ -185,24 +61,6 @@ def is_human_grch37(
 
 
 # Human GRCh38-only sub-options.
-_PROTVAR_SUBOPTIONS = [
-    {"id": "protvar_stability", "label": "Protein Structure Stability", "type": "boolean", "default": True},
-    {"id": "protvar_pocket", "label": "Protein Pockets", "type": "boolean", "default": True},
-    {"id": "protvar_int", "label": "Protein-Protein Interaction Interface", "type": "boolean", "default": True},
-]
-_INTACT_SUBOPTIONS = [
-    {"id": "intact_feature_ac", "label": "Feature AC", "type": "boolean", "default": False},
-    {"id": "intact_feature_short_label", "label": "Feature short label", "type": "boolean", "default": False},
-    {"id": "intact_ap_ac", "label": "Affected protein AC", "type": "boolean", "default": False},
-    {"id": "intact_interaction_participants", "label": "Interaction participants", "type": "boolean", "default": False},
-    {"id": "intact_pmid", "label": "PubMed ID", "type": "boolean", "default": False},
-]
-_MUTFUNC_SUBOPTIONS = [
-    {"id": "mutfunc_motif", "label": "Linear motifs", "type": "boolean", "default": True},
-    {"id": "mutfunc_int", "label": "Protein interactions", "type": "boolean", "default": True},
-    {"id": "mutfunc_mod", "label": "Protein structure", "type": "boolean", "default": True},
-    {"id": "mutfunc_exp", "label": "Protein structure (exp.)", "type": "boolean", "default": True},
-]
 
 
 # gnomAD exomes v4.1 (human GRCh38): a master toggle revealing an "Include UK
@@ -604,111 +462,24 @@ def af_max_subpopulation_label(raw: str) -> str:
     )
 
 
-def _add_human_grch38_options(panels: list[dict]) -> None:
-    """Layer the human GRCh38-only options onto the (already human 37/38) panels.
+def _add_grch38_allele_frequencies(panels: dict[str, dict]) -> None:
+    """The GRCh38 allele-frequency options.
 
-    Mutates `panels` in place. Assumes the GRCh37/38 panels are already present.
+    The last options still built here rather than declared: each is an ancestry
+    (or population) table crossed with a sex split, ~110 nodes for this
+    assembly. Expanding them into the spec would be a fourth copy of tables the
+    config entries already carry — see docs/form-panels-to-json.md; the move is
+    to give those a label and generate both from one list.
     """
-    by_id = {panel["id"]: panel for panel in panels}
-
-    # Genes & transcripts: RiboSeqORFs + Gene Ontology + pLI.
-    by_id["genes_and_transcripts"]["options"].extend([
-        {"id": "riboseqorfs", "label": "RiboSeqORFs", "type": "boolean", "default": False,
-         "category": "Annotations"},
-        # GO plugin (human GRCh38 for now; other species to follow).
-        {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False,
-         "category": "Annotations"},
-        # pLI is declared by its own config entry (human_grch38.json), which is
-        # also what makes it GRCh38-only: no entry for GRCh37, so nothing to
-        # place there. See `_place_spec_options`.
+    panels["allele_frequencies"]["options"].extend([
+        _in_category(_gnomad_exomes_option(), _AF_SHORT_VARIANTS),
+        _in_category(_gnomad_genomes_option(), _AF_SHORT_VARIANTS),
+        _in_category(_allofus_option(), _AF_SHORT_VARIANTS),
+        _in_category(_gnomad_sv_option(), _AF_STRUCTURAL_VARIANTS),
+        _in_category(_gnomad_cnv_option(), _AF_STRUCTURAL_VARIANTS),
     ])
 
-    # Protein & functional: Protein (protein + ProtVar) / Functional (MaveDB,
-    # IntAct, mutfunc).
-    protein_panel = by_id["protein_and_functional"]
-    for option in protein_panel["options"]:
-        if option["id"] == "protein":
-            option["category"] = "Protein"
-    protein_panel["options"].extend([
-        {"id": "protvar", "label": "ProtVar", "type": "boolean", "default": False,
-         "category": "Protein", "sub_options": copy.deepcopy(_PROTVAR_SUBOPTIONS)},
-        {"id": "mavedb", "label": "MaveDB", "type": "boolean", "default": False, "category": "Functional"},
-        {"id": "intact", "label": "IntAct", "type": "boolean", "default": False,
-         "category": "Functional", "sub_options": copy.deepcopy(_INTACT_SUBOPTIONS)},
-        # `requires_any_sub_option`: mutfunc does everything when told nothing,
-        # so a config line naming no sub-flag already means all of them. "None
-        # selected" is therefore not a state the plugin can be asked for — the
-        # form switches the option itself off instead of allowing it.
-        {"id": "mutfunc", "label": "mutfunc", "type": "boolean", "default": False,
-         "category": "Functional", "requires_any_sub_option": True,
-         "sub_options": copy.deepcopy(_MUTFUNC_SUBOPTIONS)},
-    ])
 
-    # Variant impact predictions panel: EVE (Missense), GERP (Genome wide).
-    #
-    # GERP scores a *position*'s conservation across species, not a gene's
-    # tolerance to variation — so it belongs beside CADD, which is the other
-    # genome-wide score, rather than with LOEUF and dosage sensitivity. Those
-    # two are constraint measures of a gene, which is why the category they are
-    # left in is now just "Constraint".
-    #
-    # GERP is human GRCh38 for now; other species to follow — each needs its own
-    # per-species bigwig, so the config entry's path becomes `by_assembly` when
-    # the next one lands.
-    if "variant_impact_predictions" in by_id:
-        by_id["variant_impact_predictions"]["options"].extend([
-            {"id": "eve", "label": "EVE & popEVE", "type": "boolean", "default": False, "category": "Missense"},
-            {"id": "gerp", "label": "GERP conservation score", "type": "boolean", "default": False,
-             "category": "Genome wide"},
-        ])
-
-    # Phenotype & disease associations: Phenotypes, then OpenTargets. That order
-    # is deliberate — GRCh37 and the other species have Phenotypes without
-    # OpenTargets, so leading with Phenotypes is the order every genome shares,
-    # and OpenTargets slots in after it where it exists rather than displacing it.
-    if "phenotype_and_disease_associations" in by_id:
-        by_id["phenotype_and_disease_associations"]["options"].extend([
-            # Phenotypes plugin (human GRCh38 for now; other species to follow).
-            {"id": "phenotypes", "label": "Phenotypes", "type": "boolean", "default": False},
-            {"id": "opentargets", "label": "OpenTargets", "type": "boolean", "default": False},
-        ])
-        # ClinVar's structural variants (the ClinVar_SV custom), human-only so
-        # it is added here rather than in the base panel. Its own top-level
-        # option: it used to hang under a "Clinical Significance (ClinVar)"
-        # master, but once the germline data moved to Phenotypes that master
-        # gated nothing else and ticking it ran nothing.
-        by_id["phenotype_and_disease_associations"]["options"].append(
-            {"id": "clinvar_sv", "label": "ClinVar structural variants",
-             "type": "boolean", "default": False}
-        )
-
-    # Regulatory: GENCODE promoter windows (a gff-overlap custom annotation).
-    panels.append({
-        "id": "regulatory",
-        "label": "Regulatory",
-        "options": [
-            {"id": "gencode_promoters", "label": "GENCODE promoter", "type": "boolean", "default": False},
-        ],
-    })
-
-    # Allele frequencies: gnomAD exomes/genomes v4.1, NIH All of Us.
-    panels.append({
-        "id": "allele_frequencies",
-        "label": "Allele frequencies",
-        "options": [
-            _in_category(_gnomad_exomes_option(), _AF_SHORT_VARIANTS),
-            _in_category(_gnomad_genomes_option(), _AF_SHORT_VARIANTS),
-            _in_category(_allofus_option(), _AF_SHORT_VARIANTS),
-            _in_category(_gnomad_sv_option(), _AF_STRUCTURAL_VARIANTS),
-            _in_category(_gnomad_cnv_option(), _AF_STRUCTURAL_VARIANTS),
-        ],
-    })
-
-
-# gnomAD v2 (human GRCh37) allele-frequency options. Unlike v4, the subset is a
-# dimension (a list of prefixes, not a UK-Biobank toggle); ancestries carry
-# sub-populations (no sex) and a plain popmax. Option ids match the ConfigIniParams
-# fields and the `gnomad_v2` config builder's codes. (code, label, [(subpop, label)])
 _GNOMAD_V2_EXOMES_SUBSETS = [
     ("full", "Full dataset"), ("controls", "Controls"), ("non_neuro", "Non-neuro"),
     ("non_topmed", "Non-TOPMed"), ("non_cancer", "Non-cancer"),
@@ -854,113 +625,17 @@ def _gnomad_v2_genomes_option() -> dict:
     )
 
 
-def _add_human_grch37_options(panels: list[dict]) -> None:
-    """Layer the reuse-tier options that exist for human GRCh37 too onto the
-    (already human 37/38) panels: Gene Ontology, Phenotypes, IntAct, and
-    ClinVar's structural-variant sub-option — the counterpart to the larger
-    GRCh38-only set. (go/phenotypes are really multi-species; gated on human
-    until the other-species specs exist. gnomAD v2 has its own shape and joins
-    later.) The GRCh38 form keeps its own layout/order in
-    `_add_human_grch38_options`; these are deliberately the small overlapping
-    set, so a couple of option dicts are stated in both.
-    """
-    by_id = {panel["id"]: panel for panel in panels}
-
-    by_id["genes_and_transcripts"]["options"].append(
-        {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False,
-         "category": "Annotations"}
-    )
-
-    protein_panel = by_id["protein_and_functional"]
-    for option in protein_panel["options"]:
-        if option["id"] == "protein":
-            option["category"] = "Protein"
-    protein_panel["options"].append(
-        {"id": "intact", "label": "IntAct", "type": "boolean", "default": False,
-         "category": "Functional", "sub_options": copy.deepcopy(_INTACT_SUBOPTIONS)}
-    )
-
-    if "phenotype_and_disease_associations" in by_id:
-        by_id["phenotype_and_disease_associations"]["options"].append(
-            {"id": "phenotypes", "label": "Phenotypes", "type": "boolean", "default": False}
-        )
-        by_id["phenotype_and_disease_associations"]["options"].append(
-            {"id": "clinvar_sv", "label": "ClinVar structural variants",
-             "type": "boolean", "default": False}
-        )
-
-    # Allele frequencies: gnomAD exomes/genomes/SV v2 (the GRCh37 shape).
-    panels.append({
-        "id": "allele_frequencies",
-        "label": "Allele frequencies",
-        "options": [
-            _in_category(_gnomad_v2_exomes_option(), _AF_SHORT_VARIANTS),
-            _in_category(_gnomad_v2_genomes_option(), _AF_SHORT_VARIANTS),
-            _in_category(_gnomad_sv_v2_option(), _AF_STRUCTURAL_VARIANTS),
-        ],
-    })
+def _add_grch37_allele_frequencies(panels: dict[str, dict]) -> None:
+    """The GRCh37 allele-frequency options — gnomAD v2, whose grammar differs
+    from v4's (a subset prefix before `AF`, sub-populations under an ancestry,
+    male/female rather than XX/XY)."""
+    panels["allele_frequencies"]["options"].extend([
+        _in_category(_gnomad_v2_exomes_option(), _AF_SHORT_VARIANTS),
+        _in_category(_gnomad_v2_genomes_option(), _AF_SHORT_VARIANTS),
+        _in_category(_gnomad_sv_v2_option(), _AF_STRUCTURAL_VARIANTS),
+    ])
 
 
-def _add_species_annotation_options(panels: list[dict], assembly_name: str | None) -> None:
-    """GO / Phenotypes for a species that carries those data files.
-
-    Driven by the same table the spec loader uses (`species_annotations.json`),
-    so the options offered here and the config entries a submission gets cannot
-    drift apart. A species with neither dataset gets nothing and keeps the base
-    panels — it still submits, just with fewer options.
-    """
-    row = species_annotation_entry(assembly_name)
-    if row is None:
-        return
-    datasets = set(row["datasets"])
-    by_id = {panel["id"]: panel for panel in panels}
-
-    if "go" in datasets:
-        by_id["genes_and_transcripts"]["options"].append(
-            {"id": "go", "label": "Gene Ontology", "type": "boolean", "default": False,
-             "category": "Annotations"}
-        )
-
-    if "cadd" in datasets:
-        # The Variant impact predictions panel is human-only today, so a species
-        # with CADD but none of the human-only predictors needs it created.
-        panel = by_id.get("variant_impact_predictions")
-        if panel is None:
-            panel = {
-                "id": "variant_impact_predictions",
-                "label": "Variant impact predictions",
-                "options": [],
-            }
-            panels.append(panel)
-        panel["options"].append(
-            {"id": "cadd", "label": "CADD", "type": "boolean", "default": False,
-             "category": "Genome wide"}
-        )
-
-    if "phenotypes" in datasets:
-        # The associations panel exists only for human today, so a species with
-        # phenotype data but none of the human-only sources needs it created.
-        panel = by_id.get("phenotype_and_disease_associations")
-        if panel is None:
-            panel = {
-                "id": "phenotype_and_disease_associations",
-                "label": "Phenotype & disease associations",
-                "options": [],
-            }
-            panels.append(panel)
-        panel["options"].append(
-            {"id": "phenotypes", "label": "Phenotypes", "type": "boolean", "default": False}
-        )
-
-
-# The order panels appear in, on the input form and in the results annotation
-# panel alike — both render the list this returns, so stating it once here is
-# what keeps the two surfaces agreeing.
-#
-# Sorted at the end rather than built in this order, because panels arrive from
-# three places (the always-visible base, the human-only additions, and the
-# per-species ones created on demand) and the order a panel happens to be
-# appended in is not a decision anyone should have to trace.
 # The step between two options this module still writes out. A `form.order`
 # lands between them (150 sits between the 2nd and 3rd), so an entry can place
 # itself without the coded list being renumbered.
@@ -1028,17 +703,6 @@ def _place_spec_options(panels: list[dict], assembly_name: str | None) -> None:
         )
 
 
-_PANEL_ORDER = (
-    "variant_representations",
-    "variant_impact_predictions",
-    "allele_frequencies",
-    "genes_and_transcripts",
-    "protein_and_functional",
-    "regulatory",
-    "phenotype_and_disease_associations",
-)
-
-
 def get_visible_panels(
     attributes: dict | None = None,
     *,
@@ -1050,32 +714,34 @@ def get_visible_panels(
     `attributes` is the genome metadata (genebuild.* etc.). `species_taxonomy_id`
     and `assembly_name` are passed by the client (from the selected species) so
     visibility can depend on species/assembly — e.g. human GRCh37/38.
+
+    Almost nothing here decides *what* a genome is offered any more: the options
+    come from the config entries the genome's assembled spec carries, so an
+    option exists for exactly the genomes that declare it. What is left is the
+    panel list, the allele frequencies (still generated), and dropping a panel
+    that ended up with nothing in it.
     """
-    panels = copy.deepcopy(_ALWAYS_VISIBLE_PANELS)
+    panels = [dict(panel, options=[]) for panel in _PANELS]
+    by_id = {panel["id"]: panel for panel in panels}
 
-    if is_human_grch37_or_38(species_taxonomy_id, assembly_name):
-        # UTRAnnotator extends the existing Genes & transcripts panel.
-        for panel in panels:
-            if panel["id"] == "genes_and_transcripts":
-                panel["options"].extend(copy.deepcopy(_HUMAN_37_38_GENES_OPTIONS))
-        # Variant-impact / associations panels are human-only.
-        panels.extend(copy.deepcopy(_HUMAN_37_38_PANELS))
-
-    if is_human_grch38(species_taxonomy_id, assembly_name):
-        _add_human_grch38_options(panels)
-    elif is_human_grch37(species_taxonomy_id, assembly_name):
-        _add_human_grch37_options(panels)
-    else:
-        # Every other species: whichever of GO / Phenotypes it has data for.
-        _add_species_annotation_options(panels, assembly_name)
-
-    # Two options are declared by their own config entry rather than above;
-    # place them before the panels are ordered (see _place_spec_options).
+    # Every non-AF option, placed where its `form` block says.
     _place_spec_options(panels, assembly_name)
 
-    # A panel not named above keeps its relative position at the end rather than
-    # disappearing or landing arbitrarily — a new panel shows up, and is then
-    # given a place here deliberately.
-    order = {panel_id: index for index, panel_id in enumerate(_PANEL_ORDER)}
-    panels.sort(key=lambda panel: order.get(panel["id"], len(order)))
-    return panels
+    # The allele frequencies are the one set still built rather than declared,
+    # and the two assemblies publish different grammars.
+    #
+    # Keyed on the assembly alone, as `resolve_merged_spec` keys the options
+    # above — otherwise a call without `species_taxonomy_id` would get every
+    # human option and no frequencies, which is worse than either answer. The
+    # spec has always been per-assembly (only `assembly_name` is available at
+    # submission), so this makes the form agree with the thing it configures.
+    assembly = assembly_name or ""
+    if assembly.startswith("GRCh38"):
+        _add_grch38_allele_frequencies(by_id)
+    elif assembly.startswith("GRCh37"):
+        _add_grch37_allele_frequencies(by_id)
+
+    # A panel with nothing to show is not shown. This is what used to be said
+    # three times over — "these panels are human-only", "create the panel if the
+    # species has CADD" — and it now follows from the options themselves.
+    return [panel for panel in panels if panel["options"]]

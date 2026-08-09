@@ -1,0 +1,2342 @@
+{
+  "human_grch38": [
+    {
+      "id": "variant_representations",
+      "label": "Variant representations",
+      "options": [
+        {
+          "id": "hgvs",
+          "label": "HGVS",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "id": "spdi",
+          "label": "SPDI",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    },
+    {
+      "id": "variant_impact_predictions",
+      "label": "Variant impact predictions",
+      "options": [
+        {
+          "id": "alphamissense",
+          "label": "AlphaMissense",
+          "type": "boolean",
+          "default": false,
+          "category": "Missense"
+        },
+        {
+          "id": "revel",
+          "label": "REVEL",
+          "type": "boolean",
+          "default": false,
+          "category": "Missense"
+        },
+        {
+          "id": "clinpred",
+          "label": "ClinPred",
+          "type": "boolean",
+          "default": false,
+          "category": "Missense"
+        },
+        {
+          "id": "spliceai",
+          "label": "SpliceAI",
+          "type": "boolean",
+          "default": false,
+          "category": "Splicing"
+        },
+        {
+          "id": "cadd",
+          "label": "CADD",
+          "type": "boolean",
+          "default": false,
+          "category": "Genome wide"
+        },
+        {
+          "id": "eve",
+          "label": "EVE & popEVE",
+          "type": "boolean",
+          "default": false,
+          "category": "Missense"
+        },
+        {
+          "id": "gerp",
+          "label": "GERP conservation score",
+          "type": "boolean",
+          "default": false,
+          "category": "Genome wide"
+        }
+      ]
+    },
+    {
+      "id": "allele_frequencies",
+      "label": "Allele frequencies",
+      "options": [
+        {
+          "id": "gnomad_exomes",
+          "label": "gnomAD Exomes v4.1.1",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "gnomad_exomes_include_ukb",
+              "label": "Include UK BioBank samples",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "type": "group",
+              "label": "Genetic ancestry group",
+              "options": [
+                {
+                  "id": "gnomad_exomes_all",
+                  "label": "All",
+                  "type": "boolean",
+                  "default": true,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_all_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_all_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_all_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_afr",
+                  "label": "African & African-American",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_afr_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_afr_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_afr_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_amr",
+                  "label": "Admixed American",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_amr_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_amr_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_amr_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_asj",
+                  "label": "Ashkenazi Jewish",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_asj_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_asj_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_asj_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_eas",
+                  "label": "East Asian",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_eas_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_eas_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_eas_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_fin",
+                  "label": "Finnish",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_fin_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_fin_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_fin_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_mid",
+                  "label": "Middle Eastern",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_mid_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_mid_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_mid_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_nfe",
+                  "label": "Non-Finnish European",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_nfe_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_nfe_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_nfe_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "category": "Short variants"
+        },
+        {
+          "id": "gnomad_genomes",
+          "label": "gnomAD Genomes v4.1.1",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "type": "group",
+              "label": "Genetic ancestry group",
+              "options": [
+                {
+                  "id": "gnomad_genomes_all",
+                  "label": "All",
+                  "type": "boolean",
+                  "default": true,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_all_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_all_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_all_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_grpmax",
+                  "label": "Maximum across all groups",
+                  "type": "boolean",
+                  "default": true
+                },
+                {
+                  "id": "gnomad_genomes_afr",
+                  "label": "African & African-American",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_afr_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_afr_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_afr_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_amr",
+                  "label": "Admixed American",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_amr_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_amr_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_amr_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_asj",
+                  "label": "Ashkenazi Jewish",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_asj_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_asj_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_asj_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_eas",
+                  "label": "East Asian",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_eas_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_eas_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_eas_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_fin",
+                  "label": "Finnish",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_fin_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_fin_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_fin_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_mid",
+                  "label": "Middle Eastern",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_mid_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_mid_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_mid_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_nfe",
+                  "label": "Non-Finnish European",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_nfe_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_nfe_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_nfe_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_ami",
+                  "label": "Amish",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_ami_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_ami_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_ami_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_remaining",
+                  "label": "Remaining",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_remaining_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_remaining_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_remaining_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "category": "Short variants"
+        },
+        {
+          "id": "allofus",
+          "label": "NIH All of Us",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "type": "group",
+              "options": [
+                {
+                  "id": "allofus_all",
+                  "label": "All",
+                  "type": "boolean",
+                  "default": true
+                },
+                {
+                  "id": "allofus_max",
+                  "label": "Maximum subpopulation",
+                  "type": "boolean",
+                  "default": true
+                },
+                {
+                  "id": "allofus_afr",
+                  "label": "African",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "allofus_amr",
+                  "label": "Latino/Ad Mixed American",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "allofus_eas",
+                  "label": "East Asian",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "allofus_eur",
+                  "label": "European",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "allofus_mid",
+                  "label": "Middle Eastern",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "allofus_sas",
+                  "label": "South Asian",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "allofus_oth",
+                  "label": "Other",
+                  "type": "boolean",
+                  "default": false
+                }
+              ]
+            }
+          ],
+          "category": "Short variants"
+        },
+        {
+          "id": "gnomad_sv",
+          "label": "gnomAD SV v4.1",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "gnomad_sv_overlap_cutoff",
+              "label": "Overlap cutoff",
+              "type": "select",
+              "default": "100",
+              "options": [
+                {
+                  "label": "80%",
+                  "value": "80"
+                },
+                {
+                  "label": "90%",
+                  "value": "90"
+                },
+                {
+                  "label": "100%",
+                  "value": "100"
+                }
+              ]
+            },
+            {
+              "type": "group",
+              "options": [
+                {
+                  "id": "gnomad_sv_af",
+                  "label": "All",
+                  "type": "boolean",
+                  "default": true
+                },
+                {
+                  "id": "gnomad_sv_af_afr",
+                  "label": "African & African-American",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_ami",
+                  "label": "Amish",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_amr",
+                  "label": "Admixed American",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_asj",
+                  "label": "Ashkenazi Jewish",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_eas",
+                  "label": "East Asian",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_fin",
+                  "label": "Finnish",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_mid",
+                  "label": "Middle Eastern",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_nfe",
+                  "label": "Non-Finnish European",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_rmi",
+                  "label": "Remaining",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_sas",
+                  "label": "South Asian",
+                  "type": "boolean",
+                  "default": false
+                }
+              ]
+            }
+          ],
+          "category": "Structural variants"
+        },
+        {
+          "id": "gnomad_cnv",
+          "label": "gnomAD CNV v4.1",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "gnomad_cnv_overlap_cutoff",
+              "label": "Overlap cutoff",
+              "type": "select",
+              "default": "100",
+              "options": [
+                {
+                  "label": "80%",
+                  "value": "80"
+                },
+                {
+                  "label": "90%",
+                  "value": "90"
+                },
+                {
+                  "label": "100%",
+                  "value": "100"
+                }
+              ]
+            },
+            {
+              "type": "group",
+              "options": [
+                {
+                  "id": "gnomad_cnv_sf",
+                  "label": "All",
+                  "type": "boolean",
+                  "default": true
+                },
+                {
+                  "id": "gnomad_cnv_sf_afr",
+                  "label": "African & African-American",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_cnv_sf_amr",
+                  "label": "Admixed American",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_cnv_sf_asj",
+                  "label": "Ashkenazi Jewish",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_cnv_sf_eas",
+                  "label": "East Asian",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_cnv_sf_fin",
+                  "label": "Finnish",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_cnv_sf_mid",
+                  "label": "Middle Eastern",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_cnv_sf_nfe",
+                  "label": "Non-Finnish European",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_cnv_sf_sas",
+                  "label": "South Asian",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_cnv_sf_remaining",
+                  "label": "Remaining",
+                  "type": "boolean",
+                  "default": false
+                }
+              ]
+            }
+          ],
+          "category": "Structural variants"
+        }
+      ]
+    },
+    {
+      "id": "genes_and_transcripts",
+      "label": "Genes & transcripts",
+      "options": [
+        {
+          "id": "tss_distance",
+          "label": "Distance to TSS",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations"
+        },
+        {
+          "id": "nearest_gene",
+          "label": "Nearest gene",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "nearest_gene_both_directions",
+              "label": "Both directions",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "nearest_exon_jb",
+          "label": "Nearest exon junction boundary",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "nearest_exon_jb_max_range",
+              "label": "Max search range (bp)",
+              "type": "number",
+              "default": 10000
+            },
+            {
+              "id": "nearest_exon_jb_intronic",
+              "label": "Intronic",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "updownstream_distance",
+          "label": "Up/downstream distance",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "updownstream_distance_bp",
+              "label": "Distance (bp)",
+              "type": "number",
+              "default": 5000,
+              "min": 0,
+              "max": 1000000
+            }
+          ]
+        },
+        {
+          "id": "utrannotator",
+          "label": "UTRAnnotator",
+          "type": "boolean",
+          "default": false,
+          "category": "Annotations"
+        },
+        {
+          "id": "nmd",
+          "label": "NMD",
+          "type": "boolean",
+          "default": false,
+          "category": "Annotations"
+        },
+        {
+          "id": "loeuf",
+          "label": "LOEUF",
+          "type": "boolean",
+          "default": false,
+          "category": "Constraint"
+        },
+        {
+          "id": "dosage_sensitivity",
+          "label": "Dosage sensitivity",
+          "type": "boolean",
+          "default": false,
+          "category": "Constraint",
+          "sub_options": [
+            {
+              "id": "dosage_sensitivity_cover",
+              "label": "Require full transcript overlap",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "riboseqorfs",
+          "label": "RiboSeqORFs",
+          "type": "boolean",
+          "default": false,
+          "category": "Annotations"
+        },
+        {
+          "id": "go",
+          "label": "Gene Ontology",
+          "type": "boolean",
+          "default": false,
+          "category": "Annotations"
+        },
+        {
+          "id": "pli",
+          "label": "pLI",
+          "type": "boolean",
+          "default": false,
+          "category": "Constraint"
+        }
+      ]
+    },
+    {
+      "id": "protein_and_functional",
+      "label": "Protein & functional",
+      "options": [
+        {
+          "id": "protein",
+          "label": "Protein ID",
+          "type": "boolean",
+          "default": false,
+          "category": "Protein"
+        },
+        {
+          "id": "protvar",
+          "label": "ProtVar",
+          "type": "boolean",
+          "default": false,
+          "category": "Protein",
+          "sub_options": [
+            {
+              "id": "protvar_stability",
+              "label": "Protein Structure Stability",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "id": "protvar_pocket",
+              "label": "Protein Pockets",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "id": "protvar_int",
+              "label": "Protein-Protein Interaction Interface",
+              "type": "boolean",
+              "default": true
+            }
+          ]
+        },
+        {
+          "id": "mavedb",
+          "label": "MaveDB",
+          "type": "boolean",
+          "default": false,
+          "category": "Functional"
+        },
+        {
+          "id": "intact",
+          "label": "IntAct",
+          "type": "boolean",
+          "default": false,
+          "category": "Functional",
+          "sub_options": [
+            {
+              "id": "intact_feature_ac",
+              "label": "Feature AC",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_feature_short_label",
+              "label": "Feature short label",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_ap_ac",
+              "label": "Affected protein AC",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_interaction_participants",
+              "label": "Interaction participants",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_pmid",
+              "label": "PubMed ID",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "mutfunc",
+          "label": "mutfunc",
+          "type": "boolean",
+          "default": false,
+          "category": "Functional",
+          "requires_any_sub_option": true,
+          "sub_options": [
+            {
+              "id": "mutfunc_motif",
+              "label": "Linear motifs",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "id": "mutfunc_int",
+              "label": "Protein interactions",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "id": "mutfunc_mod",
+              "label": "Protein structure",
+              "type": "boolean",
+              "default": true
+            },
+            {
+              "id": "mutfunc_exp",
+              "label": "Protein structure (exp.)",
+              "type": "boolean",
+              "default": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "regulatory",
+      "label": "Regulatory",
+      "options": [
+        {
+          "id": "gencode_promoters",
+          "label": "GENCODE promoter",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    },
+    {
+      "id": "phenotype_and_disease_associations",
+      "label": "Phenotype & disease associations",
+      "options": [
+        {
+          "id": "geno2mp",
+          "label": "Geno2MP",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "id": "phenotypes",
+          "label": "Phenotypes",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "id": "opentargets",
+          "label": "OpenTargets",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "id": "clinvar_sv",
+          "label": "ClinVar structural variants",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    }
+  ],
+  "human_grch37": [
+    {
+      "id": "variant_representations",
+      "label": "Variant representations",
+      "options": [
+        {
+          "id": "hgvs",
+          "label": "HGVS",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "id": "spdi",
+          "label": "SPDI",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    },
+    {
+      "id": "variant_impact_predictions",
+      "label": "Variant impact predictions",
+      "options": [
+        {
+          "id": "alphamissense",
+          "label": "AlphaMissense",
+          "type": "boolean",
+          "default": false,
+          "category": "Missense"
+        },
+        {
+          "id": "revel",
+          "label": "REVEL",
+          "type": "boolean",
+          "default": false,
+          "category": "Missense"
+        },
+        {
+          "id": "clinpred",
+          "label": "ClinPred",
+          "type": "boolean",
+          "default": false,
+          "category": "Missense"
+        },
+        {
+          "id": "spliceai",
+          "label": "SpliceAI",
+          "type": "boolean",
+          "default": false,
+          "category": "Splicing"
+        },
+        {
+          "id": "cadd",
+          "label": "CADD",
+          "type": "boolean",
+          "default": false,
+          "category": "Genome wide"
+        }
+      ]
+    },
+    {
+      "id": "allele_frequencies",
+      "label": "Allele frequencies",
+      "options": [
+        {
+          "id": "gnomad_exomes",
+          "label": "gnomAD Exomes v2.1.1",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "type": "group",
+              "label": "Subset",
+              "options": [
+                {
+                  "id": "gnomad_exomes_subset_full",
+                  "label": "Full dataset",
+                  "type": "boolean",
+                  "default": true
+                },
+                {
+                  "id": "gnomad_exomes_subset_controls",
+                  "label": "Controls",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_exomes_subset_non_neuro",
+                  "label": "Non-neuro",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_exomes_subset_non_topmed",
+                  "label": "Non-TOPMed",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_exomes_subset_non_cancer",
+                  "label": "Non-cancer",
+                  "type": "boolean",
+                  "default": false
+                }
+              ]
+            },
+            {
+              "type": "group",
+              "label": "Genetic ancestry group",
+              "options": [
+                {
+                  "id": "gnomad_exomes_all",
+                  "label": "All",
+                  "type": "boolean",
+                  "default": true,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_all_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_all_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_all_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_popmax",
+                  "label": "Maximum across populations",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_exomes_afr",
+                  "label": "African & African-American",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_afr_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_afr_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_afr_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_amr",
+                  "label": "Admixed American",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_amr_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_amr_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_amr_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_asj",
+                  "label": "Ashkenazi Jewish",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_asj_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_asj_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_asj_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_eas",
+                  "label": "East Asian",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_eas_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_eas_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_eas_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "type": "group",
+                      "label": "Sub-populations",
+                      "options": [
+                        {
+                          "id": "gnomad_exomes_eas_kor",
+                          "label": "Korean",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        {
+                          "id": "gnomad_exomes_eas_jpn",
+                          "label": "Japanese",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        {
+                          "id": "gnomad_exomes_eas_oea",
+                          "label": "Other East Asian",
+                          "type": "boolean",
+                          "default": false
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_fin",
+                  "label": "Finnish",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_fin_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_fin_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_fin_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_nfe",
+                  "label": "Non-Finnish European",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_nfe_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_nfe_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_nfe_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "type": "group",
+                      "label": "Sub-populations",
+                      "options": [
+                        {
+                          "id": "gnomad_exomes_nfe_seu",
+                          "label": "Southern European",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        {
+                          "id": "gnomad_exomes_nfe_bgr",
+                          "label": "Bulgarian",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        {
+                          "id": "gnomad_exomes_nfe_onf",
+                          "label": "Other non-Finnish European",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        {
+                          "id": "gnomad_exomes_nfe_swe",
+                          "label": "Swedish",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        {
+                          "id": "gnomad_exomes_nfe_nwe",
+                          "label": "North-Western European",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        {
+                          "id": "gnomad_exomes_nfe_est",
+                          "label": "Estonian",
+                          "type": "boolean",
+                          "default": false
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_oth",
+                  "label": "Other / uncertain",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_oth_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_oth_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_oth_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_exomes_sas",
+                  "label": "South Asian",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_exomes_sas_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_exomes_sas_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_exomes_sas_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "category": "Short variants"
+        },
+        {
+          "id": "gnomad_genomes",
+          "label": "gnomAD Genomes v2.1",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "type": "group",
+              "label": "Subset",
+              "options": [
+                {
+                  "id": "gnomad_genomes_subset_full",
+                  "label": "Full dataset",
+                  "type": "boolean",
+                  "default": true
+                },
+                {
+                  "id": "gnomad_genomes_subset_controls",
+                  "label": "Controls",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_genomes_subset_non_neuro",
+                  "label": "Non-neuro",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_genomes_subset_non_topmed",
+                  "label": "Non-TOPMed",
+                  "type": "boolean",
+                  "default": false
+                }
+              ]
+            },
+            {
+              "type": "group",
+              "label": "Genetic ancestry group",
+              "options": [
+                {
+                  "id": "gnomad_genomes_all",
+                  "label": "All",
+                  "type": "boolean",
+                  "default": true,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_all_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_all_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_all_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_popmax",
+                  "label": "Maximum across populations",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_genomes_afr",
+                  "label": "African & African-American",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_afr_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_afr_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_afr_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_amr",
+                  "label": "Admixed American",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_amr_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_amr_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_amr_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_asj",
+                  "label": "Ashkenazi Jewish",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_asj_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_asj_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_asj_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_eas",
+                  "label": "East Asian",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_eas_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_eas_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_eas_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_fin",
+                  "label": "Finnish",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_fin_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_fin_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_fin_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_nfe",
+                  "label": "Non-Finnish European",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_nfe_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_nfe_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_nfe_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "type": "group",
+                      "label": "Sub-populations",
+                      "options": [
+                        {
+                          "id": "gnomad_genomes_nfe_seu",
+                          "label": "Southern European",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        {
+                          "id": "gnomad_genomes_nfe_onf",
+                          "label": "Other non-Finnish European",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        {
+                          "id": "gnomad_genomes_nfe_nwe",
+                          "label": "North-Western European",
+                          "type": "boolean",
+                          "default": false
+                        },
+                        {
+                          "id": "gnomad_genomes_nfe_est",
+                          "label": "Estonian",
+                          "type": "boolean",
+                          "default": false
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "gnomad_genomes_oth",
+                  "label": "Other / uncertain",
+                  "type": "boolean",
+                  "default": false,
+                  "sub_options": [
+                    {
+                      "id": "gnomad_genomes_oth_both",
+                      "label": "Combined",
+                      "type": "boolean",
+                      "default": true
+                    },
+                    {
+                      "id": "gnomad_genomes_oth_female",
+                      "label": "XX",
+                      "type": "boolean",
+                      "default": false
+                    },
+                    {
+                      "id": "gnomad_genomes_oth_male",
+                      "label": "XY",
+                      "type": "boolean",
+                      "default": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "category": "Short variants"
+        },
+        {
+          "id": "gnomad_sv",
+          "label": "gnomAD SV v2.1",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "gnomad_sv_overlap_cutoff",
+              "label": "Overlap cutoff",
+              "type": "select",
+              "default": "100",
+              "options": [
+                {
+                  "label": "80%",
+                  "value": "80"
+                },
+                {
+                  "label": "90%",
+                  "value": "90"
+                },
+                {
+                  "label": "100%",
+                  "value": "100"
+                }
+              ]
+            },
+            {
+              "type": "group",
+              "options": [
+                {
+                  "id": "gnomad_sv_af",
+                  "label": "All",
+                  "type": "boolean",
+                  "default": true
+                },
+                {
+                  "id": "gnomad_sv_af_afr",
+                  "label": "African",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_amr",
+                  "label": "Admixed American",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_eas",
+                  "label": "East Asian",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_eur",
+                  "label": "European",
+                  "type": "boolean",
+                  "default": false
+                },
+                {
+                  "id": "gnomad_sv_af_oth",
+                  "label": "Other",
+                  "type": "boolean",
+                  "default": false
+                }
+              ]
+            }
+          ],
+          "category": "Structural variants"
+        }
+      ]
+    },
+    {
+      "id": "genes_and_transcripts",
+      "label": "Genes & transcripts",
+      "options": [
+        {
+          "id": "tss_distance",
+          "label": "Distance to TSS",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations"
+        },
+        {
+          "id": "nearest_gene",
+          "label": "Nearest gene",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "nearest_gene_both_directions",
+              "label": "Both directions",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "nearest_exon_jb",
+          "label": "Nearest exon junction boundary",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "nearest_exon_jb_max_range",
+              "label": "Max search range (bp)",
+              "type": "number",
+              "default": 10000
+            },
+            {
+              "id": "nearest_exon_jb_intronic",
+              "label": "Intronic",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "updownstream_distance",
+          "label": "Up/downstream distance",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "updownstream_distance_bp",
+              "label": "Distance (bp)",
+              "type": "number",
+              "default": 5000,
+              "min": 0,
+              "max": 1000000
+            }
+          ]
+        },
+        {
+          "id": "utrannotator",
+          "label": "UTRAnnotator",
+          "type": "boolean",
+          "default": false,
+          "category": "Annotations"
+        },
+        {
+          "id": "nmd",
+          "label": "NMD",
+          "type": "boolean",
+          "default": false,
+          "category": "Annotations"
+        },
+        {
+          "id": "loeuf",
+          "label": "LOEUF",
+          "type": "boolean",
+          "default": false,
+          "category": "Constraint"
+        },
+        {
+          "id": "dosage_sensitivity",
+          "label": "Dosage sensitivity",
+          "type": "boolean",
+          "default": false,
+          "category": "Constraint",
+          "sub_options": [
+            {
+              "id": "dosage_sensitivity_cover",
+              "label": "Require full transcript overlap",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "go",
+          "label": "Gene Ontology",
+          "type": "boolean",
+          "default": false,
+          "category": "Annotations"
+        }
+      ]
+    },
+    {
+      "id": "protein_and_functional",
+      "label": "Protein & functional",
+      "options": [
+        {
+          "id": "protein",
+          "label": "Protein ID",
+          "type": "boolean",
+          "default": false,
+          "category": "Protein"
+        },
+        {
+          "id": "intact",
+          "label": "IntAct",
+          "type": "boolean",
+          "default": false,
+          "category": "Functional",
+          "sub_options": [
+            {
+              "id": "intact_feature_ac",
+              "label": "Feature AC",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_feature_short_label",
+              "label": "Feature short label",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_ap_ac",
+              "label": "Affected protein AC",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_interaction_participants",
+              "label": "Interaction participants",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_pmid",
+              "label": "PubMed ID",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phenotype_and_disease_associations",
+      "label": "Phenotype & disease associations",
+      "options": [
+        {
+          "id": "geno2mp",
+          "label": "Geno2MP",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "id": "phenotypes",
+          "label": "Phenotypes",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "id": "clinvar_sv",
+          "label": "ClinVar structural variants",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    }
+  ],
+  "mouse": [
+    {
+      "id": "variant_representations",
+      "label": "Variant representations",
+      "options": [
+        {
+          "id": "hgvs",
+          "label": "HGVS",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "id": "spdi",
+          "label": "SPDI",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    },
+    {
+      "id": "genes_and_transcripts",
+      "label": "Genes & transcripts",
+      "options": [
+        {
+          "id": "tss_distance",
+          "label": "Distance to TSS",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations"
+        },
+        {
+          "id": "nearest_gene",
+          "label": "Nearest gene",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "nearest_gene_both_directions",
+              "label": "Both directions",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "nearest_exon_jb",
+          "label": "Nearest exon junction boundary",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "nearest_exon_jb_max_range",
+              "label": "Max search range (bp)",
+              "type": "number",
+              "default": 10000
+            },
+            {
+              "id": "nearest_exon_jb_intronic",
+              "label": "Intronic",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "updownstream_distance",
+          "label": "Up/downstream distance",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "updownstream_distance_bp",
+              "label": "Distance (bp)",
+              "type": "number",
+              "default": 5000,
+              "min": 0,
+              "max": 1000000
+            }
+          ]
+        },
+        {
+          "id": "go",
+          "label": "Gene Ontology",
+          "type": "boolean",
+          "default": false,
+          "category": "Annotations"
+        }
+      ]
+    },
+    {
+      "id": "protein_and_functional",
+      "label": "Protein & functional",
+      "options": [
+        {
+          "id": "protein",
+          "label": "Protein ID",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    },
+    {
+      "id": "phenotype_and_disease_associations",
+      "label": "Phenotype & disease associations",
+      "options": [
+        {
+          "id": "phenotypes",
+          "label": "Phenotypes",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    }
+  ],
+  "unlisted": [
+    {
+      "id": "variant_representations",
+      "label": "Variant representations",
+      "options": [
+        {
+          "id": "hgvs",
+          "label": "HGVS",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "id": "spdi",
+          "label": "SPDI",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    },
+    {
+      "id": "genes_and_transcripts",
+      "label": "Genes & transcripts",
+      "options": [
+        {
+          "id": "tss_distance",
+          "label": "Distance to TSS",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations"
+        },
+        {
+          "id": "nearest_gene",
+          "label": "Nearest gene",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "nearest_gene_both_directions",
+              "label": "Both directions",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "nearest_exon_jb",
+          "label": "Nearest exon junction boundary",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "nearest_exon_jb_max_range",
+              "label": "Max search range (bp)",
+              "type": "number",
+              "default": 10000
+            },
+            {
+              "id": "nearest_exon_jb_intronic",
+              "label": "Intronic",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        {
+          "id": "updownstream_distance",
+          "label": "Up/downstream distance",
+          "type": "boolean",
+          "default": false,
+          "category": "Locations",
+          "sub_options": [
+            {
+              "id": "updownstream_distance_bp",
+              "label": "Distance (bp)",
+              "type": "number",
+              "default": 5000,
+              "min": 0,
+              "max": 1000000
+            }
+          ]
+        },
+        {
+          "id": "go",
+          "label": "Gene Ontology",
+          "type": "boolean",
+          "default": false,
+          "category": "Annotations"
+        }
+      ]
+    },
+    {
+      "id": "protein_and_functional",
+      "label": "Protein & functional",
+      "options": [
+        {
+          "id": "protein",
+          "label": "Protein ID",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    },
+    {
+      "id": "phenotype_and_disease_associations",
+      "label": "Phenotype & disease associations",
+      "options": [
+        {
+          "id": "phenotypes",
+          "label": "Phenotypes",
+          "type": "boolean",
+          "default": false
+        }
+      ]
+    }
+  ]
+}

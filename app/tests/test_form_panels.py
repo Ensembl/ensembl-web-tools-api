@@ -835,72 +835,103 @@ def test_a_non_human_species_gets_neither_the_panel_nor_the_options():
     assert "conservation_and_constraint" not in {panel["id"] for panel in panels}
 
 
-# --- options declared by their own config entry (proof of concept) ----------
+# --- options declared by their own config entry ----------------------------
 #
-# Two entries carry a `form` block; everything else still comes from the
-# literals in form_panels. See docs/form-panels-to-json.md for where this goes.
+# Two entries carry a `form` block and are placed from it; form_panels still
+# writes out the other 33. See docs/form-panels-to-json.md.
 
 SPEC_DECLARED = {"nearest_exon_jb", "pli"}
 
+GOLDEN_CASES = {
+    "human_grch38": {"species_taxonomy_id": HUMAN, "assembly_name": "GRCh38.p14"},
+    "human_grch37": {"species_taxonomy_id": HUMAN, "assembly_name": "GRCh37.p13"},
+    "mouse": {"species_taxonomy_id": MOUSE, "assembly_name": "GRCm39"},
+    "unlisted": {"species_taxonomy_id": "7955", "assembly_name": "GRCz11"},
+}
+
+
+def _golden() -> dict:
+    import json
+    from pathlib import Path
+
+    return json.loads(
+        (Path(__file__).parent / "form_panels.golden.json").read_text()
+    )
+
 
 def test_the_spec_really_is_declaring_those_options():
-    """Guards the equivalence test below from passing vacuously.
+    """Guards the golden comparison from passing for the wrong reason.
 
-    If the `form` blocks stopped being read — a renamed field, a spec that fails
-    to load — the overlay would replace nothing and the comparison would then be
-    of two identical coded outputs, which proves nothing at all.
+    If the `form` blocks stopped being read the options would simply vanish, and
+    the golden test would catch it — but it would report "an option is missing"
+    rather than "the spec is not being read", which is a slower thing to
+    diagnose. This says which.
     """
-    assert set(form_panels._spec_form_options("GRCh38.p14")) == SPEC_DECLARED
-    # `pli` is declared only by human_grch38.json, so GRCh37 does not see it —
-    # the same selection that drops its parse plugin and display option.
-    assert set(form_panels._spec_form_options("GRCh37.p13")) == {"nearest_exon_jb"}
+    declared = {option_id for option_id, _, _ in _declared_ids("GRCh38.p14")}
+    assert declared == SPEC_DECLARED
+    # `pli` is declared only by human_grch38.json, so GRCh37 has nothing to
+    # place — the same selection that drops its parse plugin and display option.
+    assert {i for i, _, _ in _declared_ids("GRCh37.p13")} == {"nearest_exon_jb"}
 
 
-def test_a_spec_declared_option_is_identical_to_the_coded_one(monkeypatch):
-    """The panels come out the same whether an option is declared by its config
-    entry or written out here — for both assemblies, including the one that
-    should not see `pli` at all."""
-    for assembly in ("GRCh38.p14", "GRCh37.p13"):
-        from_spec = get_visible_panels(
-            species_taxonomy_id=HUMAN, assembly_name=assembly
-        )
-        monkeypatch.setattr(form_panels, "_spec_form_options", lambda _assembly: {})
-        from_code = get_visible_panels(
-            species_taxonomy_id=HUMAN, assembly_name=assembly
-        )
-        monkeypatch.undo()
-        assert from_spec == from_code, assembly
-
-
-def test_a_form_block_states_where_its_option_belongs():
-    """The block carries panel and category, and they agree with where this
-    module puts the option.
-
-    The overlay deliberately replaces in place rather than placing from the
-    block, so this is what proves an entry could place itself — the next step,
-    and the one that lets `form_panels` shrink.
-    """
+def _declared_ids(assembly: str):
+    """(id, panel, order) for each entry that declares a control."""
     from app.vep.utils.spec_loader import resolve_merged_spec
 
-    panels = get_visible_panels(
-        species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
-    )
-    declared = {
-        entry.id: entry.form
-        for entry in resolve_merged_spec("GRCh38.p14").config.entries
+    return [
+        (entry.id, entry.form.panel, entry.form.order)
+        for entry in resolve_merged_spec(assembly).config.entries
         if entry.form is not None
-    }
-    assert set(declared) == SPEC_DECLARED
+    ]
 
-    for option_id, form in declared.items():
-        panel = next(
-            panel
-            for panel in panels
-            if any(option["id"] == option_id for option in panel["options"])
+
+def test_panels_are_unchanged_by_placing_options_from_the_spec():
+    """The whole point: an option declared by its config entry lands exactly
+    where the hand-written list used to put it.
+
+    Against a golden file captured before the two options moved, across the four
+    paths through `get_visible_panels` — human GRCh38, human GRCh37, a species
+    with its own annotation data, and one with none.
+    """
+    golden = _golden()
+    for name, kwargs in GOLDEN_CASES.items():
+        assert get_visible_panels(**kwargs) == golden[name], name
+
+
+def test_a_declared_option_sits_between_the_coded_ones():
+    """`nearest_exon_jb` is third of four in Locations — not first or last, so
+    its `order` has to place it *between* options this module still writes.
+
+    Appending would have been enough for `pli` alone, which is last; this is the
+    case that proves the ordering actually orders.
+    """
+    genes = next(
+        panel
+        for panel in get_visible_panels(
+            species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
         )
-        option = next(o for o in panel["options"] if o["id"] == option_id)
-        assert form.panel == panel["id"], option_id
-        assert form.category == option.get("category"), option_id
+        if panel["id"] == "genes_and_transcripts"
+    )
+    ids = [option["id"] for option in genes["options"]]
+    assert ids.index("nearest_gene") < ids.index("nearest_exon_jb")
+    assert ids.index("nearest_exon_jb") < ids.index("updownstream_distance")
+    # ...and pli is last, after the GRCh38 additions.
+    assert ids[-1] == "pli"
+
+
+def test_an_option_naming_an_unshown_panel_is_an_error(monkeypatch):
+    """A control whose panel this genome does not show would otherwise vanish
+    without a word — the silent-drop failure this spec keeps having to guard
+    against."""
+    import pytest
+
+    monkeypatch.setattr(
+        form_panels,
+        "_spec_form_options",
+        lambda _assembly: [("no_such_panel", 10, {"id": "x"})],
+    )
+    with pytest.raises(ValueError, match="no_such_panel"):
+        get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14")
 
 
 def test_an_entry_with_no_control_declares_no_form_block():

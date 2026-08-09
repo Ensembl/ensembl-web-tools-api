@@ -14,7 +14,7 @@ enumerating what `create_config_ini_file` actually emits, not invented, exactly
 as the parsing transforms were. The always-on base config (`force_overwrite`,
 `numbers`, `symbol`, … and the assembly-gated `mane`/`assembly`) is deliberately
 NOT here: it is a VEP-invocation invariant that stays in the backend, next to the
-per-genome `gff`/`fasta` resolution. See app/vep/docs/design/merged-annotation-spec.md.
+per-genome `gff`/`fasta` resolution. See app/vep/docs/design/spec-and-extension-guide.md.
 """
 
 from typing import Annotated, Literal, Union

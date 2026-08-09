@@ -92,3 +92,27 @@ def unknown_options(
         species_taxonomy_id=species_taxonomy_id, assembly_name=assembly_name
     )
     return sorted(key for key in payload if key not in known)
+
+
+def option_values(
+    payload: dict,
+    *,
+    species_taxonomy_id: str | None = None,
+    assembly_name: str | None = None,
+) -> tuple[dict, list[str]]:
+    """This submission's option map, and the keys it set that mean nothing here.
+
+    Every option the genome offers appears, at the value the payload gives or
+    the default the spec declares — because "absent" and "off" are not the same
+    thing. A ProtVar sub-feature defaults to *on*, so a payload that names only
+    `protvar` must still come out with its sub-flags set, exactly as the
+    199-field model used to arrange.
+    """
+    known = submittable_options(
+        species_taxonomy_id=species_taxonomy_id, assembly_name=assembly_name
+    )
+    values = {
+        option_id: payload.get(option_id, option.default)
+        for option_id, option in known.items()
+    }
+    return values, sorted(key for key in payload if key not in known)

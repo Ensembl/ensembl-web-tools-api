@@ -37,7 +37,7 @@ def build_lines(monkeypatch, tmp_path, *, assembly="GRCh38.p14", **kwargs):
         lambda genome_id: {"gff_location": GFF, "faa_location": FASTA},
     )
     params = ConfigIniParams(
-        genome_id="genome-under-test", assembly_name=assembly, **kwargs
+        genome_id="genome-under-test", assembly_name=assembly, options=kwargs
     )
     params.create_config_ini_file(str(tmp_path), CONFIG_SPEC)
     return (tmp_path / "config.ini").read_text().splitlines()
@@ -50,7 +50,7 @@ def build_lines_37(monkeypatch, tmp_path, **kwargs):
         lambda genome_id: {"gff_location": GFF, "faa_location": FASTA},
     )
     params = ConfigIniParams(
-        genome_id="genome-under-test", assembly_name="GRCh37.p13", **kwargs
+        genome_id="genome-under-test", assembly_name="GRCh37.p13", options=kwargs
     )
     params.create_config_ini_file(str(tmp_path), CONFIG_SPEC_37)
     return (tmp_path / "config.ini").read_text().splitlines()
@@ -380,9 +380,13 @@ def test_mutfunc_defaults_to_every_sub_flag_on(monkeypatch, tmp_path):
     the line above being flagless."""
     from app.vep.models.pipeline_model import ConfigIniParams
 
-    params = ConfigIniParams(genome_id="g", assembly_name="GRCh38", mutfunc=True)
-    assert (params.mutfunc_motif, params.mutfunc_int, params.mutfunc_mod,
-            params.mutfunc_exp) == (True, True, True, True)
+    params = ConfigIniParams(
+        genome_id="g", assembly_name="GRCh38", options={"mutfunc": True}
+    )
+    assert [
+        params.options[flag]
+        for flag in ("mutfunc_motif", "mutfunc_int", "mutfunc_mod", "mutfunc_exp")
+    ] == [True, True, True, True]
 
 
 def test_mutfunc_with_no_sub_flag_emits_nothing(monkeypatch, tmp_path):

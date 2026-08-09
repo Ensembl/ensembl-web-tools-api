@@ -1,13 +1,17 @@
 """What a submission may set, derived from the spec rather than declared.
 
-PROOF OF CONCEPT for retiring the option half of `ConfigIniParams`. That model
-declares 207 fields, of which 199 are options — and those 199 are never read by
-attribute: they arrive as `ConfigIniParams(**payload)` and leave as
-`.model_dump()`, a flat map for the config interpreter. Nothing here changes the
-submission path; these assert the spec could replace it.
+`ConfigIniParams` used to declare 207 fields, of which 199 were options — one
+per control, and none of them ever read by attribute: they arrived as
+`ConfigIniParams(**payload)` and left as `.model_dump()`. They were a third
+statement of what the config entries already say, after the form panels and the
+`fields=` clause, and the only one that could not tell one assembly's options
+from another's.
 
-See docs/form-panels-to-json.md.
+They are now a map, completed and checked against the spec. See
+docs/form-panels-to-json.md.
 """
+
+import logging
 
 from app.vep.models.pipeline_model import ConfigIniParams
 from app.vep.submission_options import submittable_options, unknown_options
@@ -15,159 +19,132 @@ from app.vep.submission_options import submittable_options, unknown_options
 HUMAN = "9606"
 MOUSE = "10090"
 
-# The eight fields that are genuinely the job's, not an option's. Each is read
-# by attribute somewhere; the other 199 are not.
-JOB_FIELDS = {
-    "genome_id",
-    "assembly_name",
-    "species_taxonomy_id",
-    "gff",
-    "fasta",
-    "force_overwrite",
-    "transcript_version",
-    "canonical",
-}
 
-# Options the model carries that no form offers, and why.
-NOT_SUBMITTABLE = {
-    # Phenotypes `forces_on` it; the interpreter sets it, never the client.
-    "clinvar_short",
-    # Hidden pending chromosome synonyms; computed for ProtVar's link.
-    "hgvsg",
-    # Dead: no config entry, no control, and the parse was retired (see
-    # test_spec_interpreter.test_intact_feature_annotation_is_no_longer_parsed).
-    # It has sat on the model unnoticed because the sync test only checks
-    # form -> model, never model -> form.
-    "intact_feature_annotation",
-}
-
-ALL_GENOMES = (
-    {"species_taxonomy_id": HUMAN, "assembly_name": "GRCh38.p14"},
-    {"species_taxonomy_id": HUMAN, "assembly_name": "GRCh37.p13"},
-    {"species_taxonomy_id": MOUSE, "assembly_name": "GRCm39"},
-)
+def _params(assembly: str, species: str = HUMAN, **options) -> ConfigIniParams:
+    return ConfigIniParams(
+        genome_id="g",
+        assembly_name=assembly,
+        species_taxonomy_id=species,
+        options=options,
+    )
 
 
-def _model_option_fields() -> dict:
-    return {
-        name: field
-        for name, field in ConfigIniParams.model_fields.items()
-        if name not in JOB_FIELDS
+def test_the_model_carries_the_job_and_a_map_of_options():
+    """Nine fields, not 207. Eight are the job's — each read by attribute
+    somewhere — and the ninth is the options."""
+    assert set(ConfigIniParams.model_fields) == {
+        "genome_id",
+        "assembly_name",
+        "species_taxonomy_id",
+        "gff",
+        "fasta",
+        "force_overwrite",
+        "transcript_version",
+        "canonical",
+        "options",
     }
 
 
-def _spec_options() -> dict:
-    options: dict = {}
-    for genome in ALL_GENOMES:
-        options.update(submittable_options(**genome))
-    return options
+def test_the_dead_field_went_with_them():
+    """`intact_feature_annotation` had no config entry, no control and a retired
+    parse, and sat on the model unnoticed because the sync test only ever
+    checked form -> model. Nothing offers it, so nothing carries it."""
+    assert "intact_feature_annotation" not in ConfigIniParams.model_fields
+    assert "intact_feature_annotation" not in _params("GRCh38.p14").options
 
 
-def test_the_spec_knows_every_option_the_model_does():
-    """The whole question, in one assertion.
+def test_an_unsent_option_gets_the_default_the_spec_declares():
+    """"Absent" and "off" are not the same thing.
 
-    If the spec declares everything the model does, the model's option half is a
-    third copy of the config entries — after the panels and the `fields=`
-    clause — and can go.
+    A ProtVar sub-feature defaults to *on*, so a payload naming only `protvar`
+    must still come out with its sub-flags set — which is what the 199 fields
+    used to arrange, and what would quietly change if the map were passed
+    through as sent.
     """
-    model = set(_model_option_fields())
-    spec = set(_spec_options())
+    options = _params("GRCh38.p14", protvar=True).options
+    assert options["protvar"] is True
+    assert options["protvar_stability"] is True
+    assert options["protvar_pocket"] is True
+    # ...and something not selected is off, not missing.
+    assert options["gerp"] is False
 
-    assert not spec - model, f"spec offers options the model cannot accept: {spec - model}"
-    assert model - spec == NOT_SUBMITTABLE
+
+def test_the_map_is_everything_this_genome_offers():
+    """One entry per option the form offers, no more: the map is the contract,
+    so a caller can read it without knowing what was sent."""
+    for assembly, species in (
+        ("GRCh38.p14", HUMAN),
+        ("GRCh37.p13", HUMAN),
+        ("GRCm39", MOUSE),
+    ):
+        offered = submittable_options(
+            species_taxonomy_id=species, assembly_name=assembly
+        )
+        assert set(_params(assembly, species).options) == set(offered), assembly
 
 
-def test_the_spec_agrees_on_every_type_and_default():
-    """Not just the names: an option's type and its value when unsent.
+def test_the_awkward_shapes_survive_the_round_trip():
+    """The four options whose value is not a boolean — a number with bounds, and
+    a select whose value is a string."""
+    options = _params(
+        "GRCh38.p14",
+        nearest_exon_jb_max_range=250,
+        gnomad_sv_overlap_cutoff="80",
+    ).options
+    assert options["nearest_exon_jb_max_range"] == 250
+    assert options["gnomad_sv_overlap_cutoff"] == "80"
+    # and their declared defaults when unsent
+    assert options["updownstream_distance_bp"] == 5000
+    assert options["gnomad_cnv_overlap_cutoff"] == "100"
 
-    Those are what the model is actually *for* — validating the payload and
-    filling in what the client left out — so agreeing on the ids alone would
-    prove nothing.
+
+def test_an_option_belongs_to_an_assembly():
+    """What the flat model could not express.
+
+    `pli` is a real option on GRCh38 and not an option at all on GRCh37. One set
+    of fields accepted it for both, so a GRCh37 submission could turn on
+    something that genome has no data for and nothing said otherwise.
     """
-    model = _model_option_fields()
-    spec = _spec_options()
-
-    wrong_type = {
-        name: (model[name].annotation, spec[name].type)
-        for name in spec
-        if model[name].annotation is not spec[name].type
-    }
-    wrong_default = {
-        name: (model[name].default, spec[name].default)
-        for name in spec
-        if model[name].default != spec[name].default
-    }
-    assert not wrong_type
-    assert not wrong_default
+    assert _params("GRCh38.p14", pli=True).options["pli"] is True
+    assert "pli" not in _params("GRCh37.p13", pli=True).options
 
 
-def test_the_awkward_shapes_come_through():
-    """The four options whose value is not a boolean, stated explicitly.
+def test_an_unrecognised_option_is_dropped_but_said_out_loud(caplog):
+    """Dropped, not rejected — and logged, which is the part that was missing.
 
-    A proof that only ever saw toggles would not have tested much: these are a
-    number with bounds and a select whose value is a string.
+    A submission can be rerun for 28 days, so a replayed payload may still name
+    an option that has since been retired; failing that rerun would be worse
+    than ignoring it. What was wrong before is that pydantic's `extra` default
+    discarded it in silence, so a typo and a deliberate omission looked
+    identical from every side.
     """
-    options = submittable_options(
-        species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
-    )
-    assert options["nearest_exon_jb_max_range"].type is int
-    assert options["nearest_exon_jb_max_range"].default == 10000
-    assert options["updownstream_distance_bp"].type is int
-    assert options["updownstream_distance_bp"].default == 5000
-    assert options["gnomad_sv_overlap_cutoff"].type is str
-    assert options["gnomad_sv_overlap_cutoff"].default == "100"
-    assert options["gnomad_cnv_overlap_cutoff"].type is str
+    with caplog.at_level(logging.WARNING):
+        params = _params("GRCh38.p14", cadd=True, gerpp=True)
+
+    assert params.options["cadd"] is True
+    assert "gerpp" not in params.options
+    assert "gerpp" in caplog.text
 
 
-def test_what_is_submittable_depends_on_the_assembly():
-    """The thing the static model cannot express.
-
-    `pli` is a real option on GRCh38 and not an option at all on GRCh37, but one
-    flat set of fields accepts it for both — so a GRCh37 submission can turn on
-    something that genome has no data for, and nothing says otherwise.
-    """
-    grch38 = submittable_options(
-        species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
-    )
-    grch37 = submittable_options(
-        species_taxonomy_id=HUMAN, assembly_name="GRCh37.p13"
-    )
-    assert "pli" in grch38
-    assert "pli" not in grch37
-    assert "pli" in ConfigIniParams.model_fields  # accepted for either, today
-
-    # A species with almost nothing keeps only what it can actually run.
-    mouse = submittable_options(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
-    assert "go" in mouse
-    assert "cadd" not in mouse and "eve" not in mouse
-
-
-def test_an_unknown_option_is_named_rather_than_dropped():
-    """What moving would fix.
-
-    `extra` is pydantic's default on `ConfigIniParams`, so an option id the
-    model does not know is discarded without a word: the job runs, that
-    annotation is missing, and nothing anywhere says why. A typo behaves
-    exactly like a deliberate omission.
-    """
-    payload = {"cadd": True, "gerpp": True, "pli": True}
-
-    accepted = ConfigIniParams(
-        genome_id="x", assembly_name="GRCh38.p14", **payload
-    ).model_dump()
-    assert "gerpp" not in accepted  # silently gone
-
+def test_unknown_options_names_them_without_building_a_submission():
+    """The same check on its own, for a caller that wants to ask first."""
     assert unknown_options(
-        payload, species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
+        {"cadd": True, "gerpp": True},
+        species_taxonomy_id=HUMAN,
+        assembly_name="GRCh38.p14",
     ) == ["gerpp"]
-
-
-def test_an_option_this_genome_lacks_is_unknown_to_it():
-    """The same check, doing the thing the model cannot: `pli` is a typo's
-    equivalent on GRCh37, because that assembly has no such option."""
+    # On GRCh37 a real GRCh38 option is unknown in exactly the same way.
     assert unknown_options(
         {"pli": True}, species_taxonomy_id=HUMAN, assembly_name="GRCh37.p13"
     ) == ["pli"]
-    assert unknown_options(
-        {"pli": True}, species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
-    ) == []
+
+
+def test_a_stray_option_passed_as_a_keyword_fails_loudly():
+    """`extra="forbid"` on the model: an option is a map entry now, and a caller
+    still passing one as a keyword would otherwise have it silently dropped —
+    the failure this whole change is about."""
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="cadd"):
+        ConfigIniParams(genome_id="g", assembly_name="GRCh38.p14", cadd=True)

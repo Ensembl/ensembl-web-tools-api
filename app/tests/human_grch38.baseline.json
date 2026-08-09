@@ -875,6 +875,14 @@
         "parsed_as": [
           "gnomad_exomes"
         ],
+        "form": {
+          "panel": "allele_frequencies",
+          "category": "Short variants",
+          "order": 0,
+          "label": "gnomAD Exomes v4.1.1",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "custom",
           "omit_if_no_fields": true,
@@ -891,49 +899,62 @@
             "ancestries": [
               {
                 "option": "gnomad_exomes_all",
-                "code": ""
+                "code": "",
+                "label": "All",
+                "default": true
               },
               {
                 "option": "gnomad_exomes_afr",
-                "code": "afr"
+                "code": "afr",
+                "label": "African & African-American"
               },
               {
                 "option": "gnomad_exomes_amr",
-                "code": "amr"
+                "code": "amr",
+                "label": "Admixed American"
               },
               {
                 "option": "gnomad_exomes_asj",
-                "code": "asj"
+                "code": "asj",
+                "label": "Ashkenazi Jewish"
               },
               {
                 "option": "gnomad_exomes_eas",
-                "code": "eas"
+                "code": "eas",
+                "label": "East Asian"
               },
               {
                 "option": "gnomad_exomes_fin",
-                "code": "fin"
+                "code": "fin",
+                "label": "Finnish"
               },
               {
                 "option": "gnomad_exomes_mid",
-                "code": "mid"
+                "code": "mid",
+                "label": "Middle Eastern"
               },
               {
                 "option": "gnomad_exomes_nfe",
-                "code": "nfe"
+                "code": "nfe",
+                "label": "Non-Finnish European"
               }
             ],
             "sexes": [
               {
                 "suffix": "both",
-                "code": ""
+                "code": "",
+                "label": "Combined",
+                "default": true
               },
               {
                 "suffix": "female",
-                "code": "XX"
+                "code": "XX",
+                "label": "XX"
               },
               {
                 "suffix": "male",
-                "code": "XY"
+                "code": "XY",
+                "label": "XY"
               }
             ]
           }
@@ -945,6 +966,14 @@
         "parsed_as": [
           "gnomad_genomes"
         ],
+        "form": {
+          "panel": "allele_frequencies",
+          "category": "Short variants",
+          "order": 100,
+          "label": "gnomAD Genomes v4.1.1",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "custom",
           "omit_if_no_fields": true,
@@ -960,62 +989,80 @@
             "ancestries": [
               {
                 "option": "gnomad_genomes_all",
-                "code": ""
+                "code": "",
+                "label": "All",
+                "default": true
               },
               {
                 "option": "gnomad_genomes_afr",
-                "code": "afr"
+                "code": "afr",
+                "label": "African & African-American"
               },
               {
                 "option": "gnomad_genomes_amr",
-                "code": "amr"
+                "code": "amr",
+                "label": "Admixed American"
               },
               {
                 "option": "gnomad_genomes_asj",
-                "code": "asj"
+                "code": "asj",
+                "label": "Ashkenazi Jewish"
               },
               {
                 "option": "gnomad_genomes_eas",
-                "code": "eas"
+                "code": "eas",
+                "label": "East Asian"
               },
               {
                 "option": "gnomad_genomes_fin",
-                "code": "fin"
+                "code": "fin",
+                "label": "Finnish"
               },
               {
                 "option": "gnomad_genomes_mid",
-                "code": "mid"
+                "code": "mid",
+                "label": "Middle Eastern"
               },
               {
                 "option": "gnomad_genomes_nfe",
-                "code": "nfe"
+                "code": "nfe",
+                "label": "Non-Finnish European"
               },
               {
                 "option": "gnomad_genomes_ami",
-                "code": "ami"
+                "code": "ami",
+                "label": "Amish"
               },
               {
                 "option": "gnomad_genomes_remaining",
-                "code": "remaining"
+                "code": "remaining",
+                "label": "Remaining"
               },
               {
                 "option": "gnomad_genomes_grpmax",
                 "code": "grpmax",
-                "sex_split": false
+                "sex_split": false,
+                "label": "Maximum across all groups",
+                "form_order": 50,
+                "default": true
               }
             ],
             "sexes": [
               {
                 "suffix": "both",
-                "code": ""
+                "code": "",
+                "label": "Combined",
+                "default": true
               },
               {
                 "suffix": "female",
-                "code": "XX"
+                "code": "XX",
+                "label": "XX"
               },
               {
                 "suffix": "male",
-                "code": "XY"
+                "code": "XY",
+                "label": "XY"
               }
             ]
           }
@@ -1027,6 +1074,14 @@
         "parsed_as": [
           "all_of_us"
         ],
+        "form": {
+          "panel": "allele_frequencies",
+          "category": "Short variants",
+          "order": 200,
+          "label": "NIH All of Us",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "custom",
           "omit_if_no_fields": true,
@@ -1043,56 +1098,76 @@
                 "option": "allofus_all",
                 "codes": [
                   "gvs_all_af"
-                ]
+                ],
+                "label": "All",
+                "default": true,
+                "population": "all"
               },
               {
                 "option": "allofus_max",
                 "codes": [
                   "gvs_max_af",
                   "gvs_max_subpop"
-                ]
+                ],
+                "label": "Maximum subpopulation",
+                "default": true,
+                "population": "max"
               },
               {
                 "option": "allofus_afr",
                 "codes": [
                   "gvs_afr_af"
-                ]
+                ],
+                "label": "African",
+                "population": "afr"
               },
               {
                 "option": "allofus_amr",
                 "codes": [
                   "gvs_amr_af"
-                ]
+                ],
+                "label": "Latino/Ad Mixed American",
+                "population": "amr"
               },
               {
                 "option": "allofus_eas",
                 "codes": [
                   "gvs_eas_af"
-                ]
+                ],
+                "label": "East Asian",
+                "population": "eas"
               },
               {
                 "option": "allofus_eur",
                 "codes": [
                   "gvs_eur_af"
-                ]
+                ],
+                "label": "European",
+                "population": "eur"
               },
               {
                 "option": "allofus_mid",
                 "codes": [
                   "gvs_mid_af"
-                ]
+                ],
+                "label": "Middle Eastern",
+                "population": "mid"
               },
               {
                 "option": "allofus_sas",
                 "codes": [
                   "gvs_sas_af"
-                ]
+                ],
+                "label": "South Asian",
+                "population": "sas"
               },
               {
                 "option": "allofus_oth",
                 "codes": [
                   "gvs_oth_af"
-                ]
+                ],
+                "label": "Other",
+                "population": "oth"
               }
             ]
           }
@@ -1104,6 +1179,14 @@
         "parsed_as": [
           "gnomad_sv"
         ],
+        "form": {
+          "panel": "allele_frequencies",
+          "category": "Structural variants",
+          "order": 300,
+          "label": "gnomAD SV v4.1",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "custom",
           "params": {
@@ -1124,73 +1207,97 @@
                 "option": "gnomad_sv",
                 "codes": [
                   "SVTYPE"
-                ]
+                ],
+                "label": "gnomAD SV v4.1"
               },
               {
                 "option": "gnomad_sv_af",
                 "codes": [
                   "AF"
-                ]
+                ],
+                "label": "All",
+                "default": true,
+                "population": ""
               },
               {
                 "option": "gnomad_sv_af_afr",
                 "codes": [
                   "AF_afr"
-                ]
+                ],
+                "label": "African & African-American",
+                "population": "afr"
               },
               {
                 "option": "gnomad_sv_af_ami",
                 "codes": [
                   "AF_ami"
-                ]
+                ],
+                "label": "Amish",
+                "population": "ami"
               },
               {
                 "option": "gnomad_sv_af_amr",
                 "codes": [
                   "AF_amr"
-                ]
+                ],
+                "label": "Admixed American",
+                "population": "amr"
               },
               {
                 "option": "gnomad_sv_af_asj",
                 "codes": [
                   "AF_asj"
-                ]
+                ],
+                "label": "Ashkenazi Jewish",
+                "population": "asj"
               },
               {
                 "option": "gnomad_sv_af_eas",
                 "codes": [
                   "AF_eas"
-                ]
+                ],
+                "label": "East Asian",
+                "population": "eas"
               },
               {
                 "option": "gnomad_sv_af_fin",
                 "codes": [
                   "AF_fin"
-                ]
+                ],
+                "label": "Finnish",
+                "population": "fin"
               },
               {
                 "option": "gnomad_sv_af_mid",
                 "codes": [
                   "AF_mid"
-                ]
+                ],
+                "label": "Middle Eastern",
+                "population": "mid"
               },
               {
                 "option": "gnomad_sv_af_nfe",
                 "codes": [
                   "AF_nfe"
-                ]
+                ],
+                "label": "Non-Finnish European",
+                "population": "nfe"
               },
               {
                 "option": "gnomad_sv_af_rmi",
                 "codes": [
                   "AF_rmi"
-                ]
+                ],
+                "label": "Remaining",
+                "population": "rmi"
               },
               {
                 "option": "gnomad_sv_af_sas",
                 "codes": [
                   "AF_sas"
-                ]
+                ],
+                "label": "South Asian",
+                "population": "sas"
               }
             ]
           },
@@ -1203,6 +1310,14 @@
         "parsed_as": [
           "gnomad_cnv"
         ],
+        "form": {
+          "panel": "allele_frequencies",
+          "category": "Structural variants",
+          "order": 400,
+          "label": "gnomAD CNV v4.1",
+          "type": "boolean",
+          "default": false
+        },
         "config": {
           "emit": "custom",
           "params": {
@@ -1223,67 +1338,89 @@
                 "option": "gnomad_cnv",
                 "codes": [
                   "SVTYPE"
-                ]
+                ],
+                "label": "gnomAD CNV v4.1"
               },
               {
                 "option": "gnomad_cnv_sf",
                 "codes": [
                   "SF"
-                ]
+                ],
+                "label": "All",
+                "default": true,
+                "population": ""
               },
               {
                 "option": "gnomad_cnv_sf_afr",
                 "codes": [
                   "SF_afr"
-                ]
+                ],
+                "label": "African & African-American",
+                "population": "afr"
               },
               {
                 "option": "gnomad_cnv_sf_amr",
                 "codes": [
                   "SF_amr"
-                ]
+                ],
+                "label": "Admixed American",
+                "population": "amr"
               },
               {
                 "option": "gnomad_cnv_sf_asj",
                 "codes": [
                   "SF_asj"
-                ]
+                ],
+                "label": "Ashkenazi Jewish",
+                "population": "asj"
               },
               {
                 "option": "gnomad_cnv_sf_eas",
                 "codes": [
                   "SF_eas"
-                ]
+                ],
+                "label": "East Asian",
+                "population": "eas"
               },
               {
                 "option": "gnomad_cnv_sf_fin",
                 "codes": [
                   "SF_fin"
-                ]
+                ],
+                "label": "Finnish",
+                "population": "fin"
               },
               {
                 "option": "gnomad_cnv_sf_mid",
                 "codes": [
                   "SF_mid"
-                ]
+                ],
+                "label": "Middle Eastern",
+                "population": "mid"
               },
               {
                 "option": "gnomad_cnv_sf_nfe",
                 "codes": [
                   "SF_nfe"
-                ]
+                ],
+                "label": "Non-Finnish European",
+                "population": "nfe"
               },
               {
                 "option": "gnomad_cnv_sf_sas",
                 "codes": [
                   "SF_sas"
-                ]
+                ],
+                "label": "South Asian",
+                "population": "sas"
               },
               {
                 "option": "gnomad_cnv_sf_remaining",
                 "codes": [
                   "SF_remaining"
-                ]
+                ],
+                "label": "Remaining",
+                "population": "remaining"
               }
             ]
           },

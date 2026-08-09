@@ -133,13 +133,26 @@ class LiteralFields(BaseModel):
 class AncestryCode(BaseModel):
     """One gnomAD ancestry option and its field-code component. `code` is empty
     for "all". `sex_split=False` marks a code that takes no XX/XY suffix and is a
-    plain toggle (genomes' `grpmax`)."""
+    plain toggle (genomes' `grpmax`).
+
+    `label` and `default` are what the form draws. They live here so the ancestry
+    is stated once: this list already had to name every ancestry to build the
+    `fields=` clause, and the form used to name them all again — the two had
+    already drifted (`grpmax` was in one and not the other).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     option: str
     code: str
     sex_split: bool = True
+    label: str = ""
+    default: bool = False
+    # Where the form shows it, when that is not where the `fields=` clause wants
+    # it. genomes' `grpmax` is emitted last but sits directly under "All", where
+    # the two frequencies useful without knowing the variant's population belong
+    # together. Sparse, like FormOption.order; unset means "in list order".
+    form_order: int | None = None
 
 
 class SexCode(BaseModel):
@@ -150,16 +163,27 @@ class SexCode(BaseModel):
 
     suffix: str
     code: str
+    label: str = ""
+    default: bool = False
 
 
 class PopulationCode(BaseModel):
-    """One All of Us population option and the field code(s) it contributes
-    ("max" contributes two)."""
+    """One All of Us (or gnomAD structural) population option and the field
+    code(s) it contributes ("max" contributes two)."""
 
     model_config = ConfigDict(extra="forbid")
 
     option: str
     codes: list[str]
+    label: str = ""
+    default: bool = False
+    # The code the *parser* reports for this population, which is not always the
+    # one the option id carries: gnomAD SV is suffix-named lowercase on GRCh38
+    # (`AF_afr` -> `afr`) and prefix-named uppercase on GRCh37 (`AFR_AF` ->
+    # `AFR`), and the two assemblies share option ids. Stated rather than
+    # derived, because deriving it needs a rule per source and getting one wrong
+    # mislabels a frequency without failing anything.
+    population: str = ""
 
 
 class GnomadAncestrySexFields(BaseModel):
@@ -192,6 +216,8 @@ class GnomadV2Subset(BaseModel):
 
     option: str
     prefix: str
+    label: str = ""
+    default: bool = False
 
 
 class GnomadV2Subpop(BaseModel):
@@ -202,6 +228,8 @@ class GnomadV2Subpop(BaseModel):
 
     option: str
     code: str
+    label: str = ""
+    default: bool = False
 
 
 class GnomadV2Ancestry(BaseModel):
@@ -215,6 +243,8 @@ class GnomadV2Ancestry(BaseModel):
     code: str
     sex_split: bool = True
     subpops: list[GnomadV2Subpop] = []
+    label: str = ""
+    default: bool = False
 
 
 class GnomadV2Fields(BaseModel):

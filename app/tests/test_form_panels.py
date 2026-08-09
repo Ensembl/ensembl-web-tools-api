@@ -665,48 +665,87 @@ def test_af_max_subpopulation_label_single_and_joined():
     assert form_panels.af_max_subpopulation_label("eur&afr") == "European / African"
 
 
-def test_form_defaults_match_the_config_parameter_defaults():
-    """A sub-option left at its default is never written into the submitted
-    parameters, so the form's default only takes effect if ConfigIniParams
-    carries the same one. They are declared in two files and nothing else keeps
-    them in step — the All of Us "Maximum subpopulation" default was set in the
-    form and had no effect until this was noticed."""
-    from app.vep.models.pipeline_model import ConfigIniParams
+def test_an_unsent_option_comes_back_at_the_form_s_declared_default():
+    """The form default and the submission default are now one statement.
 
-    panels = get_visible_panels(
-        species_taxonomy_id="9606", assembly_name="GRCh38.p14"
-    )
-    config_defaults = {
-        name: field.default
-        for name, field in ConfigIniParams.model_fields.items()
-        if isinstance(field.default, bool)
-    }
+    They used to be two. The form declared `default`, `ConfigIniParams` declared
+    a field default beside it, and nothing kept them in step — the All of Us
+    "Maximum subpopulation" default was set in the form and had no effect until
+    someone noticed. The 199 option fields are gone, so an unsent option is now
+    filled from the same `default` the form renders
+    (`ConfigIniParams._resolve_options` -> `submission_options.option_values`).
 
-    mismatched = []
+    So the guard moves with the mechanism: read what the form declares, submit
+    nothing, and require the option map to come back saying exactly that. The
+    complement of `test_option_ids_round_trip_into_a_submission`, which sends
+    every option — this one sends none.
+    """
+    for species, assembly in (
+        (HUMAN, "GRCh38.p14"),
+        (HUMAN, "GRCh37.p13"),
+        (MOUSE, "GRCm39"),
+    ):
+        declared = {}
+        undeclared = []
 
-    def walk(options):
-        for option in options:
+        def walk(option):
+            # A 'group' is a heading around nested controls, with no id or value
+            # of its own — and the only node whose `options` are controls. A
+            # select's `options` are its choices ({label, value}), not controls.
             if option.get("type") == "group":
-                walk(option.get("options", []))
-                continue
-            option_id, default = option.get("id"), option.get("default")
-            if (
-                isinstance(default, bool)
-                and option_id in config_defaults
-                and config_defaults[option_id] != default
-            ):
-                mismatched.append(
-                    f"{option_id}: form={default}, ConfigIniParams="
-                    f"{config_defaults[option_id]}"
-                )
-            walk(option.get("sub_options", []) or [])
+                for nested in option["options"]:
+                    walk(nested)
+                return
+            if "default" in option:
+                declared[option["id"]] = option["default"]
+            else:
+                undeclared.append(option["id"])
+            for sub in option.get("sub_options", []):
+                walk(sub)
 
-    for panel in panels:
-        walk(panel.get("options", []))
+        for panel in get_visible_panels(
+            species_taxonomy_id=species, assembly_name=assembly
+        ):
+            for option in panel["options"]:
+                walk(option)
 
-    assert not mismatched, "form and config defaults disagree:\n  " + "\n  ".join(
-        mismatched
-    )
+        # What this test replaces read its expectations off a field list that
+        # later emptied out, so it passed over nothing for a while. If the walk
+        # finds no controls, everything below is vacuous too.
+        assert declared, f"no options walked out of the form for {assembly}"
+        assert not undeclared, (
+            f"{assembly}: options the form declares no default for, so a "
+            "submission that omits them carries None: " + ", ".join(sorted(undeclared))
+        )
+
+        submitted = ConfigIniParams(
+            genome_id="g",
+            assembly_name=assembly,
+            species_taxonomy_id=species,
+            options={},
+        ).options
+
+        # Compare the type alongside the value: `True == 1` in Python, so a
+        # boolean widened to an int would otherwise slip through.
+        def typed(value):
+            return type(value).__name__, value
+
+        mismatched = [
+            f"{option_id}: form={declared[option_id]!r}, submitted="
+            + (
+                repr(submitted[option_id])
+                if option_id in submitted
+                else "<not in the map>"
+            )
+            for option_id in sorted(declared)
+            if option_id not in submitted
+            or typed(submitted[option_id]) != typed(declared[option_id])
+        ]
+        assert not mismatched, (
+            f"{assembly}: a submission that sends nothing does not come back at "
+            "the defaults the form declares:\n  " + "\n  ".join(mismatched)
+        )
+        assert set(submitted) == set(declared), assembly
 
 
 def test_panels_come_back_in_the_agreed_order():

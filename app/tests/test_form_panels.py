@@ -882,8 +882,10 @@ def test_the_spec_really_is_declaring_those_options():
         for panel in _golden()["human_grch38"]
         for option in panel["options"]
     }
-    assert declared == shown - AF_OPTION_IDS
-    assert {"hgvs", "pli", "nearest_exon_jb", "mutfunc", "protein"} <= declared
+    # Every one of them now — the allele frequencies included, their sub-option
+    # trees grown from the same `fields=` tables that write their config lines.
+    assert declared == shown
+    assert {"hgvs", "pli", "mutfunc", "protein"} | AF_OPTION_IDS <= declared
 
     # `pli` and the rest of the GRCh38-only set are declared only by
     # human_grch38.json, so GRCh37 does not see them — the same selection that
@@ -963,3 +965,64 @@ def test_an_entry_with_no_control_declares_no_form_block():
     entries = {e.id: e for e in resolve_merged_spec("GRCh38.p14").config.entries}
     assert entries["clinvar_short"].form is None
     assert entries["hgvsg"].form is None
+
+
+# --- the allele-frequency tables now have one source ------------------------
+
+
+def test_af_labels_come_from_the_same_tables_that_write_the_config_line():
+    """The ancestry/population labels are read off each entry's `fields=`
+    builder, not a second copy of the list.
+
+    That copy was real and had already drifted — the spec carried `grpmax` and
+    the form's table did not — which is what this whole move is for.
+    """
+    from app.vep.utils.spec_loader import load_merged_spec
+
+    entry = next(
+        e
+        for e in load_merged_spec("human_grch38").config.entries
+        if e.id == "gnomad_genomes"
+    )
+    ancestries = {a.code: a.label for a in entry.config.fields.ancestries if a.code}
+    assert ancestries["afr"] == "African & African-American"
+    assert ancestries["grpmax"] == "Maximum across all groups"
+
+    # The decode the results metadata uses reads exactly those.
+    assert form_panels.af_population_label("gnomad_genomes", "afr") == (
+        "African & African-American"
+    )
+    assert form_panels.af_population_label("gnomad_genomes", "grpmax") == (
+        "Maximum across all groups"
+    )
+    # ...and the form draws the same label for the same code.
+    panels = get_visible_panels(
+        species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14"
+    )
+    labels = {}
+
+    def walk(option):
+        if "id" in option:
+            labels[option["id"]] = option.get("label")
+        for child in option.get("sub_options", []) + option.get("options", []):
+            walk(child)
+
+    for panel in panels:
+        for option in panel["options"]:
+            walk(option)
+    assert labels["gnomad_genomes_afr"] == ancestries["afr"]
+    assert labels["gnomad_genomes_grpmax"] == ancestries["grpmax"]
+
+
+def test_the_two_gnomad_sv_sources_keep_their_own_labels():
+    """GRCh38's SV populations and GRCh37's share option ids but not labels, and
+    the parser reports different codes for them (`afr` against `AFR`).
+
+    Harvesting them into one table silently gave GRCh38 v2.1's wording, which is
+    why the population code is stated on the entry rather than derived from the
+    option id.
+    """
+    assert form_panels.af_population_label("gnomad_sv", "afr") == (
+        "African & African-American"  # v4.1, GRCh38
+    )
+    assert form_panels.af_population_label("gnomad_sv", "AFR") == "African"  # v2.1

@@ -11,7 +11,9 @@ carry a `category` label which the form uses to group them within a panel.
 
 import copy
 
-from vep.utils.spec_loader import resolve_merged_spec
+from functools import lru_cache
+
+from vep.utils.spec_loader import load_merged_spec, resolve_merged_spec
 
 # Every panel the form can show, in the order it shows them.
 #
@@ -60,304 +62,170 @@ def is_human_grch37(
     )
 
 
-# Human GRCh38-only sub-options.
+# --------------------------------------------------------------------------- #
+# Allele frequencies — the sub-option trees, built from the config entry's own  #
+# code tables.                                                                  #
+#                                                                              #
+# Each AF entry already had to name every ancestry/population to build its      #
+# `fields=` clause. Those entries now carry the label and the default too, so   #
+# the form is generated from the same list rather than a second copy of it —    #
+# the two had already drifted (`grpmax` was in one and not the other).          #
+#                                                                              #
+# What stays here is the *shape*: which toggles nest under which group, the     #
+# overlap-cutoff select, and the fact that a sex-split ancestry has three       #
+# children. That is layout, not data.                                          #
+# --------------------------------------------------------------------------- #
 
 
-# gnomAD exomes v4.1 (human GRCh38): a master toggle revealing an "Include UK
-# Biobank samples" switch and a "Genetic ancestry group" of ancestry toggles,
-# each with Both / Female / Male sub-options. Option/sub-option ids match the
-# ConfigIniParams parameter names, so selections round-trip into the ini.
-_GNOMAD_EXOMES_ANCESTRIES = [
-    ("all", "All"),
-    ("afr", "African & African-American"),
-    ("amr", "Admixed American"),
-    ("asj", "Ashkenazi Jewish"),
-    ("eas", "East Asian"),
-    ("fin", "Finnish"),
-    ("mid", "Middle Eastern"),
-    ("nfe", "Non-Finnish European"),
-]
+def _toggle(option_id: str, label: str, default: bool = False) -> dict:
+    return {"id": option_id, "label": label, "type": "boolean", "default": default}
 
 
-def _gnomad_sex_suboptions(option_id: str) -> list[dict]:
-    """Both / Female / Male toggles for one ancestry option (Both on = combined
-    sexes). `option_id` is the ancestry option's id, e.g. `gnomad_exomes_afr`."""
+def _af_fields(spec, option_id: str):
+    """The `fields=` builder of one AF entry, or None if this genome has no such
+    option (gnomAD CNV is GRCh38-only, All of Us likewise)."""
+    entry = next((e for e in spec.config.entries if e.id == option_id), None)
+    return entry.config.fields if entry is not None else None
+
+
+def _ancestry_options(fields) -> list[dict]:
+    """One toggle per ancestry, each with Combined / XX / XY beneath it unless
+    the ancestry takes no sex split (genomes' grpmax)."""
+    sexes = fields.sexes
+    placed: list[tuple[int, dict]] = []
+    for index, ancestry in enumerate(fields.ancestries):
+        option = _toggle(ancestry.option, ancestry.label, ancestry.default)
+        if ancestry.sex_split:
+            option["sub_options"] = [
+                _toggle(f"{ancestry.option}_{sex.suffix}", sex.label, sex.default)
+                for sex in sexes
+            ]
+        # `form_order` moves an ancestry to where the form wants it, which is not
+        # always where the emitted clause wants it (see AncestryCode).
+        placed.append(
+            (ancestry.form_order if ancestry.form_order is not None else index * 100,
+             option)
+        )
+    placed.sort(key=lambda pair: pair[0])
+    return [option for _order, option in placed]
+
+
+def _gnomad_ancestry_sex_option(fields) -> list[dict]:
+    """The sub-options of a gnomAD v4 exomes/genomes toggle: the UK Biobank
+    switch where the source has one, then the ancestry group."""
+    sub_options = []
+    if fields.include_ukb_option:
+        sub_options.append(
+            _toggle(fields.include_ukb_option, "Include UK BioBank samples", True)
+        )
+    sub_options.append(
+        {"type": "group", "label": "Genetic ancestry group",
+         "options": _ancestry_options(fields)}
+    )
+    return sub_options
+
+
+def _allofus_sub_options(fields) -> list[dict]:
+    """All of Us: a flat list of population toggles, no sex split — and no group
+    heading, since there is only the one group to name."""
     return [
-        {"id": f"{option_id}_both", "label": "Combined", "type": "boolean", "default": True},
-        {"id": f"{option_id}_female", "label": "XX", "type": "boolean", "default": False},
-        {"id": f"{option_id}_male", "label": "XY", "type": "boolean", "default": False},
+        {"type": "group",
+         "options": [
+             _toggle(population.option, population.label, population.default)
+             for population in fields.populations
+         ]}
     ]
 
 
-def _gnomad_exomes_option() -> dict:
-    """The gnomAD Exomes v4.1.1 option (freshly built so callers can mutate it)."""
-    ancestry_options = [
-        {
-            "id": f"gnomad_exomes_{anc}",
-            "label": label,
-            "type": "boolean",
-            "default": anc == "all",  # "All" pre-selected -> fields=AF baseline
-            "sub_options": _gnomad_sex_suboptions(f"gnomad_exomes_{anc}"),
-        }
-        for anc, label in _GNOMAD_EXOMES_ANCESTRIES
-    ]
+def _overlap_cutoff(option_id: str) -> dict:
+    """How much of the variant an SV/CNV must cover to count as overlapping."""
     return {
-        "id": "gnomad_exomes",
-        "label": "gnomAD Exomes v4.1.1",
-        "type": "boolean",
-        "default": False,
-        "sub_options": [
-            {"id": "gnomad_exomes_include_ukb", "label": "Include UK BioBank samples", "type": "boolean", "default": True},
-            {"type": "group", "label": "Genetic ancestry group", "options": ancestry_options},
+        "id": f"{option_id}_overlap_cutoff",
+        "label": "Overlap cutoff",
+        "type": "select",
+        "default": "100",
+        "options": [
+            {"label": "80%", "value": "80"},
+            {"label": "90%", "value": "90"},
+            {"label": "100%", "value": "100"},
         ],
     }
 
 
-# gnomAD genomes v4.1 (human GRCh38): as exomes but no UK Biobank toggle, plus
-# Amish / Remaining, and "Maximum across all groups" (grpmax) which has no sex
-# split (a plain toggle).
-_GNOMAD_GENOMES_ANCESTRIES = [
-    ("all", "All"),
-    ("afr", "African & African-American"),
-    ("amr", "Admixed American"),
-    ("asj", "Ashkenazi Jewish"),
-    ("eas", "East Asian"),
-    ("fin", "Finnish"),
-    ("mid", "Middle Eastern"),
-    ("nfe", "Non-Finnish European"),
-    ("ami", "Amish"),
-    ("remaining", "Remaining"),
-]
+def _structural_sub_options(fields, option_id: str) -> list[dict]:
+    """gnomAD SV / CNV: an overlap-cutoff select, then the per-population
+    frequency toggles.
 
-
-def _gnomad_genomes_option() -> dict:
-    """The gnomAD Genomes v4.1.1 option (freshly built so callers can mutate it)."""
-    ancestry_options = [
-        {
-            "id": f"gnomad_genomes_{anc}",
-            "label": label,
-            "type": "boolean",
-            "default": anc == "all",  # "All" pre-selected -> fields=AF baseline
-            "sub_options": _gnomad_sex_suboptions(f"gnomad_genomes_{anc}"),
-        }
-        for anc, label in _GNOMAD_GENOMES_ANCESTRIES
+    The first population is the master option's own code — SVTYPE, which rides
+    along whenever the option is on — so it is emitted by the entry rather than
+    as a control of its own.
+    """
+    return [
+        _overlap_cutoff(option_id),
+        {"type": "group",
+         "options": [
+             _toggle(population.option, population.label, population.default)
+             for population in fields.populations
+             if population.option != option_id
+         ]},
     ]
-    # grpmax (max across groups) has no XX/XY split -> a plain toggle. On by
-    # default and placed directly under "All", the same pairing All of Us makes
-    # with its maximum subpopulation: the overall frequency plus the highest any
-    # group reaches are the two that are useful without knowing which population
-    # matters for a given variant, so they belong together at the top rather
-    # than with the individual ancestries.
-    #
-    # Display order only. The `fields=` order in the config line comes from the
-    # spec's `ancestries` list, where grpmax stays last.
-    ancestry_options.insert(1, {
-        "id": "gnomad_genomes_grpmax",
-        "label": "Maximum across all groups",
-        "type": "boolean",
-        "default": True,
-    })
-    return {
-        "id": "gnomad_genomes",
-        "label": "gnomAD Genomes v4.1.1",
-        "type": "boolean",
-        "default": False,
-        "sub_options": [
-            {"type": "group", "label": "Genetic ancestry group", "options": ancestry_options},
-        ],
-    }
 
 
-# NIH All of Us (human GRCh38): a flat list of population toggles (no sex split).
-# "Maximum subpopulation" contributes two fields (gvs_max_af + gvs_max_subpop);
-# that is handled by the ini builder, not the form.
-_ALLOFUS_POPULATIONS = [
-    ("all", "All"),
-    ("max", "Maximum subpopulation"),
-    ("afr", "African"),
-    ("amr", "Latino/Ad Mixed American"),
-    ("eas", "East Asian"),
-    ("eur", "European"),
-    ("mid", "Middle Eastern"),
-    ("sas", "South Asian"),
-    ("oth", "Other"),
-]
-
-
-def _allofus_option() -> dict:
-    """The NIH All of Us option (freshly built so callers can mutate it)."""
-    population_options = [
-        {
-            "id": f"allofus_{pop}",
-            "label": label,
-            "type": "boolean",
-            # Suggested defaults: the overall AF, plus the maximum subpopulation
-            # — the two that are useful without knowing which population matters
-            # for a given variant.
-            "default": pop in ("all", "max"),
-        }
-        for pop, label in _ALLOFUS_POPULATIONS
-    ]
-    return {
-        "id": "allofus",
-        "label": "NIH All of Us",
-        "type": "boolean",
-        "default": False,
-        # A label-less group keeps the population list full-width (reusing the
-        # nested-group renderer) without adding a heading.
-        "sub_options": [
-            {"type": "group", "options": population_options},
-        ],
-    }
-
-
-# gnomAD SV v4.1 (human GRCh38): a flat list of AF toggles (no sex split). The
-# SV id (`gnomAD_SV`) and `gnomAD_SV_SVTYPE` are always returned; these gate the
-# per-population AF columns. Population code -> label; "" is the overall AF.
-_GNOMAD_SV_POPULATIONS = [
-    ("", "All"),
-    ("afr", "African & African-American"),
-    ("ami", "Amish"),
-    ("amr", "Admixed American"),
-    ("asj", "Ashkenazi Jewish"),
-    ("eas", "East Asian"),
-    ("fin", "Finnish"),
-    ("mid", "Middle Eastern"),
-    ("nfe", "Non-Finnish European"),
-    ("rmi", "Remaining"),
-    ("sas", "South Asian"),
-]
-
-# gnomAD SV v2.1 (human GRCh37): 5 continental populations, PREFIX-named in the
-# VCF (`AFR_AF`, not v4's suffix `AF_afr`) and broader (EUR = all Europeans, not
-# NFE). (form-option suffix [lowercase], VCF column code [uppercase], label).
-_GNOMAD_SV_V2_POPULATIONS = [
-    ("afr", "AFR", "African"),
-    ("amr", "AMR", "Admixed American"),
-    ("eas", "EAS", "East Asian"),
-    ("eur", "EUR", "European"),
-    ("oth", "OTH", "Other"),
-]
-
-
-# The allele-frequency sources split into two kinds of data, so the form groups
-# them under these category headings (see `groupByCategory` on the frontend)
-# rather than listing all of them in one column.
-_AF_SHORT_VARIANTS = "Short variants"
-_AF_STRUCTURAL_VARIANTS = "Structural variants"
-
-
-def _in_category(option: dict, category: str) -> dict:
-    """The option, tagged with the category heading it sits under."""
-    return {**option, "category": category}
-
-
-def _gnomad_sv_af_option_id(code: str) -> str:
-    """Form option id for a gnomAD SV AF population (`""` = overall)."""
-    return "gnomad_sv_af" if code == "" else f"gnomad_sv_af_{code}"
-
-
-def _gnomad_sv_option_from(label: str, populations: list[tuple[str, str]]) -> dict:
-    """A gnomAD SV option: an overlap-cutoff select plus per-population AF toggles
-    (overall AF pre-selected). SVTYPE + the SV id ride along always. `populations`
-    is (option-code, label), option-code "" = the overall AF. Shared by the v4.1
-    (GRCh38) and v2.1 (GRCh37) options — they differ only in label + population
-    set (the differing VCF column codes live in each assembly's config entry)."""
-    population_options = [
-        {
-            "id": _gnomad_sv_af_option_id(code),
-            "label": pop_label,
-            "type": "boolean",
-            "default": code == "",  # overall AF pre-selected
-        }
-        for code, pop_label in populations
-    ]
-    return {
-        "id": "gnomad_sv",
-        "label": label,
-        "type": "boolean",
-        "default": False,
-        "sub_options": [
-            {
-                "id": "gnomad_sv_overlap_cutoff",
-                "label": "Overlap cutoff",
-                "type": "select",
-                "default": "100",
+def _gnomad_v2_sub_options(fields) -> list[dict]:
+    """gnomAD v2: a subset group, then ancestries — each with its sub-populations
+    and sexes beneath it."""
+    ancestry_options = []
+    for ancestry in fields.ancestries:
+        option = _toggle(ancestry.option, ancestry.label, ancestry.default)
+        if not ancestry.sex_split:
+            # popmax: a plain row, no sexes and no sub-populations.
+            ancestry_options.append(option)
+            continue
+        option["sub_options"] = [
+            _toggle(f"{ancestry.option}_{sex.suffix}", sex.label, sex.default)
+            for sex in fields.sexes
+        ]
+        if ancestry.subpops:
+            # NFE and EAS divide further, in a group of their own beneath the
+            # sexes rather than alongside them.
+            option["sub_options"].append({
+                "type": "group",
+                "label": "Sub-populations",
                 "options": [
-                    {"label": "80%", "value": "80"},
-                    {"label": "90%", "value": "90"},
-                    {"label": "100%", "value": "100"},
+                    _toggle(subpop.option, subpop.label, subpop.default)
+                    for subpop in ancestry.subpops
                 ],
-            },
-            {"type": "group", "options": population_options},
-        ],
-    }
-
-
-def _gnomad_sv_option() -> dict:
-    return _gnomad_sv_option_from("gnomAD SV v4.1", _GNOMAD_SV_POPULATIONS)
-
-
-def _gnomad_sv_v2_option() -> dict:
-    populations = [("", "All")] + [
-        (code, label) for code, _col, label in _GNOMAD_SV_V2_POPULATIONS
+            })
+        ancestry_options.append(option)
+    return [
+        {"type": "group", "label": "Subset",
+         "options": [
+             _toggle(subset.option, subset.label, subset.default)
+             for subset in fields.subsets
+         ]},
+        {"type": "group", "label": "Genetic ancestry group",
+         "options": ancestry_options},
     ]
-    return _gnomad_sv_option_from("gnomAD SV v2.1", populations)
 
 
-# gnomAD CNV v4.1 (human GRCh38): like gnomAD SV, but *sample* frequencies (SF)
-# and a slightly different population set (no Amish; "remaining" spelled out).
-_GNOMAD_CNV_POPULATIONS = [
-    ("", "All"),
-    ("afr", "African & African-American"),
-    ("amr", "Admixed American"),
-    ("asj", "Ashkenazi Jewish"),
-    ("eas", "East Asian"),
-    ("fin", "Finnish"),
-    ("mid", "Middle Eastern"),
-    ("nfe", "Non-Finnish European"),
-    ("sas", "South Asian"),
-    ("remaining", "Remaining"),
-]
+def _af_sub_options(fields, option_id: str) -> list[dict]:
+    """The sub-option tree for one allele-frequency option, chosen by the same
+    `fields=` builder that writes its config line.
 
-
-def _gnomad_cnv_sf_option_id(code: str) -> str:
-    """Form option id for a gnomAD CNV SF population (`""` = overall)."""
-    return "gnomad_cnv_sf" if code == "" else f"gnomad_cnv_sf_{code}"
-
-
-def _gnomad_cnv_option() -> dict:
-    """The gnomAD CNV v4.1 option: an overlap-cutoff select plus per-population
-    SF toggles (overall SF pre-selected). SVTYPE + the CNV id ride along always."""
-    population_options = [
-        {
-            "id": _gnomad_cnv_sf_option_id(code),
-            "label": label,
-            "type": "boolean",
-            "default": code == "",  # overall SF pre-selected
-        }
-        for code, label in _GNOMAD_CNV_POPULATIONS
-    ]
-    return {
-        "id": "gnomad_cnv",
-        "label": "gnomAD CNV v4.1",
-        "type": "boolean",
-        "default": False,
-        "sub_options": [
-            {
-                "id": "gnomad_cnv_overlap_cutoff",
-                "label": "Overlap cutoff",
-                "type": "select",
-                "default": "100",
-                "options": [
-                    {"label": "80%", "value": "80"},
-                    {"label": "90%", "value": "90"},
-                    {"label": "100%", "value": "100"},
-                ],
-            },
-            {"type": "group", "options": population_options},
-        ],
-    }
+    Every code these draw on — ancestry, population, subset, sex — comes from
+    that builder's own tables, which now carry the label and the default beside
+    the field code. One list, two consumers.
+    """
+    builder = fields.builder
+    if builder == "gnomad_ancestry_sex":
+        return _gnomad_ancestry_sex_option(fields)
+    if builder == "allofus_populations":
+        return _allofus_sub_options(fields)
+    if builder == "gnomad_structural":
+        return _structural_sub_options(fields, option_id)
+    if builder == "gnomad_v2":
+        return _gnomad_v2_sub_options(fields)
+    raise ValueError(f"no form sub-options known for builder {builder!r}")
 
 
 # --------------------------------------------------------------------------- #
@@ -371,32 +239,59 @@ def _gnomad_cnv_option() -> dict:
 # keeping its own copy of these tables.
 # --------------------------------------------------------------------------- #
 
-# gnomAD ancestry codes -> labels. Genomes is a superset of exomes, so its list
-# covers both sources; grpmax (genomes-only, added separately as a plain toggle)
-# is folded in. The form's "all" ancestry is the overall AF, which the parser
-# reports as an empty population code, so it is left out of the map.
-_GNOMAD_ANCESTRY_LABELS = {
-    code: label for code, label in _GNOMAD_GENOMES_ANCESTRIES if code != "all"
-} | {"grpmax": "Maximum across all groups"}
+# Built from the same tables the form is: each AF entry's `fields=` builder
+# names every ancestry/population and now carries its label, so there is one
+# vocabulary rather than a decode-side copy of it.
+#
+# Keyed by the *population code the parser reports* (see
+# `results_filters.af_source_descriptor`), which each source spells its own way:
+# a v4 ancestry's `code` is already it, while the flat sources encode it in the
+# option id after a per-source prefix.
+@lru_cache(maxsize=1)
+def _af_label_tables() -> dict[str, dict[str, str]]:
+    """population code -> label, per AF source, across both human assemblies.
 
-# All of Us population codes -> labels ("all" is the overall AF -> empty code).
-_ALLOFUS_POPULATION_LABELS = {
-    code: label for code, label in _ALLOFUS_POPULATIONS if code != "all"
-}
+    Both, because a source's codes differ by assembly and the decode has only
+    the code to go on: gnomAD SV is suffix-named lowercase on GRCh38 and
+    prefix-named uppercase on GRCh37, which is why they can share one table.
+    """
+    tables: dict[str, dict[str, str]] = {
+        "gnomad_ancestry": {}, "allofus": {}, "gnomad_sv": {}, "gnomad_cnv": {},
+        "gnomad_v2_ancestry": {}, "gnomad_v2_subpop": {}, "gnomad_v2_subset": {},
+    }
+    for genome in ("human_grch38", "human_grch37"):
+        for entry in load_merged_spec(genome).config.entries:
+            fields = getattr(entry.config, "fields", None)
+            builder = getattr(fields, "builder", None)
+            if builder is None:
+                continue
+            if builder == "gnomad_ancestry_sex":
+                for ancestry in fields.ancestries:
+                    if ancestry.code and ancestry.label:
+                        tables["gnomad_ancestry"][ancestry.code] = ancestry.label
+            if builder == "gnomad_v2":
+                # A separate table: v2 codes are decoded by their own function
+                # (the grammar differs), and `popmax` would otherwise shadow a
+                # v4 ancestry of the same name.
+                for ancestry in fields.ancestries:
+                    if ancestry.code and ancestry.label:
+                        tables["gnomad_v2_ancestry"][ancestry.code] = ancestry.label
+                    for subpop in ancestry.subpops:
+                        if subpop.label:
+                            tables["gnomad_v2_subpop"][subpop.code] = subpop.label
+                for subset in fields.subsets:
+                    if subset.prefix and subset.label:
+                        tables["gnomad_v2_subset"][subset.prefix] = subset.label
+            if builder in ("allofus_populations", "gnomad_structural"):
+                for population in fields.populations:
+                    if population.population and population.label:
+                        tables[entry.id][population.population] = population.label
+    return tables
 
-# gnomAD SV population codes -> labels ("" is the overall AF -> "All"). Both the
-# v4.1 (GRCh38, suffix-named, lowercase codes) and v2.1 (GRCh37, prefix-named,
-# UPPERCASE column codes) sets — disjoint by case, so they coexist in one map.
-# The v2 keys are the VCF column codes (AFR/AMR/…), which is what the parse and
-# `af_source_descriptor` derive from the columns.
-_GNOMAD_SV_POPULATION_LABELS = {
-    code: label for code, label in _GNOMAD_SV_POPULATIONS if code != ""
-} | {col: label for _code, col, label in _GNOMAD_SV_V2_POPULATIONS}
 
-# gnomAD CNV population codes -> labels ("" is the overall SF -> "All").
-_GNOMAD_CNV_POPULATION_LABELS = {
-    code: label for code, label in _GNOMAD_CNV_POPULATIONS if code != ""
-}
+def _labels_for(source: str) -> dict[str, str]:
+    return _af_label_tables()[source]
+
 
 # gnomAD sex-split suffixes — shown as the chromosomal notation (matching the
 # form's XX/XY sub-option labels).
@@ -423,7 +318,7 @@ def _gnomad_population_label(code: str) -> str:
         sex = _SEX_LABELS[rest]
         rest = ""
 
-    ancestry = "All" if rest == "" else _GNOMAD_ANCESTRY_LABELS.get(rest, rest)
+    ancestry = "All" if rest == "" else _labels_for("gnomad_ancestry").get(rest, rest)
     parts = [ancestry]
     if sex:
         parts.append(sex)
@@ -442,11 +337,11 @@ def af_population_label(source: str, code: str) -> str:
     if code == "":
         return "All"
     if source == "all_of_us":
-        return _ALLOFUS_POPULATION_LABELS.get(code, code)
+        return _labels_for("allofus").get(code, code)
     if source == "gnomad_sv":
-        return _GNOMAD_SV_POPULATION_LABELS.get(code, code)
+        return _labels_for("gnomad_sv").get(code, code)
     if source == "gnomad_cnv":
-        return _GNOMAD_CNV_POPULATION_LABELS.get(code, code)
+        return _labels_for("gnomad_cnv").get(code, code)
     # gnomAD v2 (GRCh37) codes carry the `AF` token (the parse captures the whole
     # field, subset prefix and all); v4 codes never do.
     if source in ("gnomad_exomes", "gnomad_genomes") and "AF" in code.split("_"):
@@ -462,77 +357,6 @@ def af_max_subpopulation_label(raw: str) -> str:
     )
 
 
-def _add_grch38_allele_frequencies(panels: dict[str, dict]) -> None:
-    """The GRCh38 allele-frequency options.
-
-    The last options still built here rather than declared: each is an ancestry
-    (or population) table crossed with a sex split, ~110 nodes for this
-    assembly. Expanding them into the spec would be a fourth copy of tables the
-    config entries already carry — see docs/form-panels-to-json.md; the move is
-    to give those a label and generate both from one list.
-    """
-    panels["allele_frequencies"]["options"].extend([
-        _in_category(_gnomad_exomes_option(), _AF_SHORT_VARIANTS),
-        _in_category(_gnomad_genomes_option(), _AF_SHORT_VARIANTS),
-        _in_category(_allofus_option(), _AF_SHORT_VARIANTS),
-        _in_category(_gnomad_sv_option(), _AF_STRUCTURAL_VARIANTS),
-        _in_category(_gnomad_cnv_option(), _AF_STRUCTURAL_VARIANTS),
-    ])
-
-
-_GNOMAD_V2_EXOMES_SUBSETS = [
-    ("full", "Full dataset"), ("controls", "Controls"), ("non_neuro", "Non-neuro"),
-    ("non_topmed", "Non-TOPMed"), ("non_cancer", "Non-cancer"),
-]
-_GNOMAD_V2_GENOMES_SUBSETS = [
-    ("full", "Full dataset"), ("controls", "Controls"),
-    ("non_neuro", "Non-neuro"), ("non_topmed", "Non-TOPMed"),
-]
-_GNOMAD_V2_EXOMES_ANCESTRIES = [
-    ("all", "All", []),
-    ("popmax", "Maximum across populations", []),
-    ("afr", "African & African-American", []),
-    ("amr", "Admixed American", []),
-    ("asj", "Ashkenazi Jewish", []),
-    ("eas", "East Asian", [("kor", "Korean"), ("jpn", "Japanese"), ("oea", "Other East Asian")]),
-    ("fin", "Finnish", []),
-    ("nfe", "Non-Finnish European",
-     [("seu", "Southern European"), ("bgr", "Bulgarian"), ("onf", "Other non-Finnish European"),
-      ("swe", "Swedish"), ("nwe", "North-Western European"), ("est", "Estonian")]),
-    ("oth", "Other / uncertain", []),
-    ("sas", "South Asian", []),
-]
-_GNOMAD_V2_GENOMES_ANCESTRIES = [
-    ("all", "All", []),
-    ("popmax", "Maximum across populations", []),
-    ("afr", "African & African-American", []),
-    ("amr", "Admixed American", []),
-    ("asj", "Ashkenazi Jewish", []),
-    ("eas", "East Asian", []),
-    ("fin", "Finnish", []),
-    ("nfe", "Non-Finnish European",
-     [("seu", "Southern European"), ("onf", "Other non-Finnish European"),
-      ("nwe", "North-Western European"), ("est", "Estonian")]),
-    ("oth", "Other / uncertain", []),
-]
-
-# gnomAD v2 code -> label vocabularies, derived from the form data above so the
-# results labels and the form sub-options read the same. Subset prefixes exclude
-# `full` (empty prefix); ancestry excludes the synthetic `all`/`popmax` rows.
-_GNOMAD_V2_SUBSET_LABELS = {
-    code: lbl for code, lbl in _GNOMAD_V2_EXOMES_SUBSETS if code != "full"
-}
-_GNOMAD_V2_ANCESTRY_LABELS = {
-    code: lbl for code, lbl, _ in _GNOMAD_V2_EXOMES_ANCESTRIES
-    if code not in ("all", "popmax")
-}
-_GNOMAD_V2_SUBPOP_LABELS = {
-    sp: splbl
-    for _code, _lbl, subpops in _GNOMAD_V2_EXOMES_ANCESTRIES
-    for sp, splbl in subpops
-}
-
-
 def _gnomad_v2_population_label(code: str) -> str:
     """Decode a gnomAD v2 (GRCh37) population code — the raw AF field name the
     parse captures, e.g. `AF_afr`, `controls_AF_afr_male`, `AF_nfe_seu`,
@@ -540,7 +364,7 @@ def _gnomad_v2_population_label(code: str) -> str:
     `[<subset>_]AF[_<anc>[_<subpop>]][_<sex>]`; `AF_popmax` is a single field."""
     rest = code
     subset = None
-    for prefix, lbl in _GNOMAD_V2_SUBSET_LABELS.items():
+    for prefix, lbl in _labels_for("gnomad_v2_subset").items():
         if rest.startswith(f"{prefix}_AF"):
             subset = lbl
             rest = rest[len(prefix) + 1:]
@@ -558,10 +382,11 @@ def _gnomad_v2_population_label(code: str) -> str:
         ancestry = "All"
     elif "_" in rest:
         anc, subpop = rest.split("_", 1)
-        ancestry = (f"{_GNOMAD_V2_ANCESTRY_LABELS.get(anc, anc)} › "
-                    f"{_GNOMAD_V2_SUBPOP_LABELS.get(subpop, subpop)}")
+        ancestry_label = _labels_for("gnomad_v2_ancestry").get(anc, anc)
+        subpop_label = _labels_for("gnomad_v2_subpop").get(subpop, subpop)
+        ancestry = f"{ancestry_label} › {subpop_label}"
     else:
-        ancestry = _GNOMAD_V2_ANCESTRY_LABELS.get(rest, rest)
+        ancestry = _labels_for("gnomad_v2_ancestry").get(rest, rest)
     parts = [ancestry]
     if sex:
         parts.append(sex)
@@ -570,100 +395,33 @@ def _gnomad_v2_population_label(code: str) -> str:
     return " · ".join(parts)
 
 
-def _gnomad_v2_option(prefix: str, label: str, subsets, ancestries) -> dict:
-    """A gnomAD v2 master option with a Subset group and a Genetic-ancestry group
-    (each ancestry carrying Combined/XX/XY, NFE/EAS also sub-population toggles;
-    popmax is a plain row)."""
-    subset_options = [
-        {"id": f"{prefix}_subset_{code}", "label": lbl, "type": "boolean",
-         "default": code == "full"}
-        for code, lbl in subsets
-    ]
-    ancestry_options = []
-    for code, lbl, subpops in ancestries:
-        option_id = f"{prefix}_{code}"
-        if code == "popmax":  # no sex split, no sub-pops
-            ancestry_options.append(
-                {"id": option_id, "label": lbl, "type": "boolean", "default": False}
-            )
-            continue
-        option = {
-            "id": option_id, "label": lbl, "type": "boolean",
-            "default": code == "all",  # All pre-selected -> fields=AF baseline
-            "sub_options": _gnomad_sex_suboptions(option_id),
-        }
-        if subpops:
-            option["sub_options"].append({
-                "type": "group", "label": "Sub-populations",
-                "options": [
-                    {"id": f"{prefix}_{code}_{sp}", "label": splbl,
-                     "type": "boolean", "default": False}
-                    for sp, splbl in subpops
-                ],
-            })
-        ancestry_options.append(option)
-    return {
-        "id": prefix, "label": label, "type": "boolean", "default": False,
-        "sub_options": [
-            {"type": "group", "label": "Subset", "options": subset_options},
-            {"type": "group", "label": "Genetic ancestry group", "options": ancestry_options},
-        ],
-    }
-
-
-def _gnomad_v2_exomes_option() -> dict:
-    return _gnomad_v2_option(
-        "gnomad_exomes", "gnomAD Exomes v2.1.1",
-        _GNOMAD_V2_EXOMES_SUBSETS, _GNOMAD_V2_EXOMES_ANCESTRIES,
-    )
-
-
-def _gnomad_v2_genomes_option() -> dict:
-    return _gnomad_v2_option(
-        "gnomad_genomes", "gnomAD Genomes v2.1",
-        _GNOMAD_V2_GENOMES_SUBSETS, _GNOMAD_V2_GENOMES_ANCESTRIES,
-    )
-
-
-def _add_grch37_allele_frequencies(panels: dict[str, dict]) -> None:
-    """The GRCh37 allele-frequency options — gnomAD v2, whose grammar differs
-    from v4's (a subset prefix before `AF`, sub-populations under an ancestry,
-    male/female rather than XX/XY)."""
-    panels["allele_frequencies"]["options"].extend([
-        _in_category(_gnomad_v2_exomes_option(), _AF_SHORT_VARIANTS),
-        _in_category(_gnomad_v2_genomes_option(), _AF_SHORT_VARIANTS),
-        _in_category(_gnomad_sv_v2_option(), _AF_STRUCTURAL_VARIANTS),
-    ])
-
-
-# The step between two options this module still writes out. A `form.order`
-# lands between them (150 sits between the 2nd and 3rd), so an entry can place
-# itself without the coded list being renumbered.
-_CODED_OPTION_STEP = 100
-
-
 def _spec_form_options(
     assembly_name: str | None,
 ) -> list[tuple[str, int, dict]]:
-    """Options declared by their own config entry: `(panel id, order, option)`.
+    """Every option the form shows: `(panel id, order, option)`.
 
-    Two entries carry a `form` block today — `nearest_exon_jb` and `pli`;
-    everything else still comes from the literals above. See
-    docs/form-panels-to-json.md for where this goes.
+    All of them come from here now — the config entry declares the control, and
+    an allele-frequency entry additionally grows its sub-option tree from the
+    same `fields=` tables that write its config line (see `_af_sub_options`).
 
     Read through the *assembled* spec rather than the raw documents, so an
-    option is offered exactly where its entry is: `pli` is declared only by
-    `human_grch38.json`, so GRCh37 has nothing to place and nothing here says
-    so. That is already how the parse plugin and display option are selected
-    (see `_select_library`), and it is the per-assembly branching this module
-    exists to do.
+    option is offered exactly where its entry is: `pli` and All of Us are
+    declared only by `human_grch38.json`, so GRCh37 has nothing to place and
+    nothing here says so. That is already how the parse plugin and the display
+    option are selected (see `_select_library`), and it is the per-assembly
+    branching this module used to spell out.
     """
     spec = resolve_merged_spec(assembly_name or "")
-    return [
-        (entry.form.panel, entry.form.order, entry.form.as_panel_option(entry.id))
-        for entry in spec.config.entries
-        if entry.form is not None
-    ]
+    placed = []
+    for entry in spec.config.entries:
+        if entry.form is None:
+            continue
+        option = entry.form.as_panel_option(entry.id)
+        fields = getattr(entry.config, "fields", None)
+        if fields is not None and getattr(fields, "builder", None):
+            option["sub_options"] = _af_sub_options(fields, entry.id)
+        placed.append((entry.form.panel, entry.form.order, option))
+    return placed
 
 
 def _place_spec_options(panels: list[dict], assembly_name: str | None) -> None:
@@ -722,24 +480,11 @@ def get_visible_panels(
     that ended up with nothing in it.
     """
     panels = [dict(panel, options=[]) for panel in _PANELS]
-    by_id = {panel["id"]: panel for panel in panels}
 
-    # Every non-AF option, placed where its `form` block says.
+    # Every option, placed where its `form` block says — allele frequencies
+    # included, their sub-option trees grown from the same tables that write
+    # their config lines.
     _place_spec_options(panels, assembly_name)
-
-    # The allele frequencies are the one set still built rather than declared,
-    # and the two assemblies publish different grammars.
-    #
-    # Keyed on the assembly alone, as `resolve_merged_spec` keys the options
-    # above — otherwise a call without `species_taxonomy_id` would get every
-    # human option and no frequencies, which is worse than either answer. The
-    # spec has always been per-assembly (only `assembly_name` is available at
-    # submission), so this makes the form agree with the thing it configures.
-    assembly = assembly_name or ""
-    if assembly.startswith("GRCh38"):
-        _add_grch38_allele_frequencies(by_id)
-    elif assembly.startswith("GRCh37"):
-        _add_grch37_allele_frequencies(by_id)
 
     # A panel with nothing to show is not shown. This is what used to be said
     # three times over — "these panels are human-only", "create the panel if the

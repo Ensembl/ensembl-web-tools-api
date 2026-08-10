@@ -151,7 +151,7 @@ def base_config_lines(
     because, when the option-driven lines move to the declarative config spec,
     these stay in the backend: they are VEP invariants plus the two
     runtime-resolved paths (`gff`/`fasta`), which cannot be static spec data.
-    See app/vep/docs/design/merged-annotation-spec.md §4.5.
+    See app/vep/docs/design/technical-notes.md (What the specs replaced).
 
     Assembly gating mirrors ConfigIniParams' own prefix checks:
       mane 1                 — human GRCh38 and the mouse reference (GRCm39) only
@@ -260,7 +260,7 @@ class ConfigIniParams(BaseModel):
         flag lines the config interpreter emits from `config_spec` — the
         `.config` half of the job's pinned merged spec. A thin runtime over the
         declarative spec; the option→line rules are data, not code here. See
-        app/vep/docs/design/merged-annotation-spec.md."""
+        app/vep/docs/design/spec-and-extension-guide.md."""
         vep_support_location = get_vep_support_location(self.genome_id)
         self.gff = vep_support_location["gff_location"]
         self.fasta = vep_support_location["faa_location"]

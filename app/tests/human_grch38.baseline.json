@@ -3877,7 +3877,7 @@
                 "label": "Gap frequency",
                 "from": "popeve.gap_frequency",
                 "format": "num",
-                "help": "Authors recommend filtering if > 0.5",
+                "help": "Authors recommend filtering the scores if the gap frequency > 0.5",
                 "help_link": {
                   "href": "https://europepmc.org/article/MED/41286104",
                   "label": "popEVE paper"

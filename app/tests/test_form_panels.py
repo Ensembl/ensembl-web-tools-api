@@ -825,14 +825,19 @@ def test_genes_and_transcripts_options_are_grouped_into_three_categories():
         grouped.setdefault(option.get("category"), []).append(option["id"])
 
     assert None not in grouped, "every option should be categorised"
-    assert list(grouped) == ["Locations", "Annotations", "Constraint"]
+    assert list(grouped) == ["Locations", "Additional molecular consequence predictions", "Constraint"]
     assert grouped["Locations"] == [
         "tss_distance",
         "nearest_gene",
         "nearest_exon_jb",
         "updownstream_distance",
     ]
-    assert grouped["Annotations"] == ["utrannotator", "nmd", "riboseqorfs", "go"]
+    assert grouped["Additional molecular consequence predictions"] == [
+        "utrannotator",
+        "nmd",
+        "riboseqorfs",
+        "go",
+    ]
     # pLI is GRCh38-only, so it arrives with the GRCh38 additions and lands
     # after the two the 37/38 tier contributes — same group, appended.
     assert grouped["Constraint"] == ["loeuf", "dosage_sensitivity", "pli"]
@@ -869,8 +874,8 @@ def test_a_species_with_fewer_options_keeps_the_same_category_names():
 
     assert None not in grouped
     # Mouse has GO but none of the human-only annotations or conservation data.
-    assert list(grouped) == ["Locations", "Annotations"]
-    assert grouped["Annotations"] == ["go"]
+    assert list(grouped) == ["Locations", "Additional molecular consequence predictions"]
+    assert grouped["Additional molecular consequence predictions"] == ["go"]
 
 
 def test_a_non_human_species_gets_neither_the_panel_nor_the_options():

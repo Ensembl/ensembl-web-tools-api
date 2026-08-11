@@ -938,14 +938,14 @@
           "label": "UTRAnnotator",
           "type": "boolean",
           "default": false,
-          "category": "Annotations"
+          "category": "Additional molecular consequence predictions"
         },
         {
           "id": "nmd",
           "label": "NMD",
           "type": "boolean",
           "default": false,
-          "category": "Annotations"
+          "category": "Additional molecular consequence predictions"
         },
         {
           "id": "loeuf",
@@ -974,14 +974,14 @@
           "label": "RiboSeqORFs",
           "type": "boolean",
           "default": false,
-          "category": "Annotations"
+          "category": "Additional molecular consequence predictions"
         },
         {
           "id": "go",
           "label": "Gene Ontology",
           "type": "boolean",
           "default": false,
-          "category": "Annotations"
+          "category": "Additional molecular consequence predictions"
         },
         {
           "id": "pli",
@@ -2023,14 +2023,14 @@
           "label": "UTRAnnotator",
           "type": "boolean",
           "default": false,
-          "category": "Annotations"
+          "category": "Additional molecular consequence predictions"
         },
         {
           "id": "nmd",
           "label": "NMD",
           "type": "boolean",
           "default": false,
-          "category": "Annotations"
+          "category": "Additional molecular consequence predictions"
         },
         {
           "id": "loeuf",
@@ -2059,7 +2059,7 @@
           "label": "Gene Ontology",
           "type": "boolean",
           "default": false,
-          "category": "Annotations"
+          "category": "Additional molecular consequence predictions"
         }
       ]
     },
@@ -2228,7 +2228,7 @@
           "label": "Gene Ontology",
           "type": "boolean",
           "default": false,
-          "category": "Annotations"
+          "category": "Additional molecular consequence predictions"
         }
       ]
     },
@@ -2345,7 +2345,7 @@
           "label": "Gene Ontology",
           "type": "boolean",
           "default": false,
-          "category": "Annotations"
+          "category": "Additional molecular consequence predictions"
         }
       ]
     },

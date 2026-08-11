@@ -134,7 +134,7 @@
         ],
         "form": {
           "panel": "genes_and_transcripts",
-          "category": "Annotations",
+          "category": "Additional molecular consequence predictions",
           "order": 800,
           "label": "RiboSeqORFs",
           "type": "boolean",
@@ -469,7 +469,7 @@
         ],
         "form": {
           "panel": "genes_and_transcripts",
-          "category": "Annotations",
+          "category": "Additional molecular consequence predictions",
           "order": 900,
           "label": "Gene Ontology",
           "type": "boolean",
@@ -698,7 +698,7 @@
         ],
         "form": {
           "panel": "genes_and_transcripts",
-          "category": "Annotations",
+          "category": "Additional molecular consequence predictions",
           "order": 400,
           "label": "UTRAnnotator",
           "type": "boolean",
@@ -725,7 +725,7 @@
         ],
         "form": {
           "panel": "genes_and_transcripts",
-          "category": "Annotations",
+          "category": "Additional molecular consequence predictions",
           "order": 500,
           "label": "NMD",
           "type": "boolean",

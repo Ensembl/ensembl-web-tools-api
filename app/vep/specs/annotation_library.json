@@ -49,40 +49,39 @@
         "scope": "transcript",
         "output": "mavedb",
         "csq_fields": [
+          "MaveDB_urn",
           "MaveDB_score",
-          "MaveDB_accession",
-          "MaveDB_pro"
+          "MaveDB_doi"
         ],
         "require_any_input": [
+          "MaveDB_urn",
           "MaveDB_score",
-          "MaveDB_accession",
-          "MaveDB_pro"
+          "MaveDB_doi"
         ],
         "require_any_output": [
           "assays"
         ],
         "targets": [
           {
-            "field": "protein_variant",
-            "from": "MaveDB_pro",
-            "transform": "first",
-            "type": "string"
-          },
-          {
             "field": "assays",
             "from": [
+              "MaveDB_urn",
               "MaveDB_score",
-              "MaveDB_accession"
+              "MaveDB_doi"
             ],
             "transform": "zip",
             "align": "max",
             "as": [
               {
+                "field": "urn",
+                "type": "string"
+              },
+              {
                 "field": "score",
                 "type": "float"
               },
               {
-                "field": "accession",
+                "field": "doi",
                 "type": "string"
               }
             ],
@@ -92,16 +91,17 @@
             "post": [
               {
                 "op": "split_field",
-                "by": "accession",
-                "sep": "#",
+                "by": "urn",
+                "sep": "-",
                 "keep": "before",
-                "into": "urn"
+                "into": "experiment"
               }
             ],
             "item_fields": [
+              "urn",
               "score",
-              "accession",
-              "urn"
+              "doi",
+              "experiment"
             ]
           }
         ]
@@ -3024,36 +3024,35 @@
         "heading": "MaveDB",
         "blocks": [
           {
-            "kind": "rows",
-            "rows": [
-              {
-                "key": "variant",
-                "label": "Variant",
-                "from": "mavedb.protein_variant"
-              }
-            ]
-          },
-          {
-            "kind": "list",
+            "kind": "table",
             "from": "mavedb.assays",
             "truncate": {
               "visible_count": 3
             },
-            "item": {
-              "cells": [
-                {
-                  "from": "urn",
-                  "link": {
-                    "kind": "external",
-                    "template": "https://www.mavedb.org/score-sets/{urn}?calibration&variant={accession}"
-                  }
-                },
-                {
-                  "from": "score",
-                  "format": "num"
+            "columns": [
+              {
+                "label": "Score set",
+                "from": "urn",
+                "link": {
+                  "kind": "external",
+                  "template": "https://www.mavedb.org/score-sets/{urn}?calibration"
                 }
-              ]
-            }
+              },
+              {
+                "label": "Score",
+                "from": "score",
+                "format": "num"
+              },
+              {
+                "label": "Publication",
+                "from": "doi",
+                "merge_by": "experiment",
+                "link": {
+                  "kind": "external",
+                  "template": "https://europepmc.org/search?query=DOI:%22{doi}%22"
+                }
+              }
+            ]
           }
         ]
       },

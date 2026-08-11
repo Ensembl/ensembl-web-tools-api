@@ -42,7 +42,7 @@ ALL_COLS = [
     # mutfunc
     "mutfunc_motif", "mutfunc_int", "mutfunc_mod", "mutfunc_exp",
     # MaveDB
-    "MaveDB_score", "MaveDB_accession", "MaveDB_pro",
+    "MaveDB_score", "MaveDB_urn", "MaveDB_doi",
     # popEVE
     "popEVE_SCORE", "popEVE_EVE", "popEVE_ESM1v", "popEVE_pop_adjusted_EVE",
     "popEVE_pop_adjusted_ESM1v", "popEVE_gene", "popEVE_protein",

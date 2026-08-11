@@ -23,7 +23,8 @@
           "emit": "plugin",
           "name": "MaveDB",
           "params": {
-            "file": "{path}/MaveDB_variants.tsv.gz"
+            "file": "{path}/MaveDB_variants.tsv.gz",
+            "cols": "urn:score:doi"
           }
         }
       },

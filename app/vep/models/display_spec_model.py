@@ -825,6 +825,22 @@ class TableColumn(ValuePiece):
     # a variant takes part in — a column of ten identical values costs width the
     # columns that do vary need. If the value does vary, it stays a column.
     lift_when_invariant: bool = False
+    # Merge this column's cells down: one cell per run of consecutive rows
+    # sharing the value of the named *item* field, spanning that run.
+    #
+    # The per-group sibling of `lift_when_invariant`. That one lifts a value out
+    # of the table when *every* row agrees; this keeps it in the table but draws
+    # it once per group, for a value that belongs to something coarser than a
+    # row. MaveDB is the case: a dozen score sets from one experiment each carry
+    # the same publication, so the DOI column is one cell over twelve rows.
+    #
+    # Two rules make it safe on real data, both learned from MaveDB's:
+    #   - the merged cell shows the group's first **non-null** value, because
+    #     the source populates the field on only some rows of a group;
+    #   - a group whose non-null values are **not all equal** is not merged at
+    #     all, and falls back to a cell per row. Merging there would present one
+    #     row's value as the whole group's, which is worse than repetition.
+    merge_by: str | None = None
 
     def item_field_refs(self) -> Iterator[str]:
         """Fields this column reads from the element that is one table row.
@@ -832,11 +848,17 @@ class TableColumn(ValuePiece):
         `items` and `expand` are excluded on purpose: they read elements of a
         list *inside* the row, a different set of names, so the checker resolves
         them a level down (see `MergedSpec._list_element_fields`).
+
+        `merge_by` is included: it names a field of the same element, and a typo
+        there would not fail — it would just group every row on its own and
+        silently produce no merge at all.
         """
         if self.source:
             yield self.source
         if self.link_from:
             yield self.link_from
+        if self.merge_by:
+            yield self.merge_by
 
 
 class TableMatrixRow(BaseModel):

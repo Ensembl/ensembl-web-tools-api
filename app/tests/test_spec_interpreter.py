@@ -173,49 +173,45 @@ def test_mutfunc_partial_keeps_absent_scores_as_null():
 # --- MaveDB: positional zip, the hard case -----------------------------------
 
 MAVEDB_MULTI = dict(
-    MaveDB_score="1.5&2.5&NA",
-    MaveDB_accession=(
-        "urn:mavedb:00000045-a-1#1"
-        "&urn:mavedb:00000045-b-1#2"
-        "&urn:mavedb:00000045-c-1#3"
+    MaveDB_urn=(
+        "urn:mavedb:00000045-a-1"
+        "&urn:mavedb:00000045-b-1"
+        "&urn:mavedb:00000045-c-1"
     ),
-    MaveDB_pro="p.Lys1Arg&NA",
+    MaveDB_score="1.5&2.5&NA",
+    # The publication is a property of the *experiment*, and the source states
+    # it on only some of that experiment's score sets — all three rows belong to
+    # urn:mavedb:00000045, but only the second carries the DOI.
+    MaveDB_doi="NA&10.1038/s41589-020-0480-6&NA",
 )
 
 
 def test_mavedb_multi_assay_shape_is_as_expected():
     result = run("mavedb", row_list(**MAVEDB_MULTI))
-    assert result["protein_variant"] == "p.Lys1Arg"
-    assert [(a["accession"], a["score"]) for a in result["assays"]] == [
-        ("urn:mavedb:00000045-a-1#1", 1.5),
-        ("urn:mavedb:00000045-b-1#2", 2.5),
-        # NA score, but a real accession -> assay kept
-        ("urn:mavedb:00000045-c-1#3", None),
+    assert [(a["urn"], a["score"]) for a in result["assays"]] == [
+        ("urn:mavedb:00000045-a-1", 1.5),
+        ("urn:mavedb:00000045-b-1", 2.5),
+        # NA score, but a real score set -> assay kept
+        ("urn:mavedb:00000045-c-1", None),
     ]
 
 
-def test_mavedb_accession_splits_into_the_score_set_urn():
-    """The accession names a score set *and* a variant within it. The link needs
-    both — the score set in its path, the whole accession in its query — so the
-    score-set half is split out while the accession is kept intact."""
+def test_mavedb_urn_splits_into_its_experiment():
+    """A score set belongs to an experiment, and the publication belongs to the
+    experiment rather than the score set — which is what lets the results table
+    draw one DOI cell across the whole run. The URN prefix carries no hyphen, so
+    the first one starts the score-set suffix."""
     result = run("mavedb", row_list(**MAVEDB_MULTI))
 
-    assert [a["urn"] for a in result["assays"]] == [
-        "urn:mavedb:00000045-a-1",
-        "urn:mavedb:00000045-b-1",
-        "urn:mavedb:00000045-c-1",
+    assert {a["experiment"] for a in result["assays"]} == {"urn:mavedb:00000045"}
+    # ...and the DOI stays on the row the source put it on. Nothing here spreads
+    # it across the group: that is the display's job, and only where every
+    # stated value in the group agrees.
+    assert [a["doi"] for a in result["assays"]] == [
+        None,
+        "10.1038/s41589-020-0480-6",
+        None,
     ]
-    assert result["assays"][0]["accession"] == "urn:mavedb:00000045-a-1#1"
-
-
-def test_mavedb_accession_without_a_variant_still_names_its_score_set():
-    """An accession with no '#' is a score set and no variant within it: the urn
-    is the whole value, so the link still resolves to the score set."""
-    csq = row_list(MaveDB_score="1.5", MaveDB_accession="urn:mavedb:00000045-a-1")
-    assay = run("mavedb", csq)["assays"][0]
-
-    assert assay["urn"] == "urn:mavedb:00000045-a-1"
-    assert assay["accession"] == "urn:mavedb:00000045-a-1"
 
 
 def test_mavedb_empty_is_none():
@@ -223,49 +219,59 @@ def test_mavedb_empty_is_none():
 
 
 def test_mavedb_uneven_columns_pad_rather_than_truncate():
-    """Fewer scores than accessions: `align: max` must pad, not truncate."""
+    """Fewer scores than score sets: `align: max` must pad, not truncate."""
     csq = row_list(
+        MaveDB_urn="urn:mavedb:00000045-a-1&urn:mavedb:00000045-b-1",
         MaveDB_score="1.5",
-        MaveDB_accession="urn:mavedb:00000045-a-1#1&urn:mavedb:00000045-b-1#2",
     )
     assert run("mavedb", csq) == {
-        "protein_variant": None,
         "assays": [
             {
-                "score": 1.5,
-                "accession": "urn:mavedb:00000045-a-1#1",
                 "urn": "urn:mavedb:00000045-a-1",
+                "score": 1.5,
+                "doi": None,
+                "experiment": "urn:mavedb:00000045",
             },
             {
-                "score": None,
-                "accession": "urn:mavedb:00000045-b-1#2",
                 "urn": "urn:mavedb:00000045-b-1",
+                "score": None,
+                "doi": None,
+                "experiment": "urn:mavedb:00000045",
             },
         ],
     }
 
 
-def test_mavedb_protein_variant_only_is_none():
-    """pro present but no score/accession -> no assays -> whole annotation is
-    None (require_any_output)."""
-    assert run("mavedb", row_list(MaveDB_pro="p.Lys1Arg")) is None
+def test_mavedb_doi_only_still_yields_an_assay():
+    """The DOI alone is enough to keep the row: it is the publication column's
+    only source, and dropping the row would drop the link with it."""
+    result = run("mavedb", row_list(MaveDB_doi="10.1000/x"))
+    assert result["assays"] == [
+        {
+            "urn": None,
+            "score": None,
+            "doi": "10.1000/x",
+            "experiment": None,
+        }
+    ]
 
 
 def test_mavedb_all_na_assay_dropped():
-    """A position where both score and accession are NA is dropped entirely."""
+    """A position that is NA in every column is dropped entirely."""
     csq = row_list(
-        MaveDB_score="1.5&NA", MaveDB_accession="urn:mavedb:00000045-a-1#1&NA"
+        MaveDB_urn="urn:mavedb:00000045-a-1&NA", MaveDB_score="1.5&NA"
     )
     assert run("mavedb", csq) == {
-        "protein_variant": None,
         "assays": [
             {
-                "score": 1.5,
-                "accession": "urn:mavedb:00000045-a-1#1",
                 "urn": "urn:mavedb:00000045-a-1",
+                "score": 1.5,
+                "doi": None,
+                "experiment": "urn:mavedb:00000045",
             }
         ],
     }
+
 
 
 # --- ClinVar: the `when` conditional -----------------------------------------

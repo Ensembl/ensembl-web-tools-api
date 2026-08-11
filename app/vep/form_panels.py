@@ -100,6 +100,12 @@ def _ancestry_options(fields) -> list[dict]:
                 _toggle(f"{ancestry.option}_{sex.suffix}", sex.label, sex.default)
                 for sex in sexes
             ]
+            # A sex-split ancestry emits one field per *selected sex*, so with
+            # none of them ticked it contributes nothing at all (see
+            # build_fields). Left to itself the form would show the ancestry
+            # checked while submitting no column for it; this tells the form to
+            # switch it off with its last sex.
+            option["requires_any_sub_option"] = True
         # `form_order` moves an ancestry to where the form wants it, which is not
         # always where the emitted clause wants it (see AncestryCode).
         placed.append(
@@ -196,6 +202,11 @@ def _gnomad_v2_sub_options(fields) -> list[dict]:
                     for subpop in ancestry.subpops
                 ],
             })
+        # As in `_ancestry_options`: nothing selected beneath it means no field.
+        # ★ For v2 that means neither a sex *nor* a sub-population — a subpop
+        # emits `<base>_<anc>_<subpop>` on its own, keeping the ancestry alive
+        # with every sex unticked, so the form must count both.
+        option["requires_any_sub_option"] = True
         ancestry_options.append(option)
     return [
         {"type": "group", "label": "Subset",

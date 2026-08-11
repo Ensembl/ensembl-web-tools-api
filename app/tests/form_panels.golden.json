@@ -82,6 +82,7 @@
           "label": "gnomAD Exomes v4.1.1",
           "type": "boolean",
           "default": false,
+          "category": "Short variants",
           "sub_options": [
             {
               "id": "gnomad_exomes_include_ukb",
@@ -117,7 +118,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_afr",
@@ -143,7 +145,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_amr",
@@ -169,7 +172,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_asj",
@@ -195,7 +199,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_eas",
@@ -221,7 +226,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_fin",
@@ -247,7 +253,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_mid",
@@ -273,7 +280,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_nfe",
@@ -299,18 +307,19 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 }
               ]
             }
-          ],
-          "category": "Short variants"
+          ]
         },
         {
           "id": "gnomad_genomes",
           "label": "gnomAD Genomes v4.1.1",
           "type": "boolean",
           "default": false,
+          "category": "Short variants",
           "sub_options": [
             {
               "type": "group",
@@ -340,7 +349,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_grpmax",
@@ -372,7 +382,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_amr",
@@ -398,7 +409,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_asj",
@@ -424,7 +436,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_eas",
@@ -450,7 +463,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_fin",
@@ -476,7 +490,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_mid",
@@ -502,7 +517,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_nfe",
@@ -528,7 +544,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_ami",
@@ -554,7 +571,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_remaining",
@@ -580,18 +598,19 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 }
               ]
             }
-          ],
-          "category": "Short variants"
+          ]
         },
         {
           "id": "allofus",
           "label": "NIH All of Us",
           "type": "boolean",
           "default": false,
+          "category": "Short variants",
           "sub_options": [
             {
               "type": "group",
@@ -652,14 +671,14 @@
                 }
               ]
             }
-          ],
-          "category": "Short variants"
+          ]
         },
         {
           "id": "gnomad_sv",
           "label": "gnomAD SV v4.1",
           "type": "boolean",
           "default": false,
+          "category": "Structural variants",
           "sub_options": [
             {
               "id": "gnomad_sv_overlap_cutoff",
@@ -752,14 +771,14 @@
                 }
               ]
             }
-          ],
-          "category": "Structural variants"
+          ]
         },
         {
           "id": "gnomad_cnv",
           "label": "gnomAD CNV v4.1",
           "type": "boolean",
           "default": false,
+          "category": "Structural variants",
           "sub_options": [
             {
               "id": "gnomad_cnv_overlap_cutoff",
@@ -846,8 +865,7 @@
                 }
               ]
             }
-          ],
-          "category": "Structural variants"
+          ]
         }
       ]
     },
@@ -1206,6 +1224,7 @@
           "label": "gnomAD Exomes v2.1.1",
           "type": "boolean",
           "default": false,
+          "category": "Short variants",
           "sub_options": [
             {
               "type": "group",
@@ -1271,7 +1290,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_popmax",
@@ -1303,7 +1323,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_amr",
@@ -1329,7 +1350,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_asj",
@@ -1355,7 +1377,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_eas",
@@ -1405,7 +1428,8 @@
                         }
                       ]
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_fin",
@@ -1431,7 +1455,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_nfe",
@@ -1499,7 +1524,8 @@
                         }
                       ]
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_oth",
@@ -1525,7 +1551,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_exomes_sas",
@@ -1551,18 +1578,19 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 }
               ]
             }
-          ],
-          "category": "Short variants"
+          ]
         },
         {
           "id": "gnomad_genomes",
           "label": "gnomAD Genomes v2.1",
           "type": "boolean",
           "default": false,
+          "category": "Short variants",
           "sub_options": [
             {
               "type": "group",
@@ -1622,7 +1650,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_popmax",
@@ -1654,7 +1683,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_amr",
@@ -1680,7 +1710,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_asj",
@@ -1706,7 +1737,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_eas",
@@ -1732,7 +1764,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_fin",
@@ -1758,7 +1791,8 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_nfe",
@@ -1814,7 +1848,8 @@
                         }
                       ]
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 },
                 {
                   "id": "gnomad_genomes_oth",
@@ -1840,18 +1875,19 @@
                       "type": "boolean",
                       "default": false
                     }
-                  ]
+                  ],
+                  "requires_any_sub_option": true
                 }
               ]
             }
-          ],
-          "category": "Short variants"
+          ]
         },
         {
           "id": "gnomad_sv",
           "label": "gnomAD SV v2.1",
           "type": "boolean",
           "default": false,
+          "category": "Structural variants",
           "sub_options": [
             {
               "id": "gnomad_sv_overlap_cutoff",
@@ -1914,8 +1950,7 @@
                 }
               ]
             }
-          ],
-          "category": "Structural variants"
+          ]
         }
       ]
     },

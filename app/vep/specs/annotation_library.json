@@ -2706,10 +2706,10 @@
                         }
                       ]
                     },
-                    "help": "For more detail regarding ClinVar's calculation of review status see",
+                    "help": "For more detail regarding ClinVar's clinical significance terms see",
                     "help_link": {
-                      "href": "https://www.ncbi.nlm.nih.gov/clinvar/docs/review_status/",
-                      "label": "ClinVar review status"
+                      "href": "https://www.ncbi.nlm.nih.gov/clinvar/docs/clinsig/",
+                      "label": "ClinVar clinical significance"
                     },
                     "where": {
                       "field": "type",

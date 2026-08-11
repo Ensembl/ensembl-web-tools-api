@@ -878,12 +878,33 @@ omission to catch.
 | `order` | **not** the entry's `order`. That one sequences the generated `config.ini`; this one sequences the controls a reader sees, and there is no reason for the two to agree. Numbered sparsely so an option can be inserted between two others without renumbering |
 | `category` | drives *both* surfaces: the form groups controls by it, and the results panel groups annotation rows by it. Regrouping options is therefore a backend-only change |
 | `sub_options` | nested controls that are **not** entries of their own: a sub-option is an `options` key the parent's emitter reads through `from_option` (NearestExonJB's `max_range`). `FormSubOption` adds `min` / `max` for a number |
-| `requires_any_sub_option` | for a plugin that does everything when told nothing (mutfunc): "none selected" is not a state it can be asked for, so the form switches the whole option off instead |
+| `requires_any_sub_option` | **this option contributes nothing with none of its sub-options selected**, so unticking the last one switches the option itself off, and switching it back on restores its sub-options to their **declared defaults**. Two quite different cases use it — see below |
 
 Allele-frequency entries declare a `form` block **and** grow their sub-option
 tree from their own `fields=` builder — `_af_sub_options` reads the builder's
 ancestry/sex tables, so **122 of GRCh38's 169 option nodes are generated** rather
 than written. Nothing else needs to know that happened.
+
+★ **The two `requires_any_sub_option` cases, and why they need different
+restores.** They look alike and are opposites:
+
+- **mutfunc** cannot *express* "none". A config line naming no sub-flag already
+  means *all* of them, so an empty selection would silently submit the opposite
+  of what the form shows. Its sub-options all default **on**.
+- **An allele-frequency ancestry** expresses "none" perfectly well — it just
+  emits nothing. `build_fields` writes one field per *selected sex*, so a ticked
+  ancestry with no sex ticked contributes no column, and the form would show a
+  selection that asks for nothing. Its sexes default to **Combined only**.
+
+Hence the restore is to each sub-option's **declared default**, not to all-on:
+for mutfunc those are the same thing, and for an ancestry re-ticking "All" gives
+back the suggested Combined rather than silently adding XX and XY.
+
+★ **gnomAD v2 needs the deeper count.** Its ancestries carry sexes *and* a nested
+"Sub-populations" group, and a selected sub-population emits
+`<base>_<anc>_<subpop>` on its own — so the ancestry is still alive with every
+sex unticked. The frontend's check therefore looks through a `group`, which
+carries no parameter of its own, rather than counting only direct children.
 
 ---
 

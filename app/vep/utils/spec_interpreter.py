@@ -62,6 +62,18 @@ def _coerce(raw: str | None, value_type: str, field_spec=None):
             raw = raw.replace(find, replacement)
         if field_spec.strip:
             raw = raw.strip()
+        drop = field_spec.drop_entries
+        if drop is not None:
+            kept = [
+                entry
+                for entry in raw.split(drop.sep)
+                if not re.search(drop.matching, entry)
+            ]
+            # Nothing left is nothing to say: an empty packed string would reach
+            # the display as a value and draw an empty cell.
+            if not kept:
+                return None
+            raw = drop.sep.join(kept)
     return raw
 
 

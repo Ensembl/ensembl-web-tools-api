@@ -1547,6 +1547,53 @@ def test_field_null_values_blank_a_placeholder_token():
     }
 
 
+def test_drop_entries_removes_matching_entries_from_a_packed_field():
+    """IntAct packs several participants into one field, and an Ensembl one
+    cannot be linked yet (see the `why` on the rule in the library). Dropping it
+    must take the entry and nothing else: the neighbours stay, in order, and a
+    field that is *only* droppable entries reads as absent rather than empty."""
+    index_map = index_map_for("Allele", "Participants")
+    spec = probe(
+        ["Participants"],
+        {
+            "field": "interactions",
+            "from": ["Participants"],
+            "transform": "zip",
+            "sep": "+",
+            "align": "max",
+            "as": [
+                {
+                    "field": "participants",
+                    "type": "string",
+                    "drop_entries": {"sep": "_and_", "matching": "^ensembl:"},
+                }
+            ],
+        },
+        require_any_output=["interactions"],
+    )
+    result = apply_plugin_spec(
+        [
+            "A",
+            # in the middle / only entry / none to drop / anchored, so a
+            # uniprotkb value merely containing the word survives
+            "uniprotkb:P1_and_ensembl:ENSP00000353910.5_and_uniprotkb:P2"
+            "+ensembl:ENSP1"
+            "+uniprotkb:P3"
+            "+uniprotkb:ensembl_like",
+        ],
+        index_map,
+        spec.plugin("probe"),
+    )
+    assert result == {
+        "interactions": [
+            {"participants": "uniprotkb:P1_and_uniprotkb:P2"},
+            {"participants": None},
+            {"participants": "uniprotkb:P3"},
+            {"participants": "uniprotkb:ensembl_like"},
+        ]
+    }
+
+
 def test_decode_happens_after_every_split():
     """An escaped separator must survive as data.
 

@@ -28,6 +28,32 @@ Transform = Literal[
 ]
 
 
+class DropEntries(BaseModel):
+    """Drop the entries of a packed field that match a pattern.
+
+    A field whose value is several entries joined by a separator (IntAct packs
+    its interaction participants as `uniprotkb:P42336_and_ensembl:ENSP...`).
+    Where `replace` rewrites fixed text, this removes whole entries by what they
+    look like, and is the only field-level operation that needs a regex — an
+    identifier is never the same twice, so a literal cannot name it.
+
+    If every entry goes, so does the field: an empty packed string is no value,
+    and the column drops as any absent field does.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # The separator the entries are joined by, as it appears in the CSQ.
+    sep: str
+    # A Python regular expression, matched against each entry (`re.search`).
+    matching: str
+    # Why these entries are dropped, in prose. Carried by the model rather than
+    # left to a comment because the spec is JSON and cannot hold one, and a rule
+    # that silently removes data is exactly the kind that needs to say why — and
+    # to say whether it is meant to be permanent.
+    why: str | None = None
+
+
 class FieldSpec(BaseModel):
     """One output field of a composite value (e.g. one column of a `zip`, a named
     group of a `regex`, or a slot of a `positional`/`chunk`).
@@ -50,6 +76,8 @@ class FieldSpec(BaseModel):
     # source generally uses '.' for an absent value — but '.' is a real value
     # elsewhere, so this is declared per field rather than made global.
     null_values: list[str] | None = None
+    # See DropEntries. Applied last, after the tidying above.
+    drop_entries: DropEntries | None = None
 
 
 class Match(BaseModel):

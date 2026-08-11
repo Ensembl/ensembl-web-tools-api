@@ -1613,7 +1613,12 @@
               },
               {
                 "field": "interaction_participants",
-                "type": "string"
+                "type": "string",
+                "drop_entries": {
+                  "sep": "_and_",
+                  "matching": "^ensembl:",
+                  "why": "TEMPORARY. An Ensembl participant arrives as a bare versioned ENSP with no gene beside it, and every Ensembl protein URL we can build needs one: the beta Feature Explorer takes gene:<ENSG>?protein_id=<ENSP>, and the stable-id resolver returns 404 for an ENSP (checked against a current one, so it is the resolver, not the id). Borrowing the row's own gene would be wrong rather than merely imprecise - one IntAct annotation is shared across consequences of two different genes, and the participant belongs to neither (ENSP00000353910 is FUT8). So the entry is dropped until the parse can resolve its gene, at which point delete this block and link it."
+                }
               },
               {
                 "field": "feature_short_label",

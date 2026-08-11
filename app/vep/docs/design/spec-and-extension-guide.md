@@ -987,11 +987,30 @@ differently: VEP writes a versioned gene id in `Gene` (`ENSG00000121879.8`)
 where a plugin's payload carries the bare accession. **Narrowing against a
 per-row column also widens the parse cache key** — see trap 13.
 
-**`FieldSpec`** (each entry of `as`): `{ field, type, replace?, strip?, null_values? }`.
+**`FieldSpec`** (each entry of `as`): `{ field, type, replace?, strip?, null_values?, drop_entries? }`.
 `replace` is applied in order after coercion — VEP escapes spaces as underscores
 in free text, so undoing that is a general need. `null_values` adds tokens meaning
 "absent" beyond `''` and `NA` — ClinVar writes `.`, but `.` is a real value
 elsewhere, so it is declared per field.
+
+`drop_entries` `{ sep, matching, why? }` removes whole entries from a *packed*
+field — one whose value is several entries joined by a separator, as IntAct packs
+its interaction participants (`uniprotkb:P42336_and_ensembl:ENSP…`). Where
+`replace` rewrites fixed text, this removes an entry by what it looks like, and
+is the only field-level operation taking a regex: an identifier is never the same
+twice, so a literal cannot name it. If every entry goes, so does the field — an
+empty packed string is no value, and the column drops as any absent field does.
+
+`why` is prose recorded on the rule itself. The spec is JSON and cannot carry a
+comment, and a rule that silently removes data is exactly the kind that has to
+say why — and whether it is meant to be permanent. The one use today is
+temporary: an Ensembl participant arrives as a bare versioned ENSP with no gene
+beside it, and every Ensembl protein URL needs one (the Feature Explorer takes
+`gene:<ENSG>?protein_id=<ENSP>`, and the stable-id resolver 404s on an ENSP).
+Borrowing the row's own gene would be wrong rather than imprecise — one IntAct
+annotation is shared across consequences of two different genes and the
+participant belongs to neither — so the entry is dropped until the parse can
+resolve its gene.
 
 ### 9.4 Joins
 

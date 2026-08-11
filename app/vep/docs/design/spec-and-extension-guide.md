@@ -345,12 +345,11 @@ how it appears on the form.
   "order": 44,                       // position in the emitted config.ini
   "parsed_as": ["geno2mp"],          // ← the parse plugin(s) this option feeds
   "form": {
-    "panel": "variant_impact_predictions",
+    "panel": "phenotype_and_disease_associations",
     "label": "Geno2MP",
-    "category": "Annotations",
     "type": "boolean",
     "default": false,
-    "order": 850                     // position within the panel — NOT the ini order
+    "order": 0                       // position within the panel — NOT the ini order
   },
   "config": {
     "emit": "plugin",
@@ -366,7 +365,12 @@ how it appears on the form.
 ```
 
 → emits `plugin Geno2MP,file=/…/Geno2MP.variants_GRCh38.vcf.gz`, and puts a
-checkbox in "Variant impact predictions" under the "Annotations" category.
+checkbox at the top of "Phenotype & disease associations".
+
+Geno2MP carries no `category`, which is why it does not appear above: a panel
+whose options are not sub-grouped simply lists them, and the results detail does
+the same. Add one only where the panel has groups to name — see
+[§8.5](#85-the-form-block).
 
 The entry's `id` is the seam that carries a selection through the whole system —
 it is the form option id, the key in the submission's `options` map, and what

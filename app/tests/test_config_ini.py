@@ -72,6 +72,7 @@ def test_always_on_defaults(monkeypatch, tmp_path):
     lines = build_lines(monkeypatch, tmp_path)
     for expected in [
         "force_overwrite 1",
+        "fork 8",
         "numbers 1",
         "symbol 1",
         "biotype 1",

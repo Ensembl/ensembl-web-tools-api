@@ -10,7 +10,10 @@ report.xml
 tmpdir/
 venv*
 results_meta.json
-dev-data/
+# The dev fixtures: the 42-record sample and any scaled copy of it
+# (dev-data-10k and friends). Wildcarded because the -10k directory fell
+# outside a bare `dev-data/` rule and a 28 MB VCF was committed by accident.
+dev-data*/
 # Upload staging dirs. `mkdtemp(dir=NF_WORK_DIR)` lands in the *cwd* when
 # NF_WORK_DIR is unset, and the suite runs from either the repo root or app/,
 # so they turn up at both depths.

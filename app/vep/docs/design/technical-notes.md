@@ -7,8 +7,8 @@ out. The grammar itself is in
 are in [dataflow.md](./dataflow.md); what is still owed before production is in
 [production-readiness.md](./production-readiness.md).
 
-Verified 2026-08-09 against tools-api `b69b769` and standalone-web-vep `880fa38`.
-Every status line below was re-checked against the code, not carried forward.
+Every status line below is derived from the current code rather than carried
+forward from the prototype implementation.
 
 ## Contents
 
@@ -152,8 +152,8 @@ Generating it in the pipeline rather than the API is the load-bearing choice: th
 pipeline already streams every record once, so the index costs nothing extra
 there, where the API would pay a full scan per job to build it.
 
-★ `copy_remote.sh` misnames the page index for scaled dev fixtures, so the seek
-path silently falls back to scanning and is ~19× slower. If a dev page feels
+★ `copy_remote.sh` misnames the page index for scaled test fixtures, so the seek
+path silently falls back to scanning and is ~19× slower. If a test page feels
 slow, check the sidecar's filename before profiling anything.
 
 ---
@@ -250,8 +250,8 @@ sample page.
   variant's ~43 transcript consequences; deduplicating by *value* is what shrank
   it (744 distinct of 864 in the sample).
 
-**Still open:** the backend sends **no compression at all**. That is the largest
-untouched lever.
+Responses are compressed with level-1 gzip, except downloads that are already
+gzip-compressed. See `app/main.py` for the middleware and its benchmarked level.
 
 **Method note, hard-won:** bench wall-clock, not cProfile — the profiler's
 overhead dominates this workload and reorders the ranking. Set
@@ -272,8 +272,8 @@ columns its selected options must produce, derived by
 `config.ini` — and results time checks the output header against it.
 
 **The contract is directional:** the backend fails on *missing* expected columns
-and silently ignores *extra* ones. That asymmetry is deliberate. Dev VCFs are
-annotated from a full cache and legitimately carry columns the user never
+and silently ignores *extra* ones. That asymmetry is deliberate. Workflow output
+can legitimately carry columns the user never
 selected; a missing column, by contrast, means the run did not do what was asked.
 
 Two sibling sidecars pin the rest of the ruleset: `parsing_spec.json` (the whole
@@ -409,10 +409,10 @@ spec-driven options. Nothing to trim.
 
 ## Tests
 
-**727 passing**, 1 skipped, and **one pre-existing failure**:
-`test_blast.py::test_read_config`, which wants a `.env` this checkout does not
-have. That failure is unrelated to VEP and is the expected baseline — do not
-treat it as a regression.
+**732 passing**, 1 skipped, and **one environment-specific failure** in the
+current checkout: `test_blast.py::test_read_config` reads
+`/data/blast_config.json`, which is absent outside the container runtime. The
+failure is unrelated to VEP and should not be treated as a regression.
 
 ```bash
 PYTHONPATH=app .venv/bin/python -m pytest app/tests -q
@@ -420,12 +420,8 @@ PYTHONPATH=app .venv/bin/python -m pytest app/tests -q
 
 Use a **python3.11** venv; 3.12 cannot build vcfpy.
 
-Frontend (from the `standalone-web-vep` checkout — its `node_modules` is a
-symlink with broken `.bin` shims, so invoke through node):
-
-```bash
-node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json && node node_modules/vitest/vitest.mjs run
-```
+Run the VEP frontend checks from the `ensembl-client` checkout using that
+repository's TypeScript, test, formatting, and lint commands.
 
 Coverage baseline (2026-07-20): backend 79 %, frontend VEP utils 92.7 %.
 
@@ -437,65 +433,13 @@ migration, and rewrite tests onto the real path rather than dropping them.
 
 ---
 
-## Porting to ensembl-client
+## ensembl-client integration
 
-Frontend work is authored in `standalone-web-vep` and ported into
-`ensembl-client` on `integration/vep-v2`. The two trees diverge in ~51
-integration files; VEP itself sits at the same path in both.
+`ensembl-client` owns the VEP user experience and consumes the tools API's form,
+submission, status, results, and download contracts. Client changes should be
+validated with that repository's TypeScript, test, formatting, and lint
+configuration before integration.
 
-**Classify, never patch or copy wholesale.** For each changed file, compare the
-client's copy against every past standalone commit for that path:
-
-- identical to standalone `main` → already ported, skip;
-- identical to standalone at some past commit → **BEHIND**, copy wholesale;
-- neither → **DIVERGED**, hand-port the hunks.
-
-`git apply --3way` fails messily here; the classification is what makes ports
-cheap. It has held across eight ports, and the DIVERGED set is almost always the
-same two files: `displaySpecRenderer.tsx` (standalone has an `openInNewTab`
-wrapper the client lacks) and `displaySpec.fixture.ts` (`.prettierignore`d in
-standalone, prettier-formatted in the client).
-
-★ **Lint against the client's config *before* merging in standalone**, not when
-porting. Its React Compiler rules (`react-hooks/refs`, `immutability`,
-`set-state-in-effect`, `preserve-manual-memoization`) are **errors** there and
-warnings in standalone. Skipping this once cost a merged-then-reworked PR — and
-the stricter rule was pointing at a real design problem, not a style preference;
-the rework was simpler than what had merged.
-
-Two sharpenings, both paid for:
-
-- **Lint every file the port *stages*, not only the ones you edited.** A file you
-  merely copied across can carry a pre-existing error that blocks the commit.
-- **A deletion is the case this rule keeps missing.** Removing a renderer strands
-  its imports; `tsc` does not flag unused imports and standalone has no eslint
-  installed, so a pure deletion looks completely clean in standalone and is a
-  failing commit in the client. Fix it **in standalone**, on its own branch —
-  patching it client-side turns a cleanly-BEHIND file into a DIVERGED one that
-  every future port must hand-merge.
-
-**Test-count check that confirms a good port:** the client runs exactly one fewer
-VEP test than standalone (280 vs 281 today) — standalone's single `openInNewTab`
-test.
-
----
-
-## Embedding into ensembl-client
-
-**Status: still relevant, and now the direction of travel.**
-
-The original audit asked what it would take for web-vep to be mounted by
-`ensembl-client` in its main content area, the way the client launches its other
-separate-repo tools. Its finding: **the component seam already exists**
-(`VepPage` + `VepPageContent`), because the repo was deliberately extracted from
-`ensembl-client` with a thin standalone shell around that seam.
-
-The work is (a) letting the host own the router, store, config, chrome and global
-styles instead of the standalone shell, and (b) deciding how the client actually
-*consumes* this repo — it currently builds a standalone SPA, not a consumable
-module.
-
-★ The strategic point, which supersedes the audit's framing: **standalone-web-vep's
-independence is a dev convenience, not the destination.** The direction is
-reintegration into `ensembl-client`, so work whose only value is to the
-standalone shell should not be started.
+The API remains responsible for assembling form options, pinning the submitted
+specification beside each job, launching the workflow, and parsing the workflow
+output. Keep browser-specific concerns out of these server-side contracts.

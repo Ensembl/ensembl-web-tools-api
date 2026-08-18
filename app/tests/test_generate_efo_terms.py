@@ -195,9 +195,9 @@ def test_a_missing_data_version_is_empty_not_an_error():
     assert table["version"] == ""
 
 
-def test_the_committed_table_resolves_the_accessions_in_dev_data():
+def test_the_committed_table_resolves_the_accessions_in_the_fixture():
     """A guard on the shipped file rather than the parser: these eleven are what
-    the dev-data VCF actually carries."""
+    the representative VEP output carries."""
     import json
 
     path = Path(__file__).resolve().parents[1] / "vep" / "data" / "efo_terms.json"

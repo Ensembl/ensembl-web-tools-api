@@ -322,11 +322,8 @@ def write_spec_sidecar(directory: str | Path, spec: MergedSpec) -> Path:
     config.ini and (eventually) its output VCF, so `load_spec_sidecar` finds it
     from the results path with no other bookkeeping needed.
 
-    In the DUMP_INI dev harness there is no per-job outdir — results are read
-    from a fixed LOCAL_RESULTS_VCF path, decoupled from any submission_id — so
-    `directory` there is DUMP_INI_DIR, the same directory the config dump goes
-    into. A submission there overwrites the previous sidecar, which matches how
-    that harness already works: one manually-run job at a time.
+    The job directory is the pipeline outdir, alongside its `config.ini` and
+    eventual output VCF, so results resolve this pin from the VCF's directory.
     """
     path = Path(directory) / SPEC_SIDECAR_FILE
     path.write_text(spec.model_dump_json())

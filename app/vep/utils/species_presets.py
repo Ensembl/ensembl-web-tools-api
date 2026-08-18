@@ -31,7 +31,7 @@ import logging
 import requests
 from starlette.concurrency import run_in_threadpool
 
-from core.config import GENOME_METADATA_API
+from core.config import WEB_METADATA_API
 
 # (connect, read). Local rather than from core.config so this does not collide
 # with the parked timeouts branch (#60), which introduces a shared constant for
@@ -52,7 +52,7 @@ INTEGRATED = "integrated"
 
 def _get(path: str):
     response = requests.get(
-        f"{GENOME_METADATA_API}{path}", timeout=METADATA_TIMEOUT
+        f"{WEB_METADATA_API}{path}", timeout=METADATA_TIMEOUT
     )
     response.raise_for_status()
     return response.json()

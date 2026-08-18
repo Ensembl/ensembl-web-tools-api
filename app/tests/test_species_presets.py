@@ -224,3 +224,16 @@ def test_accession_is_looked_up_directly_not_by_keyword_search(monkeypatch):
     urls = [c["url"] for c in record]
     assert any(u.endswith("genome/GCA_000001405.29/explain") for u in urls)
     assert not any("genomeid" in u for u in urls)
+
+
+def test_requests_use_the_configured_metadata_base(monkeypatch):
+    record = []
+    monkeypatch.setattr(species_presets, "WEB_METADATA_API", "https://ensembl.org/api/metadata/")
+    _resolve(
+        monkeypatch,
+        {"GCA_000001405.29": INTEGRATED_GENOME},
+        accessions=["GCA_000001405.29"],
+        record=record,
+    )
+
+    assert all(call["url"].startswith("https://ensembl.org/api/metadata/") for call in record)

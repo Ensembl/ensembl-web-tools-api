@@ -16,11 +16,12 @@ import re
 
 import pytest
 
-from app.vep.models.pipeline_model import ConfigIniParams, PLUGIN_PATH
+from app.vep.models.pipeline_model import ConfigIniParams, plugin_data_path
 from app.vep.utils.spec_loader import load_merged_spec
 
 GFF = "/vep_support/test.gff3.gz"
 FASTA = "/vep_support/test.fa"
+GRCH38_PLUGIN_PATH = plugin_data_path("GRCh38.p14")("base")
 
 # The config half of the bundled merged spec drives the interpreter. Human
 # GRCh38 for both assemblies under test — the spec's by_assembly params pick the
@@ -213,38 +214,27 @@ def test_per_assembly_plugin_files(monkeypatch, tmp_path, option, markers):
     assert find_line(lines37, grch38_marker) is None
 
 
-def test_dev_plugin_path_resolves_base_and_named_subdirs():
-    from app.vep.models.pipeline_model import _dev_plugin_path
-
-    resolve38 = _dev_plugin_path("GRCh38")
-    # A base-dir dataset resolves to the assembly base with no subdir.
-    assert resolve38("revel").endswith("/beta_plugins/grch38")
-    # A subdir dataset gets its named subdir appended.
-    assert resolve38("go").endswith("/beta_plugins/grch38/GO_data_files")
-    assert resolve38("gnomad_exomes").endswith("/beta_plugins/grch38/gnomAD_exomes")
-    # GRCh37 uses the grch37 base for the same entries.
-    assert (
-        _dev_plugin_path("GRCh37")("phenotypes")
-        .endswith("/beta_plugins/grch37/Phenotypes_data_files")
+@pytest.mark.parametrize(
+    "assembly,entry_id,suffix",
+    [
+        ("GRCh38.p14", "revel", "grch38"),
+        ("GRCh37.p13", "phenotypes", "grch37/Phenotypes_data_files"),
+        ("ARS-UCD1.2", "go", "other_species/GO_data_files"),
+        ("GRCh38.p14", "gnomad_exomes", "grch38/gnomAD_exomes"),
+    ],
+)
+def test_plugin_data_path_selects_assembly_and_dataset_directories(
+    assembly, entry_id, suffix
+):
+    assert plugin_data_path(assembly)(entry_id).endswith(
+        f"vep-plugins-data/{suffix}"
     )
 
 
-def test_dev_dump_ini_wires_the_real_beta_paths(monkeypatch, tmp_path):
-    """Under DUMP_INI, `{path}` resolves to the real beta layout: base dir for
-    most datasets, a named subdir for the few that live in one."""
-    monkeypatch.setattr("app.vep.models.pipeline_model.DUMP_INI", True)
+def test_plugin_lines_use_configured_plugin_data_root(monkeypatch, tmp_path):
     lines = build_lines(monkeypatch, tmp_path, revel=True, go=True)
-    assert find_line(lines, "beta_plugins/grch38/new_tabbed_revel_grch38") is not None
-    assert find_line(lines, "beta_plugins/grch38/GO_data_files/GO.pm_") is not None
-    assert find_line(lines, "[placeholder_path]") is None
-
-
-def test_production_keeps_the_placeholder_root(monkeypatch, tmp_path):
-    """Without DUMP_INI (production), `{path}` stays the placeholder — the dev
-    beta layout never leaks into a real run."""
-    lines = build_lines(monkeypatch, tmp_path, revel=True)
-    assert find_line(lines, "[placeholder_path]/new_tabbed_revel_grch38") is not None
-    assert find_line(lines, "beta_plugins") is None
+    assert find_line(lines, "vep-plugins-data/grch38/new_tabbed_revel_grch38")
+    assert find_line(lines, "vep-plugins-data/grch38/GO_data_files/GO.pm_")
 
 
 def test_spliceai_grch37_omits_snv_ensembl(monkeypatch, tmp_path):
@@ -430,7 +420,7 @@ def test_intact_no_sub_options_is_base_line(monkeypatch, tmp_path):
     line = find_line(
         build_lines(monkeypatch, tmp_path, intact=True), "plugin IntAct"
     )
-    assert f"mutation_file={PLUGIN_PATH}/mutations.tsv" in line
+    assert f"mutation_file={GRCH38_PLUGIN_PATH}/mutations.tsv" in line
     assert "mapping_file=" in line
     assert "all=1" not in line
     assert "=1" not in line.split("mapping_file=")[1]  # no sub-flags appended
@@ -569,7 +559,8 @@ def test_gnomad_exomes_default_is_all_both_ukb_included(monkeypatch, tmp_path):
     line = gnomad_exomes_line(build_lines(monkeypatch, tmp_path, gnomad_exomes=True))
     assert line is not None
     assert (
-        f"file={PLUGIN_PATH}/gnomad.exomes.v4.1.sites.chr###CHR###.vcf.bgz" in line
+        f"file={plugin_data_path('GRCh38.p14')('gnomad_exomes')}"
+        "/gnomad.exomes.v4.1.sites.chr###CHR###.vcf.bgz" in line
     )
     assert "short_name=gnomAD_exomes" in line
     assert line.endswith("format=vcf,type=exact")
@@ -794,7 +785,8 @@ def test_gnomad_genomes_default_line(monkeypatch, tmp_path):
     line = gnomad_genomes_line(build_lines(monkeypatch, tmp_path, gnomad_genomes=True))
     assert line is not None
     assert (
-        f"file={PLUGIN_PATH}/gnomad.genomes.v4.1.sites.chr###CHR###.vcf.bgz" in line
+        f"file={plugin_data_path('GRCh38.p14')('gnomad_genomes')}"
+        "/gnomad.genomes.v4.1.sites.chr###CHR###.vcf.bgz" in line
     )
     assert "short_name=gnomAD_genomes" in line
     assert line.endswith("format=vcf,type=exact")
@@ -869,7 +861,10 @@ def test_allofus_off_emits_no_line(monkeypatch, tmp_path):
 def test_allofus_default_line(monkeypatch, tmp_path):
     line = allofus_line(build_lines(monkeypatch, tmp_path, allofus=True))
     assert line is not None
-    assert f"file={PLUGIN_PATH}/AllOfUs_chr###CHR###.vcf.gz" in line
+    assert (
+        f"file={plugin_data_path('GRCh38.p14')('allofus')}"
+        "/AllOfUs_chr###CHR###.vcf.gz" in line
+    )
     assert "short_name=AoU" in line
     assert line.endswith("format=vcf,type=exact")
     # suggested defaults: the overall AF and the maximum subpopulation, the
@@ -939,7 +934,7 @@ def test_clinvar_line_is_assembly_specific(
         "short_name=ClinVar,",
     )
     assert line == (
-        f"custom file={PLUGIN_PATH}/{expected_file},"
+        f"custom file={plugin_data_path(assembly)('clinvar_short')}/{expected_file},"
         "short_name=ClinVar,"
         "fields=CLNDN%CLNDNINCL%CLNDISDB%CLNDISDBINCL%CLNREVSTAT%CLNSIG"
         "%CLNSIGINCL%ONCDN%ONCDNINCL%ONCDISDB"
@@ -1001,7 +996,7 @@ def test_clinvar_sv_custom_line(monkeypatch, tmp_path):
         "short_name=ClinVar_SV,",
     )
     assert line == (
-        f"custom file={PLUGIN_PATH}/nstd102.GRCh38.variant_call.combined.sorted.vcf.gz,"
+        f"custom file={GRCH38_PLUGIN_PATH}/nstd102.GRCh38.variant_call.combined.sorted.vcf.gz,"
         "short_name=ClinVar_SV,fields=CLNSIG%ORIGIN,format=vcf,type=exact"
     )
 
@@ -1022,7 +1017,8 @@ def test_gnomad_sv_custom_fields_and_overlap_cutoff(monkeypatch, tmp_path):
         "short_name=gnomAD_SV",
     )
     assert line == (
-        f"custom file={PLUGIN_PATH}/gnomad.v4.1.sv.sites_AF.vcf.gz,"
+        f"custom file={plugin_data_path('GRCh38.p14')('gnomad_sv')}"
+        "/gnomad.v4.1.sv.sites_AF.vcf.gz,"
         "type=exact,short_name=gnomAD_SV,format=vcf,"
         "fields=SVTYPE%AF%AF_afr,overlap_cutoff=90"
     )
@@ -1049,7 +1045,8 @@ def test_gnomad_cnv_custom_fields_and_overlap_cutoff(monkeypatch, tmp_path):
         "short_name=gnomAD_CNV",
     )
     assert line == (
-        f"custom file={PLUGIN_PATH}/gnomad.v4.1.cnv.all_SF.vcf.gz,"
+        f"custom file={plugin_data_path('GRCh38.p14')('gnomad_cnv')}"
+        "/gnomad.v4.1.cnv.all_SF.vcf.gz,"
         "type=exact,short_name=gnomAD_CNV,format=vcf,"
         "fields=SVTYPE%SF%SF_nfe,overlap_cutoff=80"
     )
@@ -1063,7 +1060,7 @@ def test_gencode_promoters_custom_has_no_fields_clause(monkeypatch, tmp_path):
         "short_name=GENCODE_Promoter",
     )
     assert line == (
-        f"custom file={PLUGIN_PATH}/gencode.v49.promoter_windows.sorted.gff3.gz,"
+        f"custom file={GRCH38_PLUGIN_PATH}/gencode.v49.promoter_windows.sorted.gff3.gz,"
         "gff_type=gencode_promoter,format=gff,short_name=GENCODE_Promoter,type=overlap"
     )
     assert "fields=" not in line
@@ -1075,7 +1072,7 @@ def test_gerp_plugin_takes_its_file_positionally(monkeypatch, tmp_path):
     # `key=` in front of it.
     line = find_line(build_lines(monkeypatch, tmp_path, gerp=True), "plugin Conservation")
     assert line == (
-        f"plugin Conservation,{PLUGIN_PATH}"
+        f"plugin Conservation,{GRCH38_PLUGIN_PATH}"
         "/gerp_conservation_scores.homo_sapiens.GRCh38.bw"
     )
     assert "=" not in line.split(",", 1)[1]

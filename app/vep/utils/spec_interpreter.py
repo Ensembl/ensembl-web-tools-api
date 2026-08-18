@@ -897,7 +897,7 @@ class PluginPlan:
 
     Everything here depends only on the header, which is fixed for the whole
     file — yet all of it used to be recomputed per CSQ row, by name. Over a
-    50-record dev-data run that was 21k `has_any_column` calls asking the same
+    representative 50-record run that was 21k `has_any_column` calls asking the same
     question, 88k `_column` reads building cache keys, and a 283-column scan per
     `pattern_map` target per allele (~86k `startswith`). Resolving once per file
     and reading by position is what takes the header work off the per-row path.

@@ -758,7 +758,7 @@ def test_a_go_id_the_table_does_not_know_is_null_not_an_error():
 
 def test_go_entry_without_a_term_name_is_null_not_empty_string():
     """Real data carries ids with no name at all (38 of 368 distinct GO ids in
-    dev-data/output.vcf.gz, e.g. "GO:0050911:"). An absent name is null, as
+    a representative output VCF, e.g. "GO:0050911:"). An absent name is null, as
     everywhere else in the spec."""
     assert run("go", ["GO:0050911:"], GO_INDEX)["go_terms"] == [
         {"id": "GO:0050911", "name": None, "namespace": "biological_process"}
@@ -816,7 +816,7 @@ def test_spliceai_symbol_alone_is_not_an_annotation():
 
 # --- plain scalar/list plugins -----------------------------------------------
 #
-# No new vocabulary; all five verified against dev-data/output.vcf.gz with zero
+# No new vocabulary; all five verified against a representative output VCF with zero
 # mismatches (hgvs 210,658 / phenotype_data 382,715 / dosage 393,079 /
 # intact 25 / popeve 96,953 CSQ entries).
 
@@ -1368,7 +1368,7 @@ def test_spdi_and_hgvsg_are_allele_scoped():
 UTR_COLS = ["5UTR_consequence", "5UTR_annotation", "Existing_uORFs",
             "Existing_InFrame_oORFs", "Existing_OutOfFrame_oORFs"]
 UTR_INDEX = index_map_for(*UTR_COLS)
-# A real value from dev-data/has_utr.vcf.gz.
+# A real value from a representative UTR-annotated VCF.
 UTR_ANNOTATION = (
     "alt_type=uORF:ref_StartDistanceToCDS=324:ref_type=uORF:KozakStrength=Moderate"
     ":KozakContext=GCGATGC:ref_type_length=15:Evidence=False:alt_type_length=189"
@@ -2668,6 +2668,7 @@ def test_a_plan_reads_the_columns_the_plugin_declares():
     header carries, in the order declared — read positionally at parse time, so
     a wrong index here is a value silently taken from the wrong column."""
     spec = SPEC.plugin("clinvar")
+    assert spec is not None
     plan = compile_plugin(INDEX_MAP, spec)
     assert plan.key_indices == tuple(
         INDEX_MAP[column] for column in spec.csq_fields if column in INDEX_MAP

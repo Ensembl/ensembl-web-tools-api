@@ -1,4 +1,5 @@
-import logging, os
+import logging
+import os
 from typing import Callable
 
 from pydantic import (
@@ -14,11 +15,7 @@ from pydantic import (
 )
 from requests import HTTPError
 
-from core.config import (
-    DUMP_INI,
-    NF_COMPUTE_ENV_ID,
-    NF_PIPELINE_URL,
-)
+from core.config import NF_COMPUTE_ENV_ID, NF_PIPELINE_URL, VEP_PLUGIN_DATA_PATH
 from core.logging import InterceptHandler
 
 from vep.models.config_spec_model import ConfigSpec
@@ -49,7 +46,6 @@ class VEPConfigParams(BaseModel):
         )
         return json_str
 
-
 class LaunchParams(BaseModel):
     computeEnvId: str = NF_COMPUTE_ENV_ID
     pipeline: str = NF_PIPELINE_URL
@@ -63,33 +59,13 @@ class LaunchParams(BaseModel):
     def serialize_workdir(self, workdir: DirectoryPath):
         return workdir.as_posix()
 
-
 class PipelineParams(BaseModel):
     launch: LaunchParams
 
 
-# Placeholder root for plugin data files. These paths are not yet resolved
-# per-genome; they will be substituted for real locations later.
-# TODO (pre-production, required): replace this placeholder with real per-genome
-# plugin-data resolution. Every `plugin ...` line below interpolates it, so no
-# plugin can run against real data until this is wired up.
-PLUGIN_PATH = "/[placeholder_path]"
-
-
-# --- DEV ONLY: real (beta) plugin-data locations ---------------------------
-# So a DUMP_INI dev job's config.ini points at the real data on nfs (the manual
-# HPC run reads it directly) instead of the PLUGIN_PATH placeholder. Wired only
-# under DUMP_INI (see create_config_ini_file). REMOVE this whole block — and the
-# DUMP_INI branch below — once production per-genome plugin-data resolution
-# lands. Not the final production paths; the beta layout used for dev today.
-_DEV_PLUGIN_ROOT = {
-    "GRCh38": "/nfs/production/flicek/ensembl/variation/enseweb-data_tools/beta_plugins/grch38",
-    "GRCh37": "/nfs/production/flicek/ensembl/variation/enseweb-data_tools/beta_plugins/grch37",
-}
-# Most datasets sit directly in the assembly's base dir; these few live in a
-# named subdir under it (keyed by config-entry id). GRCh37 simply has no entry
-# for the GRCh38-only datasets (AllOfUs / gnomAD CNV), so one map serves both.
-_DEV_PLUGIN_SUBDIRS = {
+# Most datasets sit directly in an assembly's base directory. These entries
+# live in a named dataset directory instead.
+_PLUGIN_DATA_SUBDIRS = {
     "allofus": "AllOfUs",
     "go": "GO_data_files",
     "phenotypes": "Phenotypes_data_files",
@@ -100,32 +76,24 @@ _DEV_PLUGIN_SUBDIRS = {
 }
 
 
-# Everything that is not one of the human assemblies: the GO / Phenotypes files
-# for the other species share one tree, under the same per-dataset subdirs.
-_DEV_OTHER_SPECIES_ROOT = (
-    "/nfs/production/flicek/ensembl/variation/enseweb-data_tools/beta_plugins/other_species"
-)
+def plugin_data_path(assembly: str) -> "Callable[[str], str]":
+    """Resolve each config entry's `{path}` below the configured data root.
 
-
-def _dev_plugin_path(assembly: str) -> "Callable[[str], str]":
-    """A per-entry `{path}` resolver for dev: the assembly's base dir, plus a
-    named subdir for the datasets that live in one.
-
-    An assembly with no root of its own is another species, not a broken
-    lookup — it resolves under the shared other-species tree. Falling back to
-    the GRCh38 root, as this once did, would have pointed a cattle job at human
-    data files.
+    Human assemblies use their own trees. Other species never fall back to a
+    human tree, preventing an annotation run from using the wrong species'
+    data. The `t2t` tree is not used until a matching T2T config entry exists.
     """
-    for prefix, root in _DEV_PLUGIN_ROOT.items():
-        if (assembly or "").startswith(prefix):
-            base = root
-            break
+    if (assembly or "").startswith("GRCh38"):
+        tree = "grch38"
+    elif (assembly or "").startswith("GRCh37"):
+        tree = "grch37"
     else:
-        base = _DEV_OTHER_SPECIES_ROOT
+        tree = "other_species"
+    base = os.path.join(VEP_PLUGIN_DATA_PATH, tree)
 
     def resolve(entry_id: str) -> str:
-        subdir = _DEV_PLUGIN_SUBDIRS.get(entry_id)
-        return f"{base}/{subdir}" if subdir else base
+        subdir = _PLUGIN_DATA_SUBDIRS.get(entry_id)
+        return os.path.join(base, subdir) if subdir else base
 
     return resolve
 
@@ -283,18 +251,11 @@ class ConfigIniParams(BaseModel):
             transcript_version=self.transcript_version,
             canonical=self.canonical,
         )
-        # Dev jobs (DUMP_INI) resolve `{path}` to the real beta data layout so
-        # the dumped ini runs directly on the HPC; production still emits the
-        # placeholder until real per-genome resolution lands (see PLUGIN_PATH).
-        # The real assembly name, not the GRCh37/38 bucket above: that bucket
-        # calls every other species GRCh38, which would point a cattle job at
-        # human plugin data.
-        plugin_path = _dev_plugin_path(assembly_name) if DUMP_INI else PLUGIN_PATH
         lines += emit_config_lines(
             config_spec,
             self.options,
             assembly=assembly,
-            plugin_path=plugin_path,
+            plugin_path=plugin_data_path(assembly_name),
             gff=self.gff,
         )
 

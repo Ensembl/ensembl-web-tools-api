@@ -3,12 +3,12 @@
 How variant data and metadata move through the VEP stack — what calls what, in
 what order, and where each piece of the JSON specification takes effect.
 
-Verified 2026-08-09 against tools-api `ad15cda` and standalone-web-vep `880fa38`.
+Verified against the tools API implementation and its `ensembl-client` integration.
 
 Companions: [spec-and-extension-guide.md](./spec-and-extension-guide.md) (the
 grammar), [technical-notes.md](./technical-notes.md) (why the machinery is shaped
-this way), [production-readiness.md](./production-readiness.md) (what is still
-dev-only in the flow below).
+this way), [production-readiness.md](./production-readiness.md) (what remains to
+validate before deployment).
 
 ## The rendered diagrams
 
@@ -19,8 +19,8 @@ data at the top and re-run, rather than hand-editing the output.
 | file | shows | generator |
 |---|---|---|
 | `concept-map.html` / `.jpg` | **the shape of the thing** — four boxes and the traffic between them. Start here | `concept-map.py` |
-| `dataflow-diagram.html` / `.jpg` | **the per-request sequence**, dev and prod branches inline, with the contract points tagged | `dataflow-diagram.py` (edit `EVENTS`) |
-| `repo-overview.html` / `.jpg` | **the two-repo overview** — what lives where, the path a submission takes, and every hop that leaves the repos. VEP slice only; the tools API also serves BLAST, not drawn | `repo-overview.py` (edit `NODES` / `EDGES` / `CONTRACTS`) |
+| `dataflow-diagram.html` / `.jpg` | **the per-request sequence**, with the contract points tagged | `dataflow-diagram.py` (edit `EVENTS`) |
+| `repo-overview.html` / `.jpg` | **the integration overview** — what lives where, the path a submission takes, and every hop that leaves the repositories. VEP slice only; the tools API also serves BLAST, not drawn | `repo-overview.py` (edit `NODES` / `EDGES` / `CONTRACTS`) |
 
 The contract markers in those diagrams are the C1–C8 points, listed and
 re-verified in
@@ -36,10 +36,9 @@ below.
 - [Worked example — a variant with a pLI score](#worked-example--a-variant-with-a-pli-score)
 - [Worked example — an allele frequency](#worked-example--an-allele-frequency)
 - [Worked example — a filtered results page](#worked-example--a-filtered-results-page)
-- [Original VEP vs beta-vep](#original-vep-vs-beta-vep)
+- [Workflow execution](#workflow-execution)
 - [Species selection](#species-selection)
 - [Metadata API reference](#metadata-api-reference)
-- [Dev server modes and toggles](#dev-server-modes-and-toggles)
 
 ---
 
@@ -122,7 +121,7 @@ renders one row under the Constraint category of Genes & transcripts.
 
 ★ **The trap this example exists to record:** the plugin names its CSQ column
 after its *argument*, so the column is `pLI_transcript_value`, not `pLI`. Find
-the real name in the dev VCF's header — a wrong `csq_fields` produces no error,
+the real name in a representative workflow output VCF's header — a wrong `csq_fields` produces no error,
 just an option that never appears.
 
 ---
@@ -193,18 +192,16 @@ for the measurements and the open question about no-data semantics.
 
 ---
 
-## Original VEP vs beta-vep
-
-![Original VEP data flow](./dataflow-original-vep.svg)
+## Workflow execution
 
 The tools API orchestrates everything. External calls (orange):
 
 - **Ensembl Web Metadata API** — genome metadata for the form config, and
   resolving the `gff` / `fasta` reference paths while building `config.ini`.
 - **Seqera Platform** (Nextflow Tower) — launch the workflow, then poll status.
-- **VEP reference data** — VEP reads the **GFF + FASTA** the tools API writes into
-  `config.ini`. This is GFF-based custom annotation, **not** the VEP cache, and
-  the original `config.ini` contains **no `plugin` lines**.
+- **VEP reference data** — VEP reads the **GFF + FASTA** and plugin data paths
+   the tools API writes into `config.ini`. This is GFF-based custom annotation,
+   not the VEP cache.
 
 The client separately calls Ensembl search / metadata / variation APIs for species
 selection and example variants.
@@ -215,28 +212,11 @@ selection and example variants.
 > annotation is GFF-based — consistent with output whose MANE designation appears
 > in the `MANE` label column.
 
-![beta-vep data flow](./dataflow-beta-vep.svg)
-
-The client/API surface is identical, but the Seqera round-trip is replaced by a
-**manual step** (violet band):
-
-1. Submit runs in `DUMP_INI` mode — the tools API still resolves `gff`/`fasta`
-   and builds the same `config.ini`, but **writes it to `data/output`** and
-   returns a `dump-…` id instead of launching Seqera.
-2. **Manual gap** — the operator takes that `config.ini`, runs the Nextflow VEP
-   pipeline on the HPC (reading the GFF + FASTA + plugin data files), and drops
-   `output.vcf.gz` back into `data/output`.
-3. Results run in `LOCAL_RESULTS_VCF` mode — the endpoint parses that local VCF
-   into the structured annotations.
-
-Submission + status are **dev-mocked** so the UI's submit → poll → results flow
-still completes, and species search is proxied to Ensembl staging via the split
-dev proxy (`TOOLS_API_TARGET` vs `ENSEMBL_API_TARGET`).
-
-**Net difference:** the original is a fully-automated `client ↔ API ↔ Seqera`
-loop; beta-vep keeps the same client/API surface but swaps the Seqera round-trip
-for dump-to-disk → run manually → parse-from-disk. Closing that gap is
-[production-readiness.md § Seqera](./production-readiness.md#seqera--nextflow-wiring).
+The API creates a per-submission work directory containing the uploaded VCF,
+generated `config.ini`, and pinned sidecars, then launches the configured
+Seqera workflow. Status, results, and downloads resolve through that workflow's
+record and output path. The API and compute environment must both see the same
+work directory and VEP support-data mount.
 
 ---
 
@@ -270,9 +250,6 @@ Selecting a species fires two request chains, plus some no-API side effects.
 **No-API side effects** — `parameters` reset to `{}`; the Variants section
 auto-expands (`VepFormVariantsSection.tsx:65`).
 
-In the dev server, chain A is mocked unless `LIVE_FORM_CONFIG=1`, and chain B is
-mocked unless `LIVE_VARIATION=1`.
-
 ---
 
 ## Metadata API reference
@@ -281,19 +258,17 @@ Three distinct upstreams are easy to conflate; only one is the **metadata API**:
 
 | Upstream | Server-side (tools API) | Client-side (browser) |
 |---|---|---|
-| Metadata API (form config) | `GENOME_METADATA_API` — **staging** by default; `GENOME_METADATA_LIVE=1` → `beta.ensembl.org` | `metadataApiBaseUrl` = `/api/metadata` → `ENSEMBL_API_TARGET` |
-| Metadata API (gff/fasta) | `WEB_METADATA_API` = `https://beta.ensembl.org/api/metadata/` | — |
+| Metadata API | `WEB_METADATA_API` for form configuration, species presets, and GFF/FASTA lookup | `metadataApiBaseUrl` = `/api/metadata` |
 | Search API (separate) | — | `searchApiBaseUrl` = `/api/search` |
 | Variation GraphQL (separate) | — | `/api/graphql/variation` |
 
-The form-config metadata call (`get_genome_metadata`) defaults to **staging**,
-matching the browser's species search so genome ids resolve consistently; the
-gff/fasta lookup (`get_vep_support_location`) uses `WEB_METADATA_API` (beta)
-independently.
+All server-side metadata calls share the `WEB_METADATA_API` base, so the form
+configuration, species presets, and GFF/FASTA lookup use the same deployment
+target.
 
 **Server-side, stage 1 — form config.** `get_genome_metadata()`
-(`app/vep/utils/web_metadata.py:39`), called from `get_form_config`
-(`app/vep/vep_resources.py:484`).
+(`app/vep/utils/web_metadata.py`), called from `get_form_config`
+(`app/vep/vep_resources.py`).
 
 - `GET …/genome/{genome_id}/dataset/genebuild/attributes?attribute_names=genebuild.provider_name&attribute_names=genebuild.provider_version&attribute_names=genebuild.last_geneset_update`
 - Returns `{"attributes": [{"name","value"}, …]}`; the code reads
@@ -302,7 +277,7 @@ independently.
 - Builds the **"Transcript set"** dropdown label/value (e.g. `GENCODE 50`).
 
 **Server-side, stage 2 — submission.** `get_vep_support_location()`
-(`app/vep/utils/web_metadata.py:8`), called from `create_config_ini_file`.
+(`app/vep/utils/web_metadata.py`), called from `create_config_ini_file`.
 
 - `GET …/genome/{genome_id}/vep/file_paths` → `{"faa_location","gff_location"}`;
   each prefixed with `VEP_SUPPORT_PATH` (default `/tmpdir`) to form the `fasta` /
@@ -320,56 +295,14 @@ independently.
 ★ Verified: the shared `genomeApiSlice` also defines `/genome/{slug}/explain` and
 `/genome/{id}/karyotype`, but the VEP flow invokes neither.
 
-★ `/genomeid` returns the **partial** genome, and staging is a release ahead of
-live — both have caused confusion when ids fail to resolve.
-
----
-
-## Dev server modes and toggles
-
-The webpack dev server (`mocks/devServerMocks.cjs`) intercepts `/api/*` and
-serves fixtures, so the whole flow works with no real backend. Individual groups
-switch to **live** (the mock is not registered, so the request falls through the
-dev proxy to the real upstream).
-
-**Frontend toggles** (`LIVE` in `mocks/devServerMocks.cjs`; restart `npm start`
-after changing):
-
-| Toggle | Env var | When live, proxies to | Affects |
-|---|---|---|---|
-| `speciesSearch` | _(hard-coded `true`)_ | `ENSEMBL_API_TARGET` | `popular_species`, `genome_group_categories`, `search/genomes/v2` |
-| `formConfig` | `LIVE_FORM_CONFIG=1` | `TOOLS_API_TARGET` (local fork) | `GET /vep/form_config/:genomeId` |
-| `submission` | `LIVE_SUBMISSION=1` | `TOOLS_API_TARGET` | `POST /vep/submissions` |
-| `results` | `LIVE_RESULTS=1` | `TOOLS_API_TARGET` | `GET /vep/submissions/:id/results` |
-| `variation` | `LIVE_VARIATION=1` | `ENSEMBL_API_TARGET` | `example_objects` + `POST /graphql/variation` |
-
-Submission `status` is always mocked (returns `SUCCEEDED` after a couple of polls
-so the Results button enables).
-
-**Proxy targets** (`webpack.config.js`): `TOOLS_API_TARGET` for `/api/tools`,
-`ENSEMBL_API_TARGET` for `/api/metadata`, `/api/search`, `/api/graphql` (both
-default to staging).
-
-**Backend modes** (`app/core/config.py`):
+**Backend configuration** (`app/core/config.py`):
 
 | Env var | Effect |
 |---|---|
-| `DUMP_INI=1` | `submit_vep` writes the generated `config.ini` to `DUMP_INI_DIR` (default the repo `data/output`) and returns a fake id, instead of launching Seqera. Also switches `{path}` to the real beta data layout |
-| `LOCAL_RESULTS_VCF=<path>` | the results endpoint parses that VCF directly, skipping the Seqera status lookup |
-| `GENOME_METADATA_LIVE=1` | form-config genome metadata uses the live API instead of staging |
+| `WEB_METADATA_API` | metadata API base (including a trailing `/`), for form configuration, species presets, and GFF/FASTA lookup |
+| `VEP_SUPPORT_PATH` | prefixes metadata-provided GFF/FASTA paths and contains `vep-plugins-data/{grch37,grch38,other_species}` |
+| `NF_WORK_DIR` | shared per-job input/output parent visible to the API and workflow compute environment |
 
-Typical combined run for the manual loop:
-
-```bash
-DUMP_INI=1 LOCAL_RESULTS_VCF=/…/data/output/output.vcf.gz uvicorn main:app --reload --port 8013
-```
-
-```bash
-LIVE_SUBMISSION=1 LIVE_RESULTS=1 LIVE_VARIATION=1 TOOLS_API_TARGET=http://localhost:8013 npm start
-```
-
-★ **The API caches each job's sidecars per process.** After regenerating
-`dev-data`'s sidecars, **restart** the API — reloading the page does nothing.
-And regenerating `dev-data/` wipes the sidecars: with no `parsing_spec.json` the
-API returns zero annotations for every plugin, with no fallback to the live spec
-and no message.
+Each job's sidecars are written beside its input and output files, ensuring that
+results are parsed with the same spec, expected columns, and display panels used
+at submission time.

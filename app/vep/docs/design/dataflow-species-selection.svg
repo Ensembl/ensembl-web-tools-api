@@ -57,10 +57,10 @@
     <line class="ext ret" x1="975" y1="400" x2="135" y2="400" marker-end="url(#sE)"/><text class="msg" x="545" y="394">variant → vcfString (Example data)</text>
   </g>
 
-  <!-- dev-mode notes -->
+  <!-- API behavior -->
   <rect class="noteb" x="44" y="420" width="1011" height="44"/>
-  <text class="notet" x="56" y="438">Dev: chain A is mocked unless LIVE_FORM_CONFIG=1 (then proxies to TOOLS_API_TARGET = local fork).</text>
-  <text class="notet" x="56" y="453">chain B is mocked unless LIVE_VARIATION=1 (then proxies to ENSEMBL_API_TARGET).</text>
+  <text class="notet" x="56" y="438">Chain A calls the tools API for form configuration and the selected genome's attributes.</text>
+  <text class="notet" x="56" y="453">Chain B requests example objects and variation details through the Ensembl APIs.</text>
 
   <line class="int" x1="56" y1="490" x2="88" y2="490" marker-end="url(#sI)"/><text class="lgd" x="94" y="494">tools API (/api/tools)</text>
   <line class="ext" x1="280" y1="490" x2="312" y2="490" marker-end="url(#sE)"/><text class="lgd" x="318" y="494">Ensembl metadata / variation API · return (dashed)</text>

@@ -32,7 +32,6 @@ from starlette.responses import (
 )
 from starlette.concurrency import run_in_threadpool
 
-from core.config import DUMP_INI, DUMP_INI_DIR, LOCAL_RESULTS_VCF
 from core.error_response import response_error_handler
 from core.logging import InterceptHandler
 from vep.models.pipeline_model import (
@@ -49,7 +48,6 @@ from vep.models.upload_vcf_files import (
     UnsafeFileNameException,
 )
 from vep.utils.nextflow import launch_workflow, get_workflow_status
-from vep.utils.dump_ini import dump_config_ini
 from vep.utils.vcf_results import get_results_from_path, stream_filtered_vcf_text
 from vep.utils.tsv_export import stream_vep_tsv, flatten_vcf_lines, gzip_text_stream
 from vep.utils.results_filters import parse_filters, FilterError, ResultsFilter
@@ -132,17 +130,6 @@ async def submit_vep(request: Request):
             )
         )
 
-        if DUMP_INI:
-            # Temporary: dump the generated config.ini to disk and return a fake
-            # id, without building launch params or contacting the runner.
-            # DUMP_INI_DIR has no per-job subdirectory (unlike the real outdir
-            # below), so the sidecar written here is overwritten by the next
-            # submission — matching how this dev harness already works: one
-            # manually-run job at a time (see write_spec_sidecar).
-            write_spec_sidecar(DUMP_INI_DIR, merged_spec)
-            write_expected_columns_sidecar(DUMP_INI_DIR, expected_columns)
-            write_display_panels_sidecar(DUMP_INI_DIR, display_panels)
-            return {"submission_id": dump_config_ini(ini_parameters, merged_spec.config)}
         ini_file = ini_parameters.create_config_ini_file(
             request_streamer.temp_dir, merged_spec.config
         )
@@ -159,11 +146,8 @@ async def submit_vep(request: Request):
             paramsText=vep_job_config_parameters, workDir=request_streamer.temp_dir
         )
         pipeline_params = PipelineParams(launch=launch_params)
-        if stream_result:
-            workflow_id = launch_workflow(pipeline_params)
-            return {"submission_id": workflow_id}
-        else:
-            raise Exception("Failed to upload VEP input files")
+        workflow_id = launch_workflow(pipeline_params)
+        return {"submission_id": workflow_id}
     except HTTPError as e:
         try:
             msg = e.response.json()["message"]
@@ -186,17 +170,6 @@ async def submit_vep(request: Request):
 @router.get("/submissions/{submission_id}/status", name="submission_status")
 async def vep_status(request: Request, submission_id: str):
     try:
-        # Dev short-circuit: in DUMP_INI / LOCAL_RESULTS_VCF mode there is no real
-        # pipeline run to poll (the submission returned a fake id), so report
-        # SUCCEEDED straight away and let the results endpoint serve the local
-        # VCF. TEMPORARY: paired with DUMP_INI / LOCAL_RESULTS_VCF.
-        if DUMP_INI or LOCAL_RESULTS_VCF:
-            return JSONResponse(
-                content={
-                    "submission_id": submission_id,
-                    "status": VepStatus.succeeded.value,
-                }
-            )
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
             submission_id=submission_id, status=workflow_status
@@ -297,13 +270,6 @@ async def download_results(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
     try:
-        # Temporary local-results mode: serve the VEP output VCF on disk directly,
-        # bypassing the Seqera status lookup. Enabled by setting LOCAL_RESULTS_VCF
-        # (the same file the results view parses). Discrete and easily removed.
-        if LOCAL_RESULTS_VCF:
-            return _results_download_response(
-                FilePath(LOCAL_RESULTS_VCF), format, active_filters
-            )
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
             submission_id=submission_id, status=workflow_status
@@ -419,19 +385,6 @@ async def fetch_results(
                     content={"details": f"Invalid filters: {exc}"},
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
-        # Temporary local-results mode: parse a VEP output VCF on disk directly,
-        # bypassing the Seqera status lookup. Enabled by setting LOCAL_RESULTS_VCF.
-        if LOCAL_RESULTS_VCF:
-            # Reading + (for a filtered request) scanning the results VCF is a
-            # blocking, CPU-bound job; run it in a worker thread so a large
-            # filtered scan doesn't stall the event loop for every other request.
-            return await run_in_threadpool(
-                _results,
-                vcf_path=FilePath(LOCAL_RESULTS_VCF),
-                page=page,
-                page_size=per_page,
-                filters=active_filters,
-            )
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
             submission_id=submission_id, status=workflow_status

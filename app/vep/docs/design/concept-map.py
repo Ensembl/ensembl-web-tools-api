@@ -4,9 +4,9 @@ together" view, in the spirit of the original hand-drawn plan: four boxes,
 numbered arrows, nothing else.
 
 Deliberately the *least* detailed of the three diagrams beside it:
-  concept-map        — the shape of the thing (this file)
-  dataflow-diagram   — the per-request sequence, dev/prod branches
-  repo-overview      — module-level map of both repos and everything outside
+    concept-map        — the shape of the thing (this file)
+    dataflow-diagram   — the per-request sequence
+    repo-overview      — module-level map of both repositories and everything outside
 
 Re-run after edits; writes the HTML next to this script.
 """
@@ -20,7 +20,7 @@ W, H = 1260, 620
 # way the original sketch had "run + poll" trailing off the backend — which frees
 # the whole lower right for the margin notes.
 BOX = {
-    "FE":   (60,  140, 240, 116, "Frontend", "standalone-web-vep", "repo"),
+    "FE":   (60,  140, 240, 116, "Frontend", "ensembl-client", "repo"),
     "BE":   (600, 140, 260, 116, "Backend", "ensembl-web-tools-api · vep", "repo"),
     "PIPE": (980, 140, 230, 116, "Pipeline", "Nextflow / Seqera", "ext"),
     "API":  (400, 420, 300, 104, "Metadata API", "a JSON file today", "seam"),
@@ -50,12 +50,10 @@ DOWN = [
 ]
 
 # --- what actually stands in for the two non-repo boxes ----------------------
-# The pipeline has a genuine dev branch. The metadata API does not: spec_loader
-# reads app/vep/specs off disk with no env override, so the JSON is the live
-# implementation in dev and prod alike — labelled as such rather than "in dev".
+# The API reads bundled annotation specs; the workflow executes externally.
 SUBS = {
-    "API":  ["dev and prod alike —", "app/vep/specs/*.json, read from disk"],
-    "PIPE": ["in dev —", "config.ini dumped to dev-data,", "manual HPC run, VCF placed back"],
+    "API":  ["app/vep/specs/*.json", "read by the backend"],
+    "PIPE": ["Nextflow via Seqera", "shared job directory"],
 }
 
 # --- margin notes (the sketch's scribbles), in the free lower-right ----------

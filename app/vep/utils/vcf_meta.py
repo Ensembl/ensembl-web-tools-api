@@ -11,17 +11,6 @@ from vep.models import vcf_results_model as model
 META_FILE = "results_meta.json"
 
 
-# ---------------------------------------------------------------------------
-# DEV/LOCAL-ONLY: stale metadata-cache guard
-#
-# In the full pipeline, every run writes its output VCF (and this metadata
-# cache) into its own directory, so the cache can never go stale. This guard
-# only matters when a single local output file is parsed repeatedly and then
-# regenerated (e.g. re-running the pipeline against the fixed LOCAL_RESULTS_VCF
-# path during development): without it the old header/record counts would be
-# reused and mis-slice the new file. Safe to remove once outputs always land in
-# per-run directories.
-# ---------------------------------------------------------------------------
 def _is_meta_cache_stale(meta_path: FilePath, vcf_path: FilePath) -> bool:
     """True if the metadata cache exists but predates its VCF."""
     return (

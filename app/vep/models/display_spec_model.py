@@ -3,25 +3,16 @@ annotation is laid out in the results annotation detail.
 
 The parsing spec says how a plugin's CSQ columns become structured data; this
 says how that data is presented — the labels, order, headings, number formats
-and placeholders that were, until now, twelve hand-written `case` bodies in the
-frontend's `VepResultsAnnotationDetail`. Moving them here makes the backend the
+and placeholders. Moving them here makes the backend the
 single owner of the option contract end to end (which options exist, how they
 are parsed, how they are shown) and lets the frontend render generically.
 
 It is authored per genome, so unlike the per-job display *panels* it lives
 inside the merged spec document as a third sibling section, under the same
-content digest, and is pinned to a job for free.
+content digest, and is pinned to a job.
 
-This model owns every option's layout. It began deliberately small — one field
-per rendering primitive the frontend already had, with the interactive and
-derived options (ClinVar, OpenTargets, ProtVar) left as frontend overrides — but
-the override registry is now empty, and ClinVar, once the example of what could
-not be expressed, is the largest thing described here. Some constructs (a
-collapsed detail, a star rating) do invent behaviour the row primitives had no
-equivalent for.
-
-What stays on the frontend: named `builder` links, which need job context no
-annotation field carries.
+Note: named `builder` links are annotated in frontend, as it needs job 
+context (genome, consequence) to build the URL.
 """
 
 import re
@@ -84,8 +75,8 @@ class SubOption(BaseModel):
 
     Also names the gate a block renders behind (`requires_selected`), which is
     the same question asked of the whole block rather than of one row: was this
-    id in the submitted parameters. The ClinVar master needs it because dev-data
-    VCFs are annotated from a full cache and carry columns the user did not
+    id in the submitted parameters. The ClinVar master needs it because outputs
+    may carry columns the user did not
     pick, so gating on the data alone would leak an unselected variant kind into
     the view.
     """

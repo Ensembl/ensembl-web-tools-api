@@ -866,10 +866,9 @@ def _check_expected_columns(vcf_path: FilePath, expected: set[str] | None) -> No
     missing expected column is a real contract breach — a plugin the user enabled
     produced no column — while extra columns are always tolerated.
 
-    Dev only warns and never fails results; a missing pin (output predating this)
-    or an unreadable header is a no-op. Production would rerun the pipeline to
-    regenerate the headers, capped at 3 retries (decision 15); that path needs
-    the real pipeline and is not wired into this dev loop.
+    Missing columns currently log warnings and never fail results; a missing pin
+    (output predating this) or an unreadable header is a no-op. A retry or
+    failure policy requires an explicit workflow contract.
     """
     if not expected:
         return

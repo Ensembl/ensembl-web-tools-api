@@ -4,11 +4,9 @@
 VEP tool** — what is data and what is code, the full grammar available in each
 spec section, and worked examples from the simplest plugin to the hardest.
 
-Verified 2026-08-09 against `ensembl-web-tools-api` `feature/extended_vep`
-(= Ensembl `handover/web-vep`) at `ad15cda`, and `standalone-web-vep` `main` at
-`880fa38`. Every table and count below was read out of the models and the
-assembled spec rather than remembered; file references are given so you can
-re-derive them when they move.
+Every table and count below is read from the models and assembled spec rather
+than remembered; file references are given so you can re-derive them when they
+move.
 
 > This guide **supersedes** the two design documents that used to sit here,
 > `adding-an-annotation-plugin.md` and `merged-annotation-spec.md`, and the
@@ -21,7 +19,7 @@ re-derive them when they move.
 > surrounding machinery works, and the reasoning behind it),
 > [dataflow.md](./dataflow.md) (what calls what, end to end, plus the rendered
 > diagrams), and [production-readiness.md](./production-readiness.md) (what must
-> change before this leaves dev).
+> change before deployment).
 
 ---
 
@@ -71,17 +69,14 @@ inventing a rendering primitive that does not exist yet.
 
 ## 2. The shape of the system
 
-### 2.1 Three repos
+### 2.1 Two repositories
 
 | repo | role | branch that ships |
 |---|---|---|
-| `ensembl-web-tools-api` | the API: form config, submission, config.ini generation, results parsing, the spec documents | fork `feature/extended_vep` → Ensembl `handover/web-vep` |
-| `standalone-web-vep` | the VEP frontend, developed standalone | fork `main` |
-| `ensembl-client` | where the frontend is integrated for release | Ensembl `integration/vep-v2` |
+| `ensembl-web-tools-api` | the API: form config, submission, config.ini generation, results parsing, and spec documents | current branch |
+| `ensembl-client` | the VEP frontend and release integration | current client integration branch |
 
-Frontend work is authored in `standalone-web-vep` (its CI, fixture job and
-browser preview all work there) and ported into `ensembl-client`. The two trees
-diverge in ~51 integration files; VEP itself sits at the same path in both.
+The client consumes the API's form, submission, status, and results contracts.
 
 ### 2.2 Spec documents and how they compose
 
@@ -257,35 +252,29 @@ pointing a config entry at it.
 ### 3.1 The `{path}` token
 
 Config entries never name absolute paths. They write `{path}/my_data.vcf.gz`, and
-`config_interpreter` substitutes it (`config_interpreter.py:42`, `:244`). What it
-substitutes depends on where you are:
-
-| context | resolver | value |
-|---|---|---|
-| production | `PLUGIN_PATH`, `pipeline_model.py:76` | **`/[placeholder_path]`** — a deliberate placeholder. Nothing runs against real data until per-genome resolution is wired. This is a known pre-production TODO. |
-| dev (`DUMP_INI`) | `_dev_plugin_path(assembly)`, `pipeline_model.py:110` | the real beta layout on nfs, per assembly, plus a named subdir for the few datasets that live in one |
-
-The dev resolver is a *function of the config-entry id*, not a constant:
+`config_interpreter` substitutes it (`config_interpreter.py:42`, `:244`) through
+`pipeline_model.plugin_data_path()`. The configured parent is
+`${VEP_SUPPORT_PATH}/vep-plugins-data`; the resolver is a function of both the
+submitted assembly and config-entry id:
 
 ```python
-_DEV_PLUGIN_ROOT = {
-    "GRCh38": ".../beta_plugins/grch38",
-    "GRCh37": ".../beta_plugins/grch37",
-}
-_DEV_PLUGIN_SUBDIRS = {           # entry id → subdir under the root
+GRCh38* -> vep-plugins-data/grch38
+GRCh37* -> vep-plugins-data/grch37
+other species -> vep-plugins-data/other_species
+
+dataset_subdirectories = {        # entry id -> subdir under the assembly tree
     "allofus": "AllOfUs", "go": "GO_data_files", "phenotypes": "Phenotypes_data_files",
     "gnomad_cnv": "gnomAD_CNV", "gnomad_sv": "gnomAD_SV",
     "gnomad_exomes": "gnomAD_exomes", "gnomad_genomes": "gnomAD_genomes",
 }
-_DEV_OTHER_SPECIES_ROOT = ".../beta_plugins/other_species"
 ```
 
-An assembly with no root of its own resolves under the other-species tree — not
-under GRCh38, which is what it used to do and which pointed a cattle job at human
-files.
+An assembly outside the human references resolves under `other_species`, never
+under GRCh38. The separate `t2t` directory is reserved for its one gnomAD file
+and requires a T2T-specific config entry before it can be selected.
 
-**So to add a dataset in dev:** drop the indexed file into the assembly's root
-(or add a `_DEV_PLUGIN_SUBDIRS` entry if it needs its own directory) and write
+**To add a dataset:** place the indexed file in the appropriate assembly tree
+(add a `_PLUGIN_DATA_SUBDIRS` entry if it needs its own directory) and write
 `{path}/<filename>` in the config entry. For a per-assembly file, use
 `by_assembly` rather than two entries.
 
@@ -319,10 +308,9 @@ separator after the table name (`_is_same_assembly`) so that Ciona's assembly
 
 ### 3.3 The pipeline itself
 
-In dev there is no automated end-to-end run: the API writes a `config.ini` dump
-(`DUMP_INI`), the Nextflow/VEP step is run manually on the HPC, and the output
-VCF plus its sidecars are copied into `dev-data/`. Seqera wiring is scaffolded
-but not live — see `seqera-wiring-todo.md` in this folder.
+The API writes each submission's `config.ini` and sidecars into its job
+directory, then launches the configured Seqera workflow. The workflow writes its
+output beside those files, where the API resolves it for results and downloads.
 
 ---
 
@@ -445,31 +433,13 @@ But a JSON round-trip *is* byte-identical with
 `json.dumps(doc, indent=2, ensure_ascii=False) + "\n"` (`ensure_ascii=False`
 matters — SpliceAI's ΔS/ΔP labels), which makes scripted edits safe within a file.
 
-### Step 5 — the frontend fixture
-
-```bash
-PYTHONPATH=app .venv/bin/python app/vep/scripts/generate_display_fixture.py
-```
-
-Run from the tools-api checkout; it rewrites `displaySpec.fixture.ts` in the
-sibling `standalone-web-vep`. The fixture is byte-equal to the served
-`display_payload`, and a CI job checks it against the fork's
-`feature/extended_vep` — so **the backend half must merge first**.
-
-### Step 6 — verify
+### Step 5 — verify
 
 ```bash
 PYTHONPATH=app .venv/bin/python -m pytest app/tests -q
 ```
 
 (one pre-existing failure: `test_blast.py::test_read_config`, missing `.env`)
-
-```bash
-node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json && node node_modules/vitest/vitest.mjs run
-```
-
-Then regenerate the dev-data sidecar and restart the API — see
-[§12](#12-traps), because this is where most of the wasted time goes.
 
 ---
 
@@ -1083,7 +1053,7 @@ Use an option-level `heading` **or** per-block headings, not both.
 | gate | question |
 |---|---|
 | `requires: "<plugin>"` | did that plugin produce an annotation at all? Needed where placeholder rows would otherwise render as a wall of dashes |
-| `requires_selected: {id, default}` | was this sub-option chosen for this job? (dev VCFs are annotated from a full cache and carry columns the user did not pick) |
+| `requires_selected: {id, default}` | was this sub-option chosen for this job? (workflow output may carry columns the user did not pick) |
 | `when: {present\|empty: "<plugin>.<field>"}` | a data condition — ClinVar flips between a bare row and a headed block on it |
 | `view: "default" \| "show_all"` | which of the two views; absent = both |
 
@@ -1273,43 +1243,29 @@ Every one of these has cost real time.
    change; make a new submission, or rewrite the sidecar. Say this when handing
    over a display change or it will be reported as "not fixed".
 
-4. **The API caches sidecars per process.** After rewriting `dev-data`'s
-   sidecars, **restart** the API — reloading the page does nothing.
-
-5. **The pinned sidecar is written by `model_dump_json()` — by field name, not by
+4. **The pinned sidecar is written by `model_dump_json()` — by field name, not by
    alias, and compact.** Two consequences: an aliased model needs
    `populate_by_name=True` or the *whole spec* fails to load and every plugin
    silently produces nothing; and if you are editing a sidecar by hand the JSON
    is `"label":"X"` with **no space after the colon**, unlike the spec files.
 
-6. **Deleting or renaming a parsing-spec field kills every existing job.** The
+5. **Deleting or renaming a parsing-spec field kills every existing job.** The
    models are `extra="forbid"`, `_load_pinned_spec` swallows the validation error
    and returns `None`, and the job renders with *no annotations at all* and no
    message. When a field goes: keep accepting the old spelling (an alias for a
    rename, a declared-but-unread field for a deletion), add its shape to
    `test_sidecar_compatibility.py`, and do **not** relax `extra="forbid"`.
 
-7. **Regenerating `dev-data/` wipes its sidecars**, and with no `parsing_spec.json`
-   the API returns zero annotations for every plugin — not a fallback to the live
-   spec.
-
-8. **A plugin's `cols` gaining a middle field silently kills the whole panel.**
+6. **A plugin's `cols` gaining a middle field silently kills the whole panel.**
    Positional parses are exactly as fragile as they sound; prefer reading both
    shapes when a source's layout changes, since results live seven days.
 
-9. **The frontend fixture job fails until the backend half merges.** Not a real
-   failure. Merge backend → re-run the job → merge frontend.
-
-10. **Lint the port against `ensembl-client`'s config before merging**, not when
-    porting — its React Compiler rules are errors where standalone's are
-    warnings. And lint *every file the port stages*, not only the ones you edited.
-
-11. **A misparse is silent.** A wrong `size`, a wrong separator or a wrong field
+7. **A misparse is silent.** A wrong `size`, a wrong separator or a wrong field
     order produces plausible numbers under the wrong names. Differential-test
-    against a real dev-data VCF carrying the columns — not just fixtures. This is
+    against a real workflow output carrying the columns — not just fixtures. This is
     the validation that consistently pays off.
 
-12. **Run the control.** When you believe something is fixed, break it
+8. **Run the control.** When you believe something is fixed, break it
     deliberately and confirm the measurement moves. A test that cannot fail
     proves nothing; a spec-driven path that silently falls back to a bespoke
     renderer looks identical to one that works.
@@ -1352,7 +1308,7 @@ Every one of these has cost real time.
 Ordered; the joins fail loudly at load if a step is skipped.
 
 1. Place the indexed data file where `{path}` resolves (and add a
-   `_DEV_PLUGIN_SUBDIRS` entry if it needs its own directory).
+  `_PLUGIN_DATA_SUBDIRS` entry if it needs its own directory).
 2. Author the `config` entry in the genome document — emitter, `parsed_as`, and
    the `form` block (label, default, panel, category, order, sub-options).
    Declaring it in `human_grch38.json` alone is how you make it GRCh38-only.
@@ -1360,11 +1316,10 @@ Ordered; the joins fail loudly at load if a step is skipped.
    `csq_fields`, targets. Only if it emits columns to read.
 4. Author the `display` option in `annotation_library.json`.
 5. Mirror steps 2–4 into `app/tests/human_grch38.baseline.json`.
-6. Regenerate the frontend fixture (`generate_display_fixture.py`).
-7. Run both suites: backend pytest, frontend `tsc` + vitest + the client's
-   prettier — and eslint under **ensembl-client's** config.
-8. Regenerate the `dev-data` sidecar and **restart** the API.
-9. Differential-test against a real VCF, and run a control.
+6. Run backend pytest and the client's `tsc`, vitest, prettier, and eslint under
+  **ensembl-client's** config.
+7. Run a test workflow and inspect the generated per-job sidecars.
+8. Differential-test against a real VCF, and run a control.
 
 There is no longer a step for `form_panels.py` or for `ConfigIniParams`. If you
 find yourself editing either to add an option, something is wrong with the entry.

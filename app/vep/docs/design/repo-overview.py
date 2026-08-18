@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the VEP two-repo overview (repo-overview.html) — a hand-built,
+"""Generate the VEP integration overview (repo-overview.html) — a hand-built,
 theme-aware SVG flow chart, matching the house style of dataflow-diagram.py
 (no mermaid, no runtime).
 
@@ -16,7 +16,7 @@ W = 1240
 
 # --- lanes -------------------------------------------------------------------
 LANES = [
-    ("FE",  "Frontend",  "standalone-web-vep",    "fe",   210),
+    ("FE",  "Frontend",  "ensembl-client",        "fe",   210),
     ("BE",  "Backend",   "ensembl-web-tools-api · vep/", "be", 640),
     ("EXT", "Outside",   "services, data, the web", "ext", 1055),
 ]
@@ -47,7 +47,7 @@ NODES = [
     ("vepsup",   "EXT", TOP + 370,  "VEP support files",        "gff + fasta paths (metadata)",   "ext"),
 
     # Phase 3 — run
-    ("runner",   "BE",  TOP + 516,  "Launch / poll run",        "nextflow.py (prod) · DUMP_INI (dev)", "plain"),
+    ("runner",   "BE",  TOP + 516,  "Launch / poll run",        "nextflow.py", "plain"),
     ("seqera",   "EXT", TOP + 516,  "Seqera / Nextflow",        "runs VEP + plugins",             "ext"),
     ("plugdata", "EXT", TOP + 586,  "Plugin data on /nfs",      "gnomAD, ClinVar, GO, …",         "ext"),
 
@@ -335,10 +335,10 @@ PAGE = r"""<meta charset="utf-8">
 </style>
 <div class="wrap">
   <p class="eyebrow">VEP: Repository overview</p>
-  <h1>What lives where, and what each repo talks to</h1>
-  <p class="lede">The two repos that make up VEP, the path a submission takes through them, and every point where either repo reaches <b>outside itself</b>. Only the VEP slice of the tools API is drawn — it also serves BLAST, which is out of scope here. Two kinds of edge are called out: <b>API&nbsp;seam</b> reads (dev version a local JSON file, live version the metadata API) and <b>external</b> hops.</p>
+    <h1>What lives where, and what each repository talks to</h1>
+    <p class="lede">The tools API and <code>ensembl-client</code>, the path a submission takes through them, and every point where either repository reaches <b>outside itself</b>. Only the VEP slice of the tools API is drawn — it also serves BLAST, which is out of scope here.</p>
   <div class="legend" aria-label="Key">
-    <span class="chip"><span class="dot fe"></span>Frontend <small>standalone-web-vep</small></span>
+    <span class="chip"><span class="dot fe"></span>Frontend <small>ensembl-client</small></span>
     <span class="chip"><span class="dot be"></span>Backend <small>ensembl-web-tools-api vep</small></span>
     <span class="chip"><span class="dot ext"></span>External <small>another service, the filesystem, or the web</small></span>
     <span class="chip"><span class="dot seam"></span>API seam <small>becomes a metadata-API call</small></span>
@@ -360,8 +360,8 @@ PAGE = r"""<meta charset="utf-8">
       <li>The frontend never reads a spec: it only ever sees what the backend serves</li></ul></div>
     <div class="card"><h3><span class="dot ext"></span>Outside contacts</h3><ul>
       <li><b>Genome metadata / search</b> — species lookup for the selector, and the gff/fasta paths for a run</li>
-      <li><b>Seqera / Nextflow</b> — launch and poll (prod). In dev this is a manual HPC run and a hand-placed VCF</li>
-      <li><b>Plugin data on /nfs</b> — read by VEP itself, named by the config the backend emits. Currently specced for locations accessible in dev. Live mode requires moving to equivalent structure visible to web-prod cluster</li>
+    <li><b>Seqera / Nextflow</b> — launches and polls the workflow; the output is written to the shared job directory</li>
+    <li><b>Plugin data</b> — read by VEP itself from the configured support-data mount, named by the config the backend emits</li>
       <li><b>Link-outs</b> — ClinVar, AmiGO, OpenTargets, MaveDB, ProtVar, opened from the results panel</li></ul></div>
   </div>
 

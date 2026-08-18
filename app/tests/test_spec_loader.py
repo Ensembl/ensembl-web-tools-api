@@ -356,8 +356,7 @@ def test_load_expected_columns_sidecar_missing_is_none(tmp_path):
 
 
 def test_write_spec_sidecar_overwrites_the_previous_one(tmp_path):
-    """Matches the DUMP_INI dev harness: one job in flight at a time, so a new
-    submission's spec replaces the last one rather than accumulating."""
+    """Writing a sidecar again for the same job replaces its previous pin."""
     write_spec_sidecar(tmp_path, load_merged_spec("human_grch38"))
     write_spec_sidecar(tmp_path, load_merged_spec("human_grch38"))
     assert (tmp_path / SPEC_SIDECAR_FILE).exists()

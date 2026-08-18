@@ -6,10 +6,10 @@ import html, os
 
 W = 1160
 LANES = [
-    ("FE",   "Frontend", "standalone-web-vep",   "fe"),
+    ("FE",   "Frontend", "ensembl-client",       "fe"),
     ("API",  "Metadata API", "JSON today",       "api"),
     ("BE",   "Backend",  "ensembl-web-tools-api", "be"),
-    ("PIPE", "Pipeline", "Nextflow / dev-data",  "pipe"),
+    ("PIPE", "Pipeline", "Nextflow / Seqera",    "pipe"),
 ]
 LANE_CLASS = {lid: cls for lid, _, _, cls in LANES}
 LX = {"FE": 170, "API": 440, "BE": 710, "PIPE": 980}
@@ -36,19 +36,16 @@ EVENTS = [
     ("self", "BE", "Merge with the always-on base config"),
     ("self", "BE", "Emit config.ini (config_interpreter)", "CONTRACT"),
     ("self", "BE", "Pin: spec + expected columns + panels", "CONTRACT"),
-    ("msg", "BE", "PIPE", "Launch Nextflow run via Seqera", "req", "PROD"),
-    ("msg", "BE", "PIPE", "Dump config.ini to dev-data", "req", "DEV"),
+    ("msg", "BE", "PIPE", "Launch Nextflow run via Seqera", "req"),
     ("msg", "BE", "FE", "submission_id", "res"),
 
     ("phase", "Phase 3  —  Run the pipeline"),
-    ("self", "PIPE", "VEP + plugins run; output VCF mounted", "PROD"),
-    ("self", "PIPE", "Manual HPC run; VCF hand-placed in dev-data", "DEV"),
+    ("self", "PIPE", "VEP + plugins run; output VCF is written beside the job", "PROD"),
 
     ("phase", "Phase 4  —  Poll status  (every 15s, until settled)"),
     ("msg", "FE", "BE", "GET status", "req"),
     ("msg", "BE", "PIPE", "Poll Seqera for run status", "req", "PROD"),
     ("msg", "PIPE", "BE", "status", "res", "PROD"),
-    ("self", "BE", "Report SUCCEEDED at once", "DEV"),
     ("msg", "BE", "FE", "status", "res"),
 
     ("phase", "Phase 5  —  Results"),
@@ -299,17 +296,17 @@ PAGE = r"""<meta charset="utf-8">
 <div class="wrap"><div class="col">
   <p class="eyebrow">VEP: Target-state architecture</p>
   <h1>End-to-end dataflow after the spec-driven changes</h1>
-  <p class="lede">How the <b>frontend</b>, <b>backend</b>, and the <b>metadata API</b> exchange options, config, parsing and display across one submission. The metadata API is drawn as a distinct service but is <b>realised today as a local JSON file</b>. Order and endpoints verified against the current code; reflects the decisions locked in review.</p>
+  <p class="lede">How the <b>frontend</b>, <b>backend</b>, and the <b>metadata API</b> exchange options, configuration, parsing, and display across one submission.</p>
   <div class="legend" aria-label="Participants">
-    <span class="chip"><span class="dot fe"></span>Frontend <small>standalone-web-vep</small></span>
-    <span class="chip"><span class="dot api"></span>Metadata API <small>currently a JSON file</small></span>
+    <span class="chip"><span class="dot fe"></span>Frontend <small>ensembl-client</small></span>
+    <span class="chip"><span class="dot api"></span>Metadata API <small>genome and support-file lookup</small></span>
     <span class="chip"><span class="dot be"></span>Backend <small>ensembl-web-tools-api</small></span>
-    <span class="chip"><span class="dot pipe"></span>Pipeline <small>Nextflow/Seqera | dev-data</small></span>
+    <span class="chip"><span class="dot pipe"></span>Pipeline <small>Nextflow via Seqera</small></span>
     <span class="chip"><span class="pill ct">CONTRACT</span><small>where one side must match the other</small></span>
     <span class="chip"><span class="pill api">API</span><small>becomes a metadata API call</small></span>
   </div>
   <div class="plate-shell">
-    <div class="plate-cap"><span>Sequence — one submission, start to finish</span><span>dev / prod branches tagged inline</span></div>
+    <div class="plate-cap"><span>Sequence — one submission, start to finish</span><span>contract points tagged inline</span></div>
     <div class="plate">__SVG__</div>
   </div>
   <div class="grid2">
@@ -328,8 +325,7 @@ PAGE = r"""<meta charset="utf-8">
       <li><b>Pins</b> parsing + display spec per job</li>
       <li>Both checks; launches/polls the pipeline; parses; filters + downloads</li></ul></div>
     <div class="card"><h3><span class="dot pipe"></span>Pipeline</h3><ul>
-      <li><b>Prod</b> — Nextflow via Seqera; output mounted for the backend</li>
-      <li><b>Dev</b> — manual HPC run; output hand-placed in <code>dev-data</code></li>
+      <li>Nextflow via Seqera; output is written to the shared job directory</li>
       <li>Adds required headers on rerun when they're missing</li></ul></div>
   </div>
 </div></div>

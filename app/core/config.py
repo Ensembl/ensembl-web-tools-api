@@ -16,6 +16,7 @@ limitations under the License.
 """
 
 import logging
+import os
 import sys
 
 from loguru import logger
@@ -37,14 +38,11 @@ ALLOWED_HOSTS: list[str] = config(
     cast=CommaSeparatedStrings,
     default="*",
 )
-# In the container the data dir is mounted at /data; for local dev fall back to
-# the repo's own data/ directory so the app boots without that mount.
-import os as _os
 
 _blast_config_path = "/data/blast_config.json"
-if not _os.path.exists(_blast_config_path):
-    _blast_config_path = _os.path.join(
-        _os.path.dirname(__file__), "..", "..", "data", "blast_config.json"
+if not os.path.exists(_blast_config_path):
+    _blast_config_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "data", "blast_config.json"
     )
 with open(_blast_config_path) as f:
     BLAST_CONFIG = json.load(f)
@@ -61,8 +59,7 @@ for logger_name in LOGGERS:
 
 logger.configure(handlers=[{"sink": sys.stderr, "level": LOGGING_LEVEL}])
 
-# Nextflow configuration. Deployment supplies these values for the workflow
-# service and its shared work directory.
+# Nextflow configuration. Supplied by envvars (k8s secret)
 NF_TOKEN = config("NF_TOKEN", default="")
 NF_COMPUTE_ENV_ID = config("NF_COMPUTE_ENV_ID", default="")
 NF_PIPELINE_URL = config("NF_PIPELINE_URL", default="")
@@ -73,5 +70,6 @@ NF_WORKSPACE_ID = config("NF_WORKSPACE_ID", default="")
 WEB_METADATA_API = config(
     "WEB_METADATA_API", default="https://www.ensembl.org/api/metadata/"
 )
-VEP_SUPPORT_PATH = config("VEP_SUPPORT_PATH", default="/tmpdir")
-VEP_PLUGIN_DATA_PATH = _os.path.join(VEP_SUPPORT_PATH, "vep-plugins-data")
+VEP_SUPPORT_PATH_ROOT = config("VEP_SUPPORT_PATH", default="/tmpdir")
+VEP_SUPPORT_PATH = os.path.join(VEP_SUPPORT_PATH_ROOT, "organisms")
+VEP_PLUGIN_DATA_PATH = os.path.join(VEP_SUPPORT_PATH_ROOT, "vep-plugins-data")

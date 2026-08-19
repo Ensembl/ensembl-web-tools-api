@@ -254,7 +254,7 @@ pointing a config entry at it.
 Config entries never name absolute paths. They write `{path}/my_data.vcf.gz`, and
 `config_interpreter` substitutes it (`config_interpreter.py:42`, `:244`) through
 `pipeline_model.plugin_data_path()`. The configured parent is
-`${VEP_SUPPORT_PATH}/vep-plugins-data`; the resolver is a function of both the
+`${VEP_SUPPORT_PATH_ROOT}/vep-plugins-data`; the resolver is a function of both the
 submitted assembly and config-entry id:
 
 ```python

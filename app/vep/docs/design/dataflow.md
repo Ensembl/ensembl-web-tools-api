@@ -300,7 +300,7 @@ target.
 | Env var | Effect |
 |---|---|
 | `WEB_METADATA_API` | metadata API base (including a trailing `/`), for form configuration, species presets, and GFF/FASTA lookup |
-| `VEP_SUPPORT_PATH` | prefixes metadata-provided GFF/FASTA paths and contains `vep-plugins-data/{grch37,grch38,other_species}` |
+| `VEP_SUPPORT_PATH_ROOT` | contains GFF/FASTA support files and VEP plugin datafiles |
 | `NF_WORK_DIR` | shared per-job input/output parent visible to the API and workflow compute environment |
 
 Each job's sidecars are written beside its input and output files, ensuring that

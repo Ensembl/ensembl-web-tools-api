@@ -329,7 +329,7 @@
             "file": {
               "by_assembly": {
                 "GRCh38": "{path}/ClinPred_hg38_sorted_tabbed.tsv.gz",
-                "GRCh37": "{path}/ClinPred_hg37_sorted_tabbed.tsv.gz"
+                "GRCh37": "{path}/ClinPred_tabbed.tsv.gz"
               }
             }
           }
@@ -844,8 +844,8 @@
           "params": {
             "file": {
               "by_assembly": {
-                "GRCh38": "{path}/clinvar_GRCh38.vcf.gz",
-                "GRCh37": "{path}/clinvar_GRCh37.vcf.gz"
+                "GRCh38": "{path}/clinvar.vcf.gz",
+                "GRCh37": "{path}/clinvar.vcf.gz"
               }
             },
             "short_name": "ClinVar",

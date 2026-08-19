@@ -560,7 +560,7 @@ def test_gnomad_exomes_default_is_all_both_ukb_included(monkeypatch, tmp_path):
     assert line is not None
     assert (
         f"file={plugin_data_path('GRCh38.p14')('gnomad_exomes')}"
-        "/gnomad.exomes.v4.1.sites.chr###CHR###.vcf.bgz" in line
+        "/gnomad.exomes.v4.1.1.sites.minimal.chr###CHR###.vcf.bgz" in line
     )
     assert "short_name=gnomAD_exomes" in line
     assert line.endswith("format=vcf,type=exact")
@@ -786,7 +786,7 @@ def test_gnomad_genomes_default_line(monkeypatch, tmp_path):
     assert line is not None
     assert (
         f"file={plugin_data_path('GRCh38.p14')('gnomad_genomes')}"
-        "/gnomad.genomes.v4.1.sites.chr###CHR###.vcf.bgz" in line
+        "/gnomad.genomes.v4.1.1.sites.minimal.chr###CHR###.vcf.bgz" in line
     )
     assert "short_name=gnomAD_genomes" in line
     assert line.endswith("format=vcf,type=exact")
@@ -923,7 +923,7 @@ def test_clinvar_off_emits_no_line(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize(
     "assembly,expected_file",
-    [("GRCh38.p14", "clinvar_GRCh38.vcf.gz"), ("GRCh37.p13", "clinvar_GRCh37.vcf.gz")],
+    [("GRCh38.p14", "clinvar.vcf.gz"), ("GRCh37.p13", "clinvar.vcf.gz")],
 )
 def test_clinvar_line_is_assembly_specific(
     monkeypatch, tmp_path, assembly, expected_file

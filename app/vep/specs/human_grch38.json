@@ -46,7 +46,7 @@
           "emit": "plugin",
           "name": "RiboseqORFs",
           "params": {
-            "file": "{path}/Ribo-seq_ORFs.phase2.comprehensive.v1like.final.bed.gz"
+            "file": "{path}/Ribo-seq_ORFs.bed.gz"
           }
         }
       },
@@ -109,7 +109,7 @@
           "emit": "plugin",
           "name": "OpenTargets",
           "params": {
-            "file": "{path}/open_targets_vep.tsv.gz"
+            "file": "{path}/open_targets_vep.tsv.bgz"
           }
         }
       },
@@ -535,7 +535,7 @@
             "file": {
               "by_assembly": {
                 "GRCh38": "{path}/ClinPred_hg38_sorted_tabbed.tsv.gz",
-                "GRCh37": "{path}/ClinPred_hg37_sorted_tabbed.tsv.gz"
+                "GRCh37": "{path}/ClinPred_tabbed.tsv.gz"
               }
             }
           }
@@ -649,7 +649,7 @@
             },
             "snv_ensembl": {
               "by_assembly": {
-                "GRCh38": "{path}/spliceai_scores.raw.snv.ensembl_mane.grch38.110.vcf.gz"
+                "GRCh38": "{path}/spliceai_scores.masked.snv.ensembl_mane.grch38.110.vcf.gz"
               },
               "omit_if_absent": true
             }
@@ -701,7 +701,7 @@
           "emit": "custom",
           "omit_if_no_fields": true,
           "params": {
-            "file": "{path}/gnomad.exomes.v4.1.sites.chr###CHR###.vcf.bgz",
+            "file": "{path}/gnomad.exomes.v4.1.1.sites.minimal.chr###CHR###.vcf.bgz",
             "short_name": "gnomAD_exomes",
             "format": "vcf",
             "type": "exact"
@@ -792,7 +792,7 @@
           "emit": "custom",
           "omit_if_no_fields": true,
           "params": {
-            "file": "{path}/gnomad.genomes.v4.1.sites.chr###CHR###.vcf.bgz",
+            "file": "{path}/gnomad.genomes.v4.1.1.sites.minimal.chr###CHR###.vcf.bgz",
             "short_name": "gnomAD_genomes",
             "format": "vcf",
             "type": "exact"
@@ -1255,8 +1255,8 @@
           "params": {
             "file": {
               "by_assembly": {
-                "GRCh38": "{path}/clinvar_GRCh38.vcf.gz",
-                "GRCh37": "{path}/clinvar_GRCh37.vcf.gz"
+                "GRCh38": "{path}/clinvar.vcf.gz",
+                "GRCh37": "{path}/clinvar.vcf.gz"
               }
             },
             "short_name": "ClinVar",

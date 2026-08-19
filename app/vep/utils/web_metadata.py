@@ -17,8 +17,8 @@ def get_vep_support_location(genome_id: str) -> dict:
         response.raise_for_status()
         data = response.json()
         return {
-            "faa_location": os.path.join(VEP_SUPPORT_PATH, data['faa_location']),
-            "gff_location": os.path.join(VEP_SUPPORT_PATH, data['gff_location']),
+            "faa_location": f"{VEP_SUPPORT_PATH}{data['faa_location']}", #faa/gaa_location includes leading slash
+            "gff_location": f"{VEP_SUPPORT_PATH}{data['gff_location']}"
         }
     except KeyError as e:
         e.args = (

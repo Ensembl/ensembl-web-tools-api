@@ -671,7 +671,7 @@
           "params": {
             "snv": {
               "by_assembly": {
-                "GRCh38": "{path}/spliceai_scores.masked.snv.hg38.vcf.gz",
+                "GRCh38": "{path}/spliceai_scores.masked.snv.ensembl_mane.grch38.110.vcf.gz",
                 "GRCh37": "{path}/spliceai_scores.masked.snv.hg19.vcf.gz"
               }
             },
@@ -680,12 +680,6 @@
                 "GRCh38": "{path}/spliceai_scores.masked.indel.hg38.vcf.gz",
                 "GRCh37": "{path}/spliceai_scores.masked.indel.hg19.vcf.gz"
               }
-            },
-            "snv_ensembl": {
-              "by_assembly": {
-                "GRCh38": "{path}/spliceai_scores.masked.snv.ensembl_mane.grch38.110.vcf.gz"
-              },
-              "omit_if_absent": true
             }
           }
         }

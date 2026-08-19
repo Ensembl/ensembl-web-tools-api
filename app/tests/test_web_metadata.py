@@ -22,12 +22,12 @@ def test_get_vep_support_location_uses_metadata_base(monkeypatch):
         web_metadata.requests,
         "get",
         lambda url: requested_urls.append(url)
-        or _FakeResponse({"faa_location": "/genome.fa", "gff_location": "/genome.gff"}),
+        or _FakeResponse({"faa_location": "GCA_000001405.29/genome.fa", "gff_location": "GCA_000001405.29/genome.gff"}),
     )
 
     assert web_metadata.get_vep_support_location("genome-id") == {
-        "faa_location": "/support/genome.fa",
-        "gff_location": "/support/genome.gff",
+        "faa_location": "/support/GCA_000001405.29/genome.fa",
+        "gff_location": "/support/GCA_000001405.29/genome.gff",
     }
     assert requested_urls == [
         "https://ensembl.org/api/metadata/genome/genome-id/vep/file_paths"

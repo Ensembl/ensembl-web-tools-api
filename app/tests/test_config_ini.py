@@ -237,7 +237,7 @@ def test_plugin_lines_use_configured_plugin_data_root(monkeypatch, tmp_path):
     assert find_line(lines, "vep-plugins-data/grch38/GO_data_files/GO.pm_")
 
 
-def test_spliceai_grch37_omits_snv_ensembl(monkeypatch, tmp_path):
+def test_spliceai_selects_the_assembly_specific_snv_file(monkeypatch, tmp_path):
     line38 = find_line(
         build_lines(monkeypatch, tmp_path, assembly="GRCh38.p14", spliceai=True),
         "plugin SpliceAI",
@@ -246,7 +246,10 @@ def test_spliceai_grch37_omits_snv_ensembl(monkeypatch, tmp_path):
         build_lines(monkeypatch, tmp_path, assembly="GRCh37.p13", spliceai=True),
         "plugin SpliceAI",
     )
-    assert "snv_ensembl=" in line38
+    assert "snv=" in line38
+    assert "spliceai_scores.masked.snv.ensembl_mane.grch38.110.vcf.gz" in line38
+    assert "spliceai_scores.masked.snv.hg19.vcf.gz" in line37
+    assert "snv_ensembl=" not in line38
     assert "snv_ensembl=" not in line37
 
 

@@ -1,9 +1,12 @@
 import os
 import requests
+from starlette.concurrency import run_in_threadpool
 
 from vep.models.submission_form import GenomeAnnotationProvider
 
 from core.config import WEB_METADATA_API, VEP_SUPPORT_PATH
+
+METADATA_TIMEOUT = (5.0, 15.0)
 
 
 def get_vep_support_location(genome_id: str) -> dict:
@@ -12,7 +15,7 @@ def get_vep_support_location(genome_id: str) -> dict:
             WEB_METADATA_API
             + "genome/"
             + genome_id
-            + "/vep/file_paths"
+            + "/vep/file_paths", timeout=METADATA_TIMEOUT
         )
         response.raise_for_status()
         data = response.json()
@@ -38,6 +41,10 @@ def get_vep_support_location(genome_id: str) -> dict:
 
 
 async def get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
+    return await run_in_threadpool(_get_genome_metadata, genome_id)
+
+
+def _get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
     try:
         response = requests.get(
             WEB_METADATA_API
@@ -46,7 +53,8 @@ async def get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
             + "/dataset/genebuild/attributes?"
             + "attribute_names=genebuild.provider_name&"
             + "attribute_names=genebuild.provider_version&"
-            + "attribute_names=genebuild.last_geneset_update"
+            + "attribute_names=genebuild.last_geneset_update",
+            timeout=METADATA_TIMEOUT,
         )
         response.raise_for_status()
         attributes = {}

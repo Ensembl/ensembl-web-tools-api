@@ -190,7 +190,10 @@ def _emit_entry(entry, options, assembly, context) -> str | None:
 
     if isinstance(emitter, SettingEmitter):
         value = _param_value(emitter.value, options, assembly, context)
-        return f"{emitter.keyword} {value}"
+        line = f"{emitter.keyword} {value}"
+        if "\n" in line or "\r" in line:
+            raise ValueError(f"config entry {entry.id!r} contains a newline")
+        return line
 
     if isinstance(emitter, PluginEmitter):
         # Positional args first, bare; then the named params. A plugin uses one
@@ -209,6 +212,8 @@ def _emit_entry(entry, options, assembly, context) -> str | None:
             line += "," + ",".join(parts)
         if emitter.flags:
             line += _variadic_suffix(emitter.flags, options)
+        if "\n" in line or "\r" in line:
+            raise ValueError(f"config entry {entry.id!r} contains a newline")
         return line
 
     if isinstance(emitter, CustomEmitter):
@@ -225,7 +230,10 @@ def _emit_entry(entry, options, assembly, context) -> str | None:
                 parts.append(f"{key}={resolved}")
             if emitter.fields is not None and key == emitter.fields_after:
                 parts.append(f"fields={join.join(field_list)}")
-        return "custom " + ",".join(parts)
+        line = "custom " + ",".join(parts)
+        if "\n" in line or "\r" in line:
+            raise ValueError(f"config entry {entry.id!r} contains a newline")
+        return line
 
     raise ValueError(f"unknown emitter: {emitter!r}")
 

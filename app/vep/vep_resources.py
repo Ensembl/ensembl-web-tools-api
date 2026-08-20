@@ -21,7 +21,7 @@ import json
 import logging
 import re
 
-from fastapi import Request, status, APIRouter
+from fastapi import Request, status, APIRouter, Query
 from pydantic import FilePath
 from requests import HTTPError
 from starlette.responses import (
@@ -130,8 +130,10 @@ async def submit_vep(request: Request):
             )
         )
 
-        ini_file = ini_parameters.create_config_ini_file(
-            request_streamer.temp_dir, merged_spec.config
+        ini_file = await run_in_threadpool(
+            ini_parameters.create_config_ini_file,
+            request_streamer.temp_dir,
+            merged_spec.config,
         )
         write_spec_sidecar(request_streamer.temp_dir, merged_spec)
         write_expected_columns_sidecar(request_streamer.temp_dir, expected_columns)
@@ -146,7 +148,7 @@ async def submit_vep(request: Request):
             paramsText=vep_job_config_parameters, workDir=request_streamer.temp_dir
         )
         pipeline_params = PipelineParams(launch=launch_params)
-        workflow_id = launch_workflow(pipeline_params)
+        workflow_id = await run_in_threadpool(launch_workflow, pipeline_params)
         return {"submission_id": workflow_id}
     except HTTPError as e:
         try:
@@ -161,6 +163,9 @@ async def submit_vep(request: Request):
         # The client's fault, not ours — a 500 here would read as a server bug
         # and tell the user nothing about how to fix their upload.
         logging.warning(f"rejected upload file name: {e}")
+        return response_error_handler(result={"status": 400})
+    except ValueError as e:
+        logging.warning("invalid VEP submission: %s", e)
         return response_error_handler(result={"status": 400})
     except Exception as e:
         logging.exception(f"{e.__class__.__name__}: {e}")
@@ -230,7 +235,7 @@ def _results_download_response(
             gzip_text_stream(vcf_text),
             media_type="application/gzip",
             headers={
-                "Content-Disposition": f'attachment; filename="{results_path.name}"'
+                "Content-Disposition": f'attachment; filename="{results_path.stem}.filtered.vcf.gz"'
             },
         )
     if is_table:
@@ -353,8 +358,8 @@ def _results_response(**kwargs) -> Response:
 async def fetch_results(
     request: Request,
     submission_id: str,
-    page: int,
-    per_page: int,
+    page: int = Query(..., ge=1),
+    per_page: int = Query(..., ge=1, le=500),
     filters: str | None = None,
 ):
     results_file_path = None

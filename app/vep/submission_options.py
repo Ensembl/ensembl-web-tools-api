@@ -28,12 +28,16 @@ class SubmittableOption:
     """One option a submission may set: what type its value is, and what it is
     when the client does not send it."""
 
-    __slots__ = ("id", "type", "default")
+    __slots__ = ("id", "type", "default", "min", "max", "choices")
 
-    def __init__(self, option_id: str, value_type: type, default) -> None:
+    def __init__(self, option_id: str, value_type: type, default, *, min_value=None,
+                 max_value=None, choices=()) -> None:
         self.id = option_id
         self.type = value_type
         self.default = default
+        self.min = min_value
+        self.max = max_value
+        self.choices = tuple(choices)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"SubmittableOption({self.id!r}, {self.type.__name__}, {self.default!r})"
@@ -61,7 +65,10 @@ def submittable_options(
         if option_id is not None:
             value_type = _VALUE_TYPES[option["type"]]
             options[option_id] = SubmittableOption(
-                option_id, value_type, option.get("default")
+                option_id, value_type, option.get("default"),
+                min_value=option.get("min"), max_value=option.get("max"),
+                choices=[choice.get("value") for choice in option.get("options", [])
+                         if isinstance(choice, dict) and "value" in choice],
             )
         # A `group` has `options`; everything else nests under `sub_options`.
         for child in option.get("sub_options", []) + option.get("options", []):
@@ -111,8 +118,23 @@ def option_values(
     known = submittable_options(
         species_taxonomy_id=species_taxonomy_id, assembly_name=assembly_name
     )
-    values = {
-        option_id: payload.get(option_id, option.default)
-        for option_id, option in known.items()
-    }
+    values = {}
+    for option_id, option in known.items():
+        value = payload.get(option_id, option.default)
+        if option.type is bool:
+            valid = isinstance(value, bool)
+        elif option.type is int:
+            valid = isinstance(value, int) and not isinstance(value, bool)
+        else:
+            valid = isinstance(value, str)
+        if not valid:
+            raise ValueError(f"{option_id} must be a {option.type.__name__}")
+        if option.type is int:
+            if option.min is not None and value < option.min:
+                raise ValueError(f"{option_id} must be at least {option.min}")
+            if option.max is not None and value > option.max:
+                raise ValueError(f"{option_id} must be at most {option.max}")
+        if option.choices and value not in option.choices:
+            raise ValueError(f"{option_id} must be one of {sorted(option.choices)}")
+        values[option_id] = value
     return values, sorted(key for key in payload if key not in known)

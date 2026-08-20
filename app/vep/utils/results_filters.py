@@ -238,6 +238,9 @@ class FilterOutcome:
     stats: list[FilterStat]
 
 
+MAX_FILTERS = 32
+
+
 def parse_filters(raw: str | None) -> list[ResultsFilter]:
     """Parse the `filters` query param (a JSON array of conditions) into models.
 
@@ -251,6 +254,8 @@ def parse_filters(raw: str | None) -> list[ResultsFilter]:
         raise FilterError(f"filters is not valid JSON: {exc}") from exc
     if not isinstance(data, list):
         raise FilterError("filters must be a JSON array")
+    if len(data) > MAX_FILTERS:
+        raise FilterError(f"filters may contain at most {MAX_FILTERS} conditions")
     try:
         return [ResultsFilter.model_validate(item) for item in data]
     except Exception as exc:  # pydantic ValidationError et al.
@@ -644,7 +649,7 @@ def af_source_descriptor(column: str, spec: ParsingSpec | None = None) -> dict |
     return _af_descriptor(column, source, population)
 
 
-def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFilter | None:
+def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int], spec=None) -> CompiledFilter | None:
     """Keep an allele whose AF meets the comparison. AF is allele-level (identical
     across an allele's CSQ rows), so this reads like an entry test but effectively
     keeps/drops whole alleles. Tests either the specified AF columns (`values`) or,
@@ -665,7 +670,7 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int]) -> Co
     threshold = f.threshold
 
     requested = [c for c in f.values if c]
-    columns = requested or af_columns(index_map)
+    columns = requested or af_columns(index_map, spec)
     indices = [index_map[c] for c in columns if c in index_map]
     if not indices:
         return None  # no AF columns to test (e.g. AF not run) -> no-op
@@ -782,7 +787,7 @@ _BUILDERS: dict[
 
 
 def compile_filters(
-    filters: list[ResultsFilter], index_map: dict[str, int]
+    filters: list[ResultsFilter], index_map: dict[str, int], spec=None
 ) -> list[CompiledFilter]:
     """Validate and compile request filters against the file's CSQ layout. A
     builder returns None for a no-op condition (e.g. empty values), which is
@@ -792,7 +797,8 @@ def compile_filters(
         builder = _BUILDERS.get(f.field)
         if builder is None:
             raise FilterError(f"unsupported filter field: {f.field!r}")
-        cf = builder(f, index_map)
+        cf = (_compile_allele_frequency(f, index_map, spec)
+              if f.field == ALLELE_FREQUENCY_FIELD else builder(f, index_map))
         if cf is not None:
             compiled.append(cf)
     return compiled

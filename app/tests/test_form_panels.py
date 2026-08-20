@@ -10,6 +10,7 @@ the form round-trips into the generated config.ini.
 from app.vep import form_panels
 from app.vep.form_panels import get_visible_panels
 from app.vep.models.pipeline_model import ConfigIniParams
+from app.vep.submission_options import submittable_options
 
 HUMAN = "9606"
 MOUSE = "10090"
@@ -589,14 +590,23 @@ def test_option_ids_round_trip_into_a_submission():
         # locked_children (hgvs_c/hgvs_p) are display-only, not parameters.
         offered = set(option_ids(panels, include_sub_options=True))
 
+        known = submittable_options(
+            species_taxonomy_id=HUMAN, assembly_name=assembly
+        )
+        submitted = {
+            option_id: (
+                True if known[option_id].type is bool else known[option_id].default
+            )
+            for option_id in offered
+        }
         params = ConfigIniParams(
             genome_id="g",
             assembly_name=assembly,
             species_taxonomy_id=HUMAN,
-            options={option_id: True for option_id in offered},
+            options=submitted,
         )
         assert offered <= set(params.options), assembly
-        assert all(params.options[option_id] is True for option_id in offered)
+        assert all(params.options[option_id] == submitted[option_id] for option_id in offered)
 
 
 # ---------------------------------------------------------------------------

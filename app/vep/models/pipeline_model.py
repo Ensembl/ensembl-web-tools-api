@@ -50,7 +50,7 @@ class LaunchParams(BaseModel):
     computeEnvId: str = NF_COMPUTE_ENV_ID
     pipeline: str = NF_PIPELINE_URL
     workDir: DirectoryPath
-    revision: str = "release/115"
+    revision: str = "main"
     pullLatest: bool = True
     configProfiles: list[str] = ["ensembl"]
     paramsText: VEPConfigParams

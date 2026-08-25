@@ -102,7 +102,10 @@ async def vep_status(request: Request, submission_id: str):
         if submission_status.status == VepStatus.failed:
             logging.error(
                 f"VEP submission f{submission_id} failed: f{workflow_status['workflow']['errorMessage'] or workflow_status['workflow']['errorReport']}")
-        return JSONResponse(content=submission_status.model_dump())
+        return JSONResponse(
+            content=submission_status.model_dump(),
+            headers={"Cache-Control": "no-store"},
+        )
 
     except HTTPError as e:
         try:

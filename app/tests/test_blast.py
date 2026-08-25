@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 import json
 import pytest
-from app.blast import blast
+from blast import blast
 from app.main import app
 from core.config import API_PREFIX
 

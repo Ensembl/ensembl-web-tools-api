@@ -159,13 +159,19 @@ async def submit_blast(payload: BlastJob) -> dict:
     return {"submission_id": secrets.token_urlsafe(16), "jobs": job_results}
 
 
+async def get_blast_job_status(job_id: str) -> dict:
+    resp = await blast_proxy("status", job_id)
+    resp["job_id"] = job_id
+    return resp
+
+
 # Endpoint for querying a job status
 @app.get("/jobs/status/{job_id}")
-async def blast_job_status(job_id: str) -> dict:
-    resp = await blast_proxy("status", job_id)
-    if resp["status"] == "NOT_FOUND":
+async def blast_job_status(job_id: str, response: Response) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    resp = await get_blast_job_status(job_id)
+    if resp.get("status") == "NOT_FOUND":
         response.status_code = 404
-    resp["job_id"] = job_id
     return resp
 
 
@@ -173,7 +179,7 @@ async def blast_job_status(job_id: str) -> dict:
 @app.post("/jobs/status")
 async def blast_job_statuses(payload: JobIDs) -> dict:
     payload = jsonable_encoder(payload)
-    status_requests = [blast_job_status(job_id) for job_id in payload["job_ids"]]
+    status_requests = [get_blast_job_status(job_id) for job_id in payload["job_ids"]]
     statuses = await asyncio.gather(*status_requests)
     return {"statuses": statuses}
 

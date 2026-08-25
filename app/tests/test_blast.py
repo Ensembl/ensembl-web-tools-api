@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 import json
 import pytest
-from app.blast.blast import get_db_path
+from app.blast import blast
 from app.main import app
 from core.config import API_PREFIX
 
@@ -27,9 +27,9 @@ def blast_payload():
 def test_get_db_path(blast_payload):
     genome_id = blast_payload["genome_ids"][0]
     genome_id_prefix = genome_id[:3]
-    filename = get_db_path(genome_id, "dna_sm")
+    filename = blast.get_db_path(genome_id, "dna_sm")
     assert filename == f"ensembl/{genome_id_prefix}/{genome_id}/softmasked"
-    filename = get_db_path(genome_id, "pep")
+    filename = blast.get_db_path(genome_id, "pep")
     assert filename == f"ensembl/{genome_id_prefix}/{genome_id}/pep"
 
 
@@ -97,11 +97,21 @@ def test_blast_job_jd_error(blast_payload):
 
 
 # Test BLAST job status endpoint
-def test_blast_job_status():
+def test_blast_job_status_is_not_cacheable(monkeypatch):
+    async def fake_get_blast_job_status(job_id):
+        assert job_id == "ncbiblast_ensembl-12345"
+        return {"status": "RUNNING", "job_id": job_id}
+
+    monkeypatch.setattr(blast, "get_blast_job_status", fake_get_blast_job_status)
+
     with TestClient(app) as client:
         response = client.get(API_PREFIX + "/blast/jobs/status/ncbiblast_ensembl-12345")
         assert response.status_code == 200
-        assert "status" in response.json()
+        assert response.headers["cache-control"] == "no-store"
+        assert response.json() == {
+            "status": "RUNNING",
+            "job_id": "ncbiblast_ensembl-12345",
+        }
 
 
 # Test multiple jobs status endpoint

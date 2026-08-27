@@ -428,6 +428,12 @@ def _spec_form_options(
         if entry.form is None:
             continue
         option = entry.form.as_panel_option(entry.id)
+        # The (?) text. Keyed by option id in the shared library, so an option
+        # declared by both human specs states it once (see option_help_model).
+        if spec.help is not None:
+            help_payload = spec.help.payload_for(entry.id)
+            if help_payload is not None:
+                option["help"] = help_payload
         fields = getattr(entry.config, "fields", None)
         if fields is not None and getattr(fields, "builder", None):
             option["sub_options"] = _af_sub_options(fields, entry.id)

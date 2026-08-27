@@ -38,6 +38,7 @@ from vep.models.display_spec_model import (
     DisplaySpec,
     DisplayTableBlock,
 )
+from vep.models.option_help_model import HelpSpec
 from vep.models.parsing_spec_model import ParsingSpec, PluginSpec
 from vep.utils.config_interpreter import build_fields
 
@@ -185,6 +186,10 @@ class MergedSpec(BaseModel):
     # existed has no `display` key and must still load (the results path then
     # falls back to the current genome's display spec).
     display: DisplaySpec | None = None
+    # The help behind each option's (?) button. Optional for the same reason as
+    # `display`: every spec pinned to a job before this section existed has no
+    # `help` key and must still load.
+    help: HelpSpec | None = None
 
     def config_entries(self) -> list[ConfigEntry]:
         return self.config.entries

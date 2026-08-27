@@ -34,6 +34,12 @@ _PANELS: list[dict] = [
      "label": "Phenotype & disease associations"},
 ]
 
+# Kept for compatibility while the final coded-panel migration is completed.
+# Panels are currently initialised empty, so the placement branch has no coded
+# entries to space, but leaving this undefined makes future pre-population a
+# runtime NameError.
+_CODED_OPTION_STEP = 100
+
 
 def is_human_grch37_or_38(
     species_taxonomy_id: str | None, assembly_name: str | None

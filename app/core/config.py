@@ -18,6 +18,7 @@ limitations under the License.
 import logging
 import os
 import sys
+import tempfile
 
 from loguru import logger
 from starlette.config import Config
@@ -63,7 +64,7 @@ logger.configure(handlers=[{"sink": sys.stderr, "level": LOGGING_LEVEL}])
 NF_TOKEN = config("NF_TOKEN", default="")
 NF_COMPUTE_ENV_ID = config("NF_COMPUTE_ENV_ID", default="")
 NF_PIPELINE_URL = config("NF_PIPELINE_URL", default="")
-NF_WORK_DIR = config("NF_WORK_DIR", default="")
+NF_WORK_DIR = config("NF_WORK_DIR", default=tempfile.gettempdir())
 SEQERA_API = config("SEQERA_API", default="")
 NF_WORKSPACE_ID = config("NF_WORKSPACE_ID", default="")
 

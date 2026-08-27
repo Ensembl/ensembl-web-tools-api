@@ -148,3 +148,12 @@ def test_a_stray_option_passed_as_a_keyword_fails_loudly():
 
     with pytest.raises(ValidationError, match="cadd"):
         ConfigIniParams(genome_id="g", assembly_name="GRCh38.p14", cadd=True)
+
+
+def test_submitted_option_values_are_type_checked_and_bounded():
+    import pytest
+
+    with pytest.raises(ValueError, match="updownstream_distance_bp"):
+        _params("GRCh38.p14", updownstream_distance_bp="5000\nfasta /etc/passwd")
+    with pytest.raises(ValueError, match="at most"):
+        _params("GRCh38.p14", updownstream_distance_bp=1_000_001)

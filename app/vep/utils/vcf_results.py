@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import subprocess
+import threading
 from pathlib import Path
 from pydantic import FilePath
 from vep.models import vcf_results_model as model
@@ -546,6 +547,7 @@ def _read_indexed_page(
 # ---------------------------------------------------------------------------
 _SCAN_CACHE_MAX_ENTRIES = 4
 _scan_cache: "OrderedDict[tuple, _ScanResult]" = OrderedDict()
+_scan_cache_lock = threading.Lock()
 
 
 @dataclass
@@ -594,24 +596,27 @@ def _scan_cache_key(
 def _scan_cache_get(key: tuple | None) -> _ScanResult | None:
     if key is None:
         return None
-    result = _scan_cache.get(key)
-    if result is not None:
-        _scan_cache.move_to_end(key)
-    return result
+    with _scan_cache_lock:
+        result = _scan_cache.get(key)
+        if result is not None:
+            _scan_cache.move_to_end(key)
+        return result
 
 
 def _scan_cache_put(key: tuple | None, result: _ScanResult) -> None:
     if key is None:
         return
-    _scan_cache[key] = result
-    _scan_cache.move_to_end(key)
-    while len(_scan_cache) > _SCAN_CACHE_MAX_ENTRIES:
-        _scan_cache.popitem(last=False)
+    with _scan_cache_lock:
+        _scan_cache[key] = result
+        _scan_cache.move_to_end(key)
+        while len(_scan_cache) > _SCAN_CACHE_MAX_ENTRIES:
+            _scan_cache.popitem(last=False)
 
 
 def clear_scan_cache() -> None:
     """Drop every cached scan (tests; and anything that rewrites outputs)."""
-    _scan_cache.clear()
+    with _scan_cache_lock:
+        _scan_cache.clear()
 
 
 def _get_filtered_results(
@@ -651,7 +656,7 @@ def _get_filtered_results(
                 break
 
         index_map = csq_index_map_from_header(header_lines)
-        compiled = results_filters.compile_filters(filters, index_map)
+        compiled = results_filters.compile_filters(filters, index_map, spec)
 
         data_lines = (
             handle
@@ -740,7 +745,8 @@ def stream_filtered_vcf_text(
             else:
                 break
     index_map = csq_index_map_from_header(header_lines)
-    compiled = results_filters.compile_filters(filters, index_map)
+    spec = _load_pinned_spec(vcf_path)
+    compiled = results_filters.compile_filters(filters, index_map, spec)
 
     def generate() -> Iterator[str]:
         yield from header_lines
@@ -766,11 +772,13 @@ def stream_filtered_vcf_text(
 # ---------------------------------------------------------------------------
 _SPEC_CACHE_MAX_ENTRIES = 4
 _spec_cache: "OrderedDict[tuple, MergedSpec | None]" = OrderedDict()
+_spec_cache_lock = threading.Lock()
 
 
 def clear_spec_cache() -> None:
     """Drop every cached pinned spec (tests; and anything that rewrites outputs)."""
-    _spec_cache.clear()
+    with _spec_cache_lock:
+        _spec_cache.clear()
 
 
 def _load_pinned_merged_spec(vcf_path: FilePath) -> MergedSpec | None:
@@ -780,9 +788,11 @@ def _load_pinned_merged_spec(vcf_path: FilePath) -> MergedSpec | None:
     unreadable one returns None.
     """
     key = _file_identity(vcf_path)
-    if key is not None and key in _spec_cache:
-        _spec_cache.move_to_end(key)
-        return _spec_cache[key]
+    if key is not None:
+        with _spec_cache_lock:
+            if key in _spec_cache:
+                _spec_cache.move_to_end(key)
+                return _spec_cache[key]
 
     try:
         merged = load_spec_sidecar(vcf_path)
@@ -799,10 +809,11 @@ def _load_pinned_merged_spec(vcf_path: FilePath) -> MergedSpec | None:
         )
 
     if key is not None:
-        _spec_cache[key] = merged
-        _spec_cache.move_to_end(key)
-        while len(_spec_cache) > _SPEC_CACHE_MAX_ENTRIES:
-            _spec_cache.popitem(last=False)
+        with _spec_cache_lock:
+            _spec_cache[key] = merged
+            _spec_cache.move_to_end(key)
+            while len(_spec_cache) > _SPEC_CACHE_MAX_ENTRIES:
+                _spec_cache.popitem(last=False)
     return merged
 
 
@@ -1302,7 +1313,8 @@ def _get_results_from_records(
                 for alt in alt_allele_strings
             ]
 
-            longest_alt = max((_alt_value(a) for a in record.ALT), key=len)
+            alt_values = [_alt_value(a) for a in record.ALT]
+            longest_alt = max(alt_values, key=len) if alt_values else ""
 
             variant = model.Variant(
                 name=";".join(record.ID) if len(record.ID) > 0 else ".",

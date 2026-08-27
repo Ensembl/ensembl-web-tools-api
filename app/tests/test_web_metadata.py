@@ -21,7 +21,7 @@ def test_get_vep_support_location_uses_metadata_base(monkeypatch):
     monkeypatch.setattr(
         web_metadata.requests,
         "get",
-        lambda url: requested_urls.append(url)
+        lambda url, **kwargs: requested_urls.append(url)
         or _FakeResponse({"faa_location": "GCA_000001405.29/genome.fa", "gff_location": "GCA_000001405.29/genome.gff"}),
     )
 
@@ -40,7 +40,7 @@ def test_get_genome_metadata_uses_metadata_base(monkeypatch):
     monkeypatch.setattr(
         web_metadata.requests,
         "get",
-        lambda url: requested_urls.append(url)
+        lambda url, **kwargs: requested_urls.append(url)
         or _FakeResponse(
             {
                 "attributes": [

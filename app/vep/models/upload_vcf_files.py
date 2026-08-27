@@ -61,7 +61,7 @@ class Streamer:
         self.request = request
         self.filename = self.request.headers.get("Filename", "temp_name")
         self.file_name_validator(self.filename)
-        self.temp_dir = tempfile.mkdtemp(dir=NF_WORK_DIR)
+        self.temp_dir = tempfile.mkdtemp(dir=NF_WORK_DIR or None)
         self.filepath = os.path.join(
             str(self.temp_dir), os.path.basename(self.filename)
         )

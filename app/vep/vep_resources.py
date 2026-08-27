@@ -40,6 +40,7 @@ from vep.models.pipeline_model import (
     LaunchParams,
     PipelineParams,
     PipelineStatus,
+    output_prefix_for,
 )
 from vep.models.submission_form import Dropdown, FormConfig
 from vep.models.upload_vcf_files import (
@@ -85,15 +86,13 @@ async def submit_vep(request: Request):
         vep_job_parameters = request_streamer.parameters.value.decode()
         genome_id = request_streamer.genome_id.value.decode()
         vep_job_parameters_dict = json.loads(vep_job_parameters)
-        # The payload carries the job's own fields and the selected options in
-        # one flat object; the options are validated against the spec for this
-        # assembly rather than against a field per option (see
-        # submission_options), so they are separated here.
+
         job_fields = {
             key: value
             for key, value in vep_job_parameters_dict.items()
             if key in ConfigIniParams.model_fields
         }
+        # Extract the selected options from the parameters payload for validation against the spec
         options = {
             key: value
             for key, value in vep_job_parameters_dict.items()
@@ -103,26 +102,11 @@ async def submit_vep(request: Request):
             **job_fields, genome_id=genome_id, options=options
         )
 
-        # Resolve and pin the merged spec (config + parsing) for this job's
-        # assembly now, at submission, rather than waiting for results: it must
-        # fail here (while the user is present and nothing has run yet) rather
-        # than after the pipeline completes, and it must be the spec used to
-        # build the options this submission is based on, not whatever the
-        # "current" one is by the time results are parsed (see
-        # spec_loader.resolve_merged_spec).
+        # Resolve the merged spec (config + parsing) for this job's assembly
         merged_spec = resolve_merged_spec(ini_parameters.assembly_name)
-        # The CSQ columns these options require, pinned for the results-time
-        # missing-expected-field check (a plugin the user enabled must produce
-        # its columns; extras are ignored). See spec_loader / get_results_from_path.
+        # Extract the expected CSQ columns for validating the output VCF
         expected_columns = merged_spec.expected_csq_columns(ini_parameters.options)
-        # The option panels this submission was built against, pinned so the
-        # results view renders the submitted layout rather than whatever
-        # /form_config returns by the time the results are looked at. Computed
-        # with exactly the predicates /form_config uses — hence
-        # `species_taxonomy_id` on the submission payload; without it every
-        # human-specific panel would silently vanish from the pin. `attributes`
-        # is not passed (get_visible_panels never reads it), so this needs no
-        # genome-metadata call.
+        # Get the visible option panels for rendering the results
         display_panels = to_display_panels(
             get_visible_panels(
                 species_taxonomy_id=ini_parameters.species_taxonomy_id,
@@ -143,6 +127,7 @@ async def submit_vep(request: Request):
             vcf=request_streamer.filepath,
             vep_config=ini_file.name,
             outdir=request_streamer.temp_dir,
+            output_prefix=output_prefix_for(request_streamer.filename),
         )
         launch_params = LaunchParams(
             paramsText=vep_job_config_parameters, workDir=request_streamer.temp_dir
@@ -160,8 +145,6 @@ async def submit_vep(request: Request):
     except MaxBodySizeException:
         return response_error_handler(result={"status": 413})
     except UnsafeFileNameException as e:
-        # The client's fault, not ours — a 500 here would read as a server bug
-        # and tell the user nothing about how to fix their upload.
         logging.warning(f"rejected upload file name: {e}")
         return response_error_handler(result={"status": 400})
     except ValueError as e:
@@ -182,7 +165,10 @@ async def vep_status(request: Request, submission_id: str):
         if submission_status.status == VepStatus.failed:
             logging.error(
                 f"VEP submission f{submission_id} failed: f{workflow_status['workflow']['errorMessage'] or workflow_status['workflow']['errorReport']}")
-        return JSONResponse(content=submission_status.model_dump())
+        return JSONResponse(
+            content=submission_status.model_dump(),
+            headers={"Cache-Control": "no-store"},
+        )
 
     except HTTPError as e:
         try:
@@ -196,60 +182,51 @@ async def vep_status(request: Request, submission_id: str):
         return response_error_handler(result={"status": 500})
 
 
-def get_vep_results_file_path(input_vcf_file: str) -> FilePath:
+def get_vep_results_file_path(
+    input_vcf_file: str, output_prefix: str | None = None
+) -> FilePath:
     input_vcf_path = FilePath(input_vcf_file)
-    vep_results_file = input_vcf_path.with_name(
-        input_vcf_path.stem + "_VEP.vcf.gz"
+    result_name = (
+        f"{output_prefix}_VEP.vcf.gz"
+        if output_prefix
+        else input_vcf_path.stem + "_VEP.vcf.gz"
     )
-    return vep_results_file
+    return input_vcf_path.with_name(result_name)
 
 
-# Build the download response for a resolved results VCF path. `format=vcf`
-# (default) serves the VCF; `format=tsv` streams the flattened, fully expanded
-# "columnar" table (spreadsheet-friendly), gzip-compressed. When `active_filters`
-# is non-empty the download is restricted to the CSQ entries (and records) passing
-# those filters — the same filters the results view applies — rather than the
-# whole file. Compiling the filters here (via stream_filtered_vcf_text) can raise
-# FilterError for an invalid filter; the caller maps that to a 400.
+def _gzip_download_response(text_stream, filename: str) -> StreamingResponse:
+    return StreamingResponse(
+        gzip_text_stream(text_stream),
+        media_type="application/gzip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 def _results_download_response(
     results_path: FilePath,
     output_format: str,
     active_filters: list[ResultsFilter] | None = None,
-):
+) -> FileResponse | StreamingResponse:
     is_table = output_format in ("tsv", "txt", "table")
+    table_extension = "tsv" if output_format == "tsv" else "txt"
+    base = re.sub(r"\.vcf(\.gz)?$", "", results_path.name) or "vep_results"
     if active_filters:
-        # A lazy stream of the results VCF narrowed to just the matching rows.
+        # Filtered download (include only CSQ entries/records passing the filters)
         vcf_text = stream_filtered_vcf_text(results_path, active_filters)
         if is_table:
-            base = re.sub(r"\.vcf(\.gz)?$", "", results_path.name) or "vep_results"
-            return StreamingResponse(
-                gzip_text_stream(flatten_vcf_lines(vcf_text)),
-                media_type="application/gzip",
-                headers={
-                    "Content-Disposition": f'attachment; filename="{base}.txt.gz"'
-                },
+            # Filtered download in tabular format (send over gzipped stream)
+            return _gzip_download_response(
+                flatten_vcf_lines(vcf_text),
+                f"{base}_filtered.{table_extension}.gz",
             )
-        # Filtered VCF: gzip the rebuilt VCF text (the unfiltered path can serve
-        # the file straight from disk, but a filtered VCF has to be assembled).
-        return StreamingResponse(
-            gzip_text_stream(vcf_text),
-            media_type="application/gzip",
-            headers={
-                "Content-Disposition": f'attachment; filename="{results_path.stem}.filtered.vcf.gz"'
-            },
-        )
+        return _gzip_download_response(vcf_text, f"{base}_filtered.vcf.gz")
     if is_table:
-        base = re.sub(r"\.vcf(\.gz)?$", "", results_path.name) or "vep_results"
-        # Compress the table before it's sent (plain gzip, for compatibility).
-        # It's served as the payload (application/gzip, .txt.gz filename), not via
-        # Content-Encoding, so the browser saves the compressed file rather than
-        # transparently decompressing it.
-        return StreamingResponse(
-            gzip_text_stream(stream_vep_tsv(results_path)),
-            media_type="application/gzip",
-            headers={"Content-Disposition": f'attachment; filename="{base}.txt.gz"'},
+        # Full results in tabular format
+        return _gzip_download_response(
+            stream_vep_tsv(results_path), f"{base}.{table_extension}.gz"
         )
     return FileResponse(
+        # Full results in VCF format
         results_path,
         media_type="application/gzip",
         filename=results_path.name,
@@ -263,10 +240,8 @@ async def download_results(
     format: str = "vcf",
     filters: str | None = None,
 ):
-    # Optional server-side filtering: `filters` is the same JSON query-builder
-    # payload the results view sends to /results. When present, the download is
-    # restricted to the rows passing those filters. Malformed input is a client
-    # error (400), not a 500.
+    # Optional server-side filtering.
+    # `filters` is a JSON array of query-builder conditions.
     try:
         active_filters = parse_filters(filters)
     except FilterError as exc:
@@ -281,7 +256,12 @@ async def download_results(
         )
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["input"]
-            results_file_path = get_vep_results_file_path(input_vcf_file)
+            output_prefix = workflow_status["workflow"]["params"].get(
+                "output_prefix"
+            )
+            results_file_path = get_vep_results_file_path(
+                input_vcf_file, output_prefix
+            )
             if results_file_path.exists():
                 return _results_download_response(
                     results_file_path, format, active_filters
@@ -327,25 +307,9 @@ async def download_results(
 
 
 def _results_response(**kwargs) -> Response:
-    """A page of results, already serialised.
-
-    Returning the model itself would leave the serialising to FastAPI, which
-    for anything that is not already a Response runs `jsonable_encoder` — a
-    recursive walk in Python over every node of the tree, then `json.dumps`.
-    On a 100-record page that is 490ms against pydantic's own 62ms for the
-    same bytes, and it grew quietly as annotations made each variant bigger:
-    the route has returned the model since the endpoint was written, when the
-    payload was a fraction of this.
-
-    ★ `by_alias=True` is not optional. One display-spec field is `source` on
-    the model and `from` on the wire (`from` being a keyword), and
-    `jsonable_encoder` applies aliases where `model_dump_json` does not — so
-    without it that field silently renames and the frontend stops finding it.
-    With it, the bytes are identical to what this endpoint has always sent.
-
-    Serialising here rather than in the caller also keeps the work inside the
-    threadpool. FastAPI's encoding runs on the event loop, so until now every
-    results request blocked it for the duration.
+    """Return a serialized JSONResponse for the results page.
+    Pre-serialized to bytes with `model_dump_json` for performance.
+    `by_alias=True` is needed to map `source` field in the spec model to `from` in the payload.
     """
     payload = get_results_from_path(**kwargs)
     return Response(
@@ -375,13 +339,10 @@ async def fetch_results(
             )
 
         def _results(**kwargs):
-            """Build the page, turning a bad filter into the client error it is.
-
-            `parse_filters` above only checks the shape; whether a field accepts
-            an operator is not known until the filter is compiled, which happens
-            inside the results call. Without this, asking allele frequency for
-            `==` — which an older client may still do, since it was offered
-            until recently — came back as a 500.
+            """
+            `parse_filters` only checks the filter payload shape.
+            `_results_response` compiles the filters to check that the requested 
+            columns and operators exist in the result VCF.
             """
             try:
                 return _results_response(**kwargs)
@@ -396,7 +357,12 @@ async def fetch_results(
         )
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["input"]
-            results_file_path = get_vep_results_file_path(input_vcf_file)
+            output_prefix = workflow_status["workflow"]["params"].get(
+                "output_prefix"
+            )
+            results_file_path = get_vep_results_file_path(
+                input_vcf_file, output_prefix
+            )
             if results_file_path.exists():
                 return await run_in_threadpool(
                     _results,
@@ -471,9 +437,8 @@ async def get_form_config(
         )
 
         form_config = FormConfig(transcript_set=transcript_set)
-        # Panels/options to show on the input form for this genome. Currently the
-        # always-visible set for every species; the genome `attributes` are the
-        # hook for species-conditional visibility later.
+        # Panels/options to show on the input form for this genome.
+        # `attributes` is a placeholder for defining species-specific visibility
         return {
             "parameters": form_config,
             "panels": get_visible_panels(
@@ -504,14 +469,7 @@ async def get_form_config(
 
 @router.get("/species_presets", name="get_species_presets")
 async def species_presets(request: Request):
-    """Quick-select species for the form, resolved to the current integrated
-    release rather than shipped as hardcoded genome UUIDs in the frontend.
-
-    Always 200. An accession that cannot be resolved is dropped from the list
-    (see species_presets.get_species_presets); the form simply shows one fewer
-    button, which is a far better failure than a button that submits jobs
-    against a stale or partial release.
-    """
+    """Species presets for the input form quick-select buttons."""
     try:
         return await get_species_presets()
     except Exception as e:

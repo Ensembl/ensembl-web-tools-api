@@ -1,5 +1,7 @@
 import logging
 import os
+from datetime import datetime
+from pathlib import Path
 from typing import Callable
 
 from pydantic import (
@@ -29,28 +31,43 @@ class VEPConfigParams(BaseModel):
     vcf: FilePath
     vep_config: FilePath
     outdir: DirectoryPath
+    output_prefix: str
     bin_size: int = 3000
     sort: bool = True
-    vep_version: str = "115.2"
 
     @model_serializer
     def vep_config_serialiser(self):
         vcf_str = f'"input": "{self.vcf.as_posix()}"'
         config_str = f'"vep_config": "{self.vep_config.as_posix()}"'
         outdir_str = f'"outdir": "{self.outdir.as_posix()}"'
+        output_prefix_str = f'"output_prefix": "{self.output_prefix}"'
         bin_str = f'"bin_size": {self.bin_size}'
         sort_str = f'"sort": {"true" if self.sort else "false"}'
-        vep_version_str = f'"vep_version": "{self.vep_version}"'
         json_str = (
-            "{" + ", ".join([vcf_str, config_str, outdir_str, bin_str, sort_str, vep_version_str]) + "}"
+            "{"
+            + ", ".join(
+                [vcf_str, config_str, outdir_str, output_prefix_str, bin_str, sort_str]
+            )
+            + "}"
         )
         return json_str
+
+
+def output_prefix_for(filename: str, now: datetime | None = None) -> str:
+    timestamp = (now or datetime.now()).strftime("%Y-%m-%d-%H-%M")
+    if filename == "input.txt":
+        return timestamp
+
+    input_stem = Path(filename)
+    while input_stem.suffix:
+        input_stem = Path(input_stem.stem)
+    return f"{input_stem}_{timestamp}"
 
 class LaunchParams(BaseModel):
     computeEnvId: str = NF_COMPUTE_ENV_ID
     pipeline: str = NF_PIPELINE_URL
     workDir: DirectoryPath
-    revision: str = "release/115"
+    revision: str = "main"
     pullLatest: bool = True
     configProfiles: list[str] = ["ensembl"]
     paramsText: VEPConfigParams

@@ -233,10 +233,12 @@ Selecting a species fires two request chains, plus some no-API side effects.
 **Chain A — form config** (`useVepFormConfig.ts`):
 
 1. `GET /api/tools/vep/form_config/{genome_id}` (`vepApiSlice.ts:38`).
-2. The tools API calls the **metadata API**:
-   `GET …/genome/{genome_id}/dataset/genebuild/attributes?attribute_names=genebuild.provider_name&…provider_version&…last_geneset_update`.
-3. The response builds the **Transcript set** dropdown (+ static
-   `symbol`/`biotype`); the option panels come from the assembled spec.
+2. The tools API calls the **metadata API** in parallel:
+   `GET …/genome/{genome_id}/dataset/genebuild/attributes?attribute_names=genebuild.provider_name&…provider_version&…last_geneset_update`
+   and `GET …/genome/{genome_id}/explain`.
+3. The attributes response builds the **Transcript set** dropdown (+ static
+   `symbol`/`biotype`); the explain response supplies the taxonomy ID and
+   assembly name used to select the option panels.
 4. `setDefaultParameters()` seeds `parameters`, so the call will not re-fire until
    the species changes again.
 
@@ -266,7 +268,8 @@ All server-side metadata calls share the `WEB_METADATA_API` base, so the form
 configuration, species presets, and GFF/FASTA lookup use the same deployment
 target.
 
-**Server-side, stage 1 — form config.** `get_genome_metadata()`
+**Server-side, stage 1 — form config.** `get_genome_genebuild()` and
+`get_genome_explain()`
 (`app/vep/utils/web_metadata.py`), called from `get_form_config`
 (`app/vep/vep_resources.py`).
 
@@ -275,6 +278,8 @@ target.
   `genebuild.provider_name`, `genebuild.provider_version`,
   `genebuild.last_geneset_update`.
 - Builds the **"Transcript set"** dropdown label/value (e.g. `GENCODE 50`).
+- `GET …/genome/{genome_id}/explain` returns the canonical
+  `species_taxonomy_id` and `assembly.name` used to select form panels.
 
 **Server-side, stage 2 — submission.** `get_vep_support_location()`
 (`app/vep/utils/web_metadata.py`), called from `create_config_ini_file`.
@@ -292,8 +297,8 @@ target.
 `GET /api/metadata/genome/{genome_id}/example_objects` → `[{id, type}]`, then a
 `POST /api/graphql/variation` for the variant.
 
-★ Verified: the shared `genomeApiSlice` also defines `/genome/{slug}/explain` and
-`/genome/{id}/karyotype`, but the VEP flow invokes neither.
+★ The VEP backend calls `/genome/{id}/explain` for form-panel selection; the
+client's shared `genomeApiSlice` still does not call it directly.
 
 **Backend configuration** (`app/core/config.py`):
 

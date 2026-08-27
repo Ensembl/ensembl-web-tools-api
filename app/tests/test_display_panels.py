@@ -38,31 +38,38 @@ MOUSE = "10090"
 
 def _form_config_panels(*, genome_id, species_taxonomy_id, assembly_name):
     """The `panels` the /form_config endpoint actually serves, with its genome
-    metadata lookup stubbed (that feeds the transcript-set dropdown only)."""
+    metadata lookups stubbed."""
     import asyncio
 
     from app.vep import vep_resources
 
-    async def fake_get_genome_metadata(_genome_id):
+    async def fake_get_genome_genebuild(_genome_id):
         return {
             "genebuild.provider_name": "Ensembl",
             "genebuild.provider_version": "115",
             "genebuild.last_geneset_update": "2024-01",
         }
 
-    original = vep_resources.get_genome_metadata
-    vep_resources.get_genome_metadata = fake_get_genome_metadata
+    async def fake_get_genome_explain(_genome_id):
+        return {
+            "species_taxonomy_id": species_taxonomy_id,
+            "assembly": {"name": assembly_name},
+        }
+
+    original_genebuild = vep_resources.get_genome_genebuild
+    original_explain = vep_resources.get_genome_explain
+    vep_resources.get_genome_genebuild = fake_get_genome_genebuild
+    vep_resources.get_genome_explain = fake_get_genome_explain
     try:
         response = asyncio.run(
             vep_resources.get_form_config(
                 request=None,
                 genome_id=genome_id,
-                species_taxonomy_id=species_taxonomy_id,
-                assembly_name=assembly_name,
             )
         )
     finally:
-        vep_resources.get_genome_metadata = original
+        vep_resources.get_genome_genebuild = original_genebuild
+        vep_resources.get_genome_explain = original_explain
     return response["panels"]
 
 
@@ -121,10 +128,8 @@ def test_submission_pins_the_same_panels_form_config_serves():
         species_taxonomy_id=ini_parameters.species_taxonomy_id,
         assembly_name=ini_parameters.assembly_name,
     )
-    # What the form_config endpoint itself serves for the same species/assembly.
-    # Its only network call is the genome-metadata lookup, which feeds the
-    # transcript-set dropdown, not the panels (`attributes` is accepted by
-    # get_visible_panels but never read) -- so it is stubbed out here.
+    # What the form_config endpoint itself serves for the same species/assembly,
+    # now derived from its metadata API explain response.
     from_form_config = _form_config_panels(
         genome_id=ini_parameters.genome_id,
         species_taxonomy_id=HUMAN,
@@ -138,6 +143,74 @@ def test_submission_pins_the_same_panels_form_config_serves():
             "phenotype_and_disease_associations",
         "allele_frequencies",
     } <= panel_ids
+
+
+def test_form_config_uses_explain_metadata_for_non_human_panels():
+    panels = _form_config_panels(
+        genome_id="mouse-genome-id",
+        species_taxonomy_id=MOUSE,
+        assembly_name="GRCm39",
+    )
+
+    assert {panel["id"] for panel in panels} == {
+        "variant_representations",
+        "genes_and_transcripts",
+        "protein_and_functional",
+        "phenotype_and_disease_associations",
+    }
+
+
+def test_form_config_ignores_legacy_species_query_parameters(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.vep import vep_resources
+
+    async def fake_get_genome_genebuild(_genome_id):
+        return {
+            "genebuild.provider_name": "Ensembl",
+            "genebuild.provider_version": "115",
+        }
+
+    async def fake_get_genome_explain(_genome_id):
+        return {
+            "species_taxonomy_id": HUMAN,
+            "assembly": {"name": "GRCh38.p14"},
+        }
+
+    monkeypatch.setattr(vep_resources, "get_genome_genebuild", fake_get_genome_genebuild)
+    monkeypatch.setattr(vep_resources, "get_genome_explain", fake_get_genome_explain)
+    app = FastAPI()
+    app.include_router(vep_resources.router, prefix="/vep")
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/vep/form_config/genome-id?species_taxonomy_id=1&assembly_name=Wibble_v1"
+        )
+
+    assert response.status_code == 200
+    assert "allele_frequencies" in {panel["id"] for panel in response.json()["panels"]}
+
+
+def test_form_config_rejects_an_incomplete_explain_payload(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.vep import vep_resources
+
+    async def fake_get_genome_genebuild(_genome_id):
+        return {"genebuild.provider_name": "Ensembl"}
+
+    async def fake_get_genome_explain(_genome_id):
+        return {"species_taxonomy_id": HUMAN, "assembly": {}}
+
+    monkeypatch.setattr(vep_resources, "get_genome_genebuild", fake_get_genome_genebuild)
+    monkeypatch.setattr(vep_resources, "get_genome_explain", fake_get_genome_explain)
+    app = FastAPI()
+    app.include_router(vep_resources.router, prefix="/vep")
+
+    with TestClient(app) as client:
+        response = client.get("/vep/form_config/genome-id")
+
+    assert response.status_code == 500
 
 
 def test_the_panels_no_longer_depend_on_species_taxonomy_id():

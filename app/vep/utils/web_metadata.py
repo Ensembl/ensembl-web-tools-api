@@ -40,11 +40,35 @@ def get_vep_support_location(genome_id: str) -> dict:
         raise
 
 
-async def get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
-    return await run_in_threadpool(_get_genome_metadata, genome_id)
+async def get_genome_genebuild(genome_id: str) -> GenomeAnnotationProvider:
+    return await run_in_threadpool(_get_genome_genebuild, genome_id)
 
 
-def _get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
+async def get_genome_explain(genome_id: str) -> dict:
+    """Return the metadata API's canonical description of a genome UUID."""
+    return await run_in_threadpool(_get_genome_explain, genome_id)
+
+
+def _get_genome_explain(genome_id: str) -> dict:
+    try:
+        response = requests.get(
+            WEB_METADATA_API + "genome/" + genome_id + "/explain",
+            timeout=METADATA_TIMEOUT,
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.HTTPError as e:
+        e.args = (
+            f"get_genome_explain(): error response from metadata API for {genome_id}:",
+            *e.args,
+        )
+        raise
+    except Exception as e:
+        e.args = (f"{type(e).__name__} in get_genome_explain():", *e.args)
+        raise
+
+
+def _get_genome_genebuild(genome_id: str) -> GenomeAnnotationProvider:
     try:
         response = requests.get(
             WEB_METADATA_API
@@ -65,16 +89,16 @@ def _get_genome_metadata(genome_id: str) -> GenomeAnnotationProvider:
         return attributes
     except KeyError as e:
         e.args = (
-            f"get_genome_metadata(): unexpected metadata API payload for f{genome_id}:",
+            f"get_genome_genebuild(): unexpected metadata API payload for {genome_id}:",
             *e.args,
         )
         raise
     except requests.HTTPError as e:
         e.args = (
-            f"get_genome_metadata(): error response from metadata API for f{genome_id}:",
+            f"get_genome_genebuild(): error response from metadata API for {genome_id}:",
             *e.args,
         )
         raise
     except Exception as e:
-        e.args = (f"{type(e).__name__} in get_genome_metadata():", *e.args)
+        e.args = (f"{type(e).__name__} in get_genome_genebuild():", *e.args)
         raise

@@ -203,17 +203,23 @@ def _results_download_response(
     active_filters: list[ResultsFilter] | None = None,
 ) -> FileResponse | StreamingResponse:
     is_table = output_format in ("tsv", "txt", "table")
+    table_extension = "tsv" if output_format == "tsv" else "txt"
     base = re.sub(r"\.vcf(\.gz)?$", "", results_path.name) or "vep_results"
     if active_filters:
         # Filtered download (include only CSQ entries/records passing the filters)
         vcf_text = stream_filtered_vcf_text(results_path, active_filters)
         if is_table:
             # Filtered download in tabular format (send over gzipped stream)
-            return _gzip_download_response(flatten_vcf_lines(vcf_text), f"{base}_filtered.txt.gz")
+            return _gzip_download_response(
+                flatten_vcf_lines(vcf_text),
+                f"{base}_filtered.{table_extension}.gz",
+            )
         return _gzip_download_response(vcf_text, f"{base}_filtered.vcf.gz")
     if is_table:
         # Full results in tabular format
-        return _gzip_download_response(stream_vep_tsv(results_path), f"{base}.txt.gz")
+        return _gzip_download_response(
+            stream_vep_tsv(results_path), f"{base}.{table_extension}.gz"
+        )
     return FileResponse(
         # Full results in VCF format
         results_path,

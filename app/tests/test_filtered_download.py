@@ -14,6 +14,7 @@ import gzip
 import pytest
 from pydantic import FilePath
 
+from app.vep import vep_resources
 from app.vep.utils import results_filters as rf
 from app.vep.utils.tsv_export import flatten_vcf_lines
 from app.vep.utils.vcf_results import stream_filtered_vcf_text
@@ -187,3 +188,18 @@ def test_stream_filtered_vcf_text_raises_eagerly_on_invalid_filter(tmp_path):
     # test_vep.py compares by value).
     with pytest.raises(Exception, match="unsupported transcript group"):
         stream_filtered_vcf_text(FilePath(vcf), [bad])
+
+
+@pytest.mark.parametrize("filters", [None, [_canonical_filter()]])
+def test_tsv_download_uses_a_tsv_extension(tmp_path, filters):
+    vcf = tmp_path / "results.vcf.gz"
+    _write_vcf(vcf, [_record(100, [_entry("T", "missense_variant", "ENST_A")])])
+
+    response = vep_resources._results_download_response(
+        FilePath(vcf), "tsv", filters
+    )
+
+    expected = "results_filtered.tsv.gz" if filters else "results.tsv.gz"
+    assert response.headers["content-disposition"] == (
+        f'attachment; filename="{expected}"'
+    )

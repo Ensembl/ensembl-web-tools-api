@@ -125,10 +125,18 @@ def _select_library(library: dict, config_entries: list[dict]) -> dict:
         for option in library["display"]["options"]
         if DisplayOptionSpec.model_validate(option).plugin_refs() <= enabled_plugins
     ]
-    return {
+    selected = {
         "parsing": {**library["parsing"], "plugins": plugins},
         "display": {**library["display"], "options": options},
     }
+    # Help is carried whole. It is an inert lookup keyed by option id, read only
+    # when an option is already being shown, so an unused entry costs nothing;
+    # filtering it would need a third rule, since help is keyed across both id
+    # spaces (a form option, a display option, or — as with ClinVar — one and
+    # not the other).
+    if "help" in library:
+        selected["help"] = library["help"]
+    return selected
 
 
 BASE_ENTRY_SPEC = "base"

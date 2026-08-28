@@ -437,7 +437,7 @@ def _spec_form_options(
         # The (?) text. Keyed by option id in the shared library, so an option
         # declared by both human specs states it once (see option_help_model).
         if spec.help is not None:
-            help_payload = spec.help.payload_for(entry.id)
+            help_payload = spec.help.payload_for(entry.id, entry.form.label)
             if help_payload is not None:
                 option["help"] = help_payload
         fields = getattr(entry.config, "fields", None)

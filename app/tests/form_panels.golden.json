@@ -161,7 +161,7 @@
           "default": false,
           "category": "Short variants",
           "help": {
-            "description": "Allele frequencies from the exome sequences in the Genome Aggregation Database (gnomAD){version}. Populations are named as at source.",
+            "description": "Allele frequencies from the exome sequences in the Genome Aggregation Database (gnomAD) v4.1.1. Populations are named as at source.",
             "links": [
               {
                 "href": "https://gnomad.broadinstitute.org/"
@@ -406,7 +406,7 @@
           "default": false,
           "category": "Short variants",
           "help": {
-            "description": "Allele frequencies from the genome sequences in the Genome Aggregation Database (gnomAD){version}. Populations are named as at source.",
+            "description": "Allele frequencies from the genome sequences in the Genome Aggregation Database (gnomAD) v4.1.1. Populations are named as at source.",
             "links": [
               {
                 "href": "https://gnomad.broadinstitute.org/"
@@ -781,15 +781,10 @@
           "default": false,
           "category": "Structural variants",
           "help": {
-            "description": "Allele frequencies for structural variants in the Genome Aggregation Database (gnomAD){version}. Populations are named as at source.",
+            "description": "Allele frequencies for structural variants in the Genome Aggregation Database (gnomAD) v4.1. Populations are named as at source.",
             "links": [
               {
-                "href": "https://gnomad.broadinstitute.org/news/2023-11-v4-structural-variants/",
-                "majorVersion": "4"
-              },
-              {
-                "href": "https://europepmc.org/article/MED/32461652",
-                "majorVersion": "2"
+                "href": "https://gnomad.broadinstitute.org/news/2023-11-v4-structural-variants/"
               }
             ]
           },
@@ -894,7 +889,7 @@
           "default": false,
           "category": "Structural variants",
           "help": {
-            "description": "Sample frequencies for copy number variants in the Genome Aggregation Database (gnomAD){version}. Populations are named as at source.",
+            "description": "Sample frequencies for copy number variants in the Genome Aggregation Database (gnomAD) v4.1. Populations are named as at source.",
             "links": [
               {
                 "href": "https://gnomad.broadinstitute.org/news/2023-11-v4-copy-number-variants/"
@@ -1002,8 +997,7 @@
           "default": false,
           "category": "Locations",
           "help": {
-            "description": "Distance in bases to the nearest transcription start site.",
-            "links": []
+            "description": "Distance in bases to the nearest transcription start site."
           }
         },
         {
@@ -1021,8 +1015,7 @@
             }
           ],
           "help": {
-            "description": "Distance in bases to the nearest gene.",
-            "links": []
+            "description": "Distance in bases to the nearest gene."
           }
         },
         {
@@ -1046,8 +1039,7 @@
             }
           ],
           "help": {
-            "description": "Distance in bases to the nearest exon junction. The intronic option overrides the max search range for variants in introns and checks the nearest introns.",
-            "links": []
+            "description": "Distance in bases to the nearest exon junction. The intronic option overrides the max search range for variants in introns and checks the nearest introns."
           }
         },
         {
@@ -1194,8 +1186,7 @@
           "default": false,
           "category": "Protein",
           "help": {
-            "description": "The Ensembl protein identifier (ENSP).",
-            "links": []
+            "description": "The Ensembl protein identifier (ENSP)."
           }
         },
         {
@@ -1383,8 +1374,7 @@
           "type": "boolean",
           "default": false,
           "help": {
-            "description": "Annotates variants with associated phenotypes, diseases and traits curated by Ensembl from sources including ClinVar, OMIM and the GWAS Catalog.",
-            "links": []
+            "description": "Annotates variants with associated phenotypes, diseases and traits curated by Ensembl from sources including ClinVar, OMIM and the GWAS Catalog."
           }
         },
         {
@@ -1537,7 +1527,7 @@
           "default": false,
           "category": "Short variants",
           "help": {
-            "description": "Allele frequencies from the exome sequences in the Genome Aggregation Database (gnomAD){version}. Populations are named as at source.",
+            "description": "Allele frequencies from the exome sequences in the Genome Aggregation Database (gnomAD) v2.1.1. Populations are named as at source.",
             "links": [
               {
                 "href": "https://gnomad.broadinstitute.org/"
@@ -1911,7 +1901,7 @@
           "default": false,
           "category": "Short variants",
           "help": {
-            "description": "Allele frequencies from the genome sequences in the Genome Aggregation Database (gnomAD){version}. Populations are named as at source.",
+            "description": "Allele frequencies from the genome sequences in the Genome Aggregation Database (gnomAD) v2.1. Populations are named as at source.",
             "links": [
               {
                 "href": "https://gnomad.broadinstitute.org/"
@@ -2216,15 +2206,10 @@
           "default": false,
           "category": "Structural variants",
           "help": {
-            "description": "Allele frequencies for structural variants in the Genome Aggregation Database (gnomAD){version}. Populations are named as at source.",
+            "description": "Allele frequencies for structural variants in the Genome Aggregation Database (gnomAD) v2.1. Populations are named as at source.",
             "links": [
               {
-                "href": "https://gnomad.broadinstitute.org/news/2023-11-v4-structural-variants/",
-                "majorVersion": "4"
-              },
-              {
-                "href": "https://europepmc.org/article/MED/32461652",
-                "majorVersion": "2"
+                "href": "https://europepmc.org/article/MED/32461652"
               }
             ]
           },
@@ -2305,8 +2290,7 @@
           "default": false,
           "category": "Locations",
           "help": {
-            "description": "Distance in bases to the nearest transcription start site.",
-            "links": []
+            "description": "Distance in bases to the nearest transcription start site."
           }
         },
         {
@@ -2324,8 +2308,7 @@
             }
           ],
           "help": {
-            "description": "Distance in bases to the nearest gene.",
-            "links": []
+            "description": "Distance in bases to the nearest gene."
           }
         },
         {
@@ -2349,8 +2332,7 @@
             }
           ],
           "help": {
-            "description": "Distance in bases to the nearest exon junction. The intronic option overrides the max search range for variants in introns and checks the nearest introns.",
-            "links": []
+            "description": "Distance in bases to the nearest exon junction. The intronic option overrides the max search range for variants in introns and checks the nearest introns."
           }
         },
         {
@@ -2467,8 +2449,7 @@
           "default": false,
           "category": "Protein",
           "help": {
-            "description": "The Ensembl protein identifier (ENSP).",
-            "links": []
+            "description": "The Ensembl protein identifier (ENSP)."
           }
         },
         {
@@ -2544,8 +2525,7 @@
           "type": "boolean",
           "default": false,
           "help": {
-            "description": "Annotates variants with associated phenotypes, diseases and traits curated by Ensembl from sources including ClinVar, OMIM and the GWAS Catalog.",
-            "links": []
+            "description": "Annotates variants with associated phenotypes, diseases and traits curated by Ensembl from sources including ClinVar, OMIM and the GWAS Catalog."
           }
         },
         {
@@ -2603,8 +2583,7 @@
           "default": false,
           "category": "Locations",
           "help": {
-            "description": "Distance in bases to the nearest transcription start site.",
-            "links": []
+            "description": "Distance in bases to the nearest transcription start site."
           }
         },
         {
@@ -2622,8 +2601,7 @@
             }
           ],
           "help": {
-            "description": "Distance in bases to the nearest gene.",
-            "links": []
+            "description": "Distance in bases to the nearest gene."
           }
         },
         {
@@ -2647,8 +2625,7 @@
             }
           ],
           "help": {
-            "description": "Distance in bases to the nearest exon junction. The intronic option overrides the max search range for variants in introns and checks the nearest introns.",
-            "links": []
+            "description": "Distance in bases to the nearest exon junction. The intronic option overrides the max search range for variants in introns and checks the nearest introns."
           }
         },
         {
@@ -2695,8 +2672,7 @@
           "type": "boolean",
           "default": false,
           "help": {
-            "description": "The Ensembl protein identifier (ENSP).",
-            "links": []
+            "description": "The Ensembl protein identifier (ENSP)."
           }
         }
       ]
@@ -2711,8 +2687,7 @@
           "type": "boolean",
           "default": false,
           "help": {
-            "description": "Annotates variants with associated phenotypes, diseases and traits curated by Ensembl from sources including ClinVar, OMIM and the GWAS Catalog.",
-            "links": []
+            "description": "Annotates variants with associated phenotypes, diseases and traits curated by Ensembl from sources including ClinVar, OMIM and the GWAS Catalog."
           }
         }
       ]
@@ -2764,8 +2739,7 @@
           "default": false,
           "category": "Locations",
           "help": {
-            "description": "Distance in bases to the nearest transcription start site.",
-            "links": []
+            "description": "Distance in bases to the nearest transcription start site."
           }
         },
         {
@@ -2783,8 +2757,7 @@
             }
           ],
           "help": {
-            "description": "Distance in bases to the nearest gene.",
-            "links": []
+            "description": "Distance in bases to the nearest gene."
           }
         },
         {
@@ -2808,8 +2781,7 @@
             }
           ],
           "help": {
-            "description": "Distance in bases to the nearest exon junction. The intronic option overrides the max search range for variants in introns and checks the nearest introns.",
-            "links": []
+            "description": "Distance in bases to the nearest exon junction. The intronic option overrides the max search range for variants in introns and checks the nearest introns."
           }
         },
         {
@@ -2856,8 +2828,7 @@
           "type": "boolean",
           "default": false,
           "help": {
-            "description": "The Ensembl protein identifier (ENSP).",
-            "links": []
+            "description": "The Ensembl protein identifier (ENSP)."
           }
         }
       ]
@@ -2872,8 +2843,7 @@
           "type": "boolean",
           "default": false,
           "help": {
-            "description": "Annotates variants with associated phenotypes, diseases and traits curated by Ensembl from sources including ClinVar, OMIM and the GWAS Catalog.",
-            "links": []
+            "description": "Annotates variants with associated phenotypes, diseases and traits curated by Ensembl from sources including ClinVar, OMIM and the GWAS Catalog."
           }
         }
       ]

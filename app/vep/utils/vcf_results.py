@@ -1,6 +1,6 @@
 """Load a VEP VCF and convert it to the results response model."""
 
-from collections import deque, OrderedDict
+from collections import Counter, deque, OrderedDict
 from dataclasses import dataclass
 from io import StringIO
 from typing import Iterable, Iterator
@@ -303,6 +303,7 @@ def _get_alt_allele_details(
     sv: dict | None = None,
     plans: dict | None = None,
     location: model.Location | None = None,
+    unhandled_feature_types: Counter | None = None,
 ) -> model.AlternativeVariantAllele:
     """Build one alternate allele from matching CSQ entries.
 
@@ -428,6 +429,15 @@ def _get_alt_allele_details(
                     consequences=["intergenic_variant"],
                 )
             )
+        elif unhandled_feature_types is not None:
+            # A CSQ row for a feature type the response has no model for —
+            # RegulatoryFeature and MotifFeature, which VEP emits when
+            # regulatory annotation is on. Dropping it loses the row entirely,
+            # so record what was dropped for the caller to report; it is a gap
+            # in the model rather than bad input.
+            unhandled_feature_types[
+                csq_values[index_map["Feature_type"]] or "(none)"
+            ] += 1
 
     return model.AlternativeVariantAllele(
         allele_sequence=allele_sequence,
@@ -1312,6 +1322,9 @@ def _get_results_from_records(
     # all, and which columns a pattern_map matches are all answerable here
     # instead of on every CSQ row. See PluginPlan.
     plans = compile_parsing_spec(prediction_index_map, spec)
+    # CSQ rows dropped for want of a model, counted per feature type so the loss
+    # is reported once for the page rather than per row or not at all.
+    unhandled_feature_types: Counter = Counter()
 
     variants = []
     # populate variants page. `presliced` means the stream already contains
@@ -1369,6 +1382,7 @@ def _get_results_from_records(
                     sv,
                     plans,
                     location=location,
+                    unhandled_feature_types=unhandled_feature_types,
                 )
                 for alt in alt_allele_strings
             ]
@@ -1392,6 +1406,17 @@ def _get_results_from_records(
             # One pool per variant, once it holds every allele and consequence.
             _pool_annotations(variant)
             variants.append(variant)
+
+    if unhandled_feature_types:
+        logging.warning(
+            "Dropped %d CSQ row(s) with no consequence model: %s. "
+            "Their annotations do not reach the response.",
+            sum(unhandled_feature_types.values()),
+            ", ".join(
+                f"{name} x{count}"
+                for name, count in sorted(unhandled_feature_types.items())
+            ),
+        )
 
     available_af_sources = [
         model.AfSource(**descriptor)

@@ -316,3 +316,65 @@ def test_transcript_flags_mane_gencode_primary_canonical():
     assert plain_cons.is_canonical is False
     assert plain_cons.is_mane_select is False
     assert plain_cons.is_gencode_primary is False
+
+
+# --- feature types with no consequence model ---------------------------------
+
+
+def test_an_unmodelled_feature_type_is_counted_rather_than_lost():
+    """VEP emits RegulatoryFeature and MotifFeature rows once regulatory
+    annotation is on, and the response has no model for either. They are dropped
+    — but the caller is told what was dropped, so the loss is reportable instead
+    of silent."""
+    from collections import Counter
+
+    dropped: Counter = Counter()
+    allele = _get_alt_allele_details(
+        "G",
+        "A",
+        [
+            row_str(Allele="A", Feature_type="RegulatoryFeature",
+                    Feature="ENSR1_958", BIOTYPE="promoter",
+                    Consequence="regulatory_region_variant"),
+            row_str(Allele="A", Feature_type="MotifFeature",
+                    Feature="ENSM00000000314",
+                    Consequence="TF_binding_site_variant"),
+        ],
+        INDEX_MAP,
+        SPEC,
+        unhandled_feature_types=dropped,
+    )
+    assert allele.predicted_molecular_consequences == []
+    assert dropped == Counter({"RegulatoryFeature": 1, "MotifFeature": 1})
+
+
+def test_the_counter_is_optional():
+    """Callers that do not care still parse."""
+    allele = _get_alt_allele_details(
+        "G", "A",
+        [row_str(Allele="A", Feature_type="RegulatoryFeature",
+                 Consequence="regulatory_region_variant")],
+        INDEX_MAP,
+        SPEC,
+    )
+    assert allele.predicted_molecular_consequences == []
+
+
+def test_transcript_and_intergenic_rows_are_not_counted():
+    """Only rows with no model at all — the two that have one are unaffected."""
+    from collections import Counter
+
+    dropped: Counter = Counter()
+    _get_alt_allele_details(
+        "G", "A",
+        [
+            row_str(Allele="A", Feature_type="Transcript", Feature="ENST1",
+                    BIOTYPE="protein_coding", Consequence="missense_variant",
+                    STRAND="1"),
+            row_str(Allele="A", Feature_type="", Consequence="intergenic_variant"),
+        ],
+        INDEX_MAP,
+        SPEC,
+        unhandled_feature_types=dropped,
+    )
+    assert dropped == Counter()

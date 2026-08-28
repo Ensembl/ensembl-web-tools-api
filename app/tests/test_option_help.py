@@ -44,20 +44,89 @@ def test_help_follows_the_option_to_every_genome_that_offers_it():
     assert _options("GRCh38.p14")["cadd"]["help"] == _options("GRCh37.p13")["cadd"]["help"]
 
 
-def test_a_version_placeholder_is_served_uninterpolated():
-    """`{version}` is resolved from the option's rendered label, which is the
-    frontend's business — the backend must not guess at it."""
-    assert "{version}" in _options()["gnomad_exomes"]["help"]["description"]
+# --- version resolution ------------------------------------------------------
+#
+# One authored entry serves an option offered at a different version per
+# assembly. Both halves resolve against the option's own label, and what is
+# served is finished: no placeholder, and only the links that belong with it.
 
 
-def test_a_version_scoped_link_keeps_the_frontend_s_spelling():
-    """`majorVersion`, not `major_version`: the payload is handed straight to the
-    frontend, whose OptionHelpLink names the field that way. Snake_case would
-    drop the filter silently — every link would show, and one assembly's help
-    would cite the other's release announcement."""
-    links = _options()["gnomad_sv"]["help"]["links"]
-    assert [link.get("majorVersion") for link in links] == ["4", "2"]
-    assert not any("major_version" in link for link in links)
+def test_the_placeholder_is_resolved_from_the_label():
+    description = _options()["gnomad_exomes"]["help"]["description"]
+    assert "{version}" not in description
+    assert "(gnomAD) v4.1.1." in description
+
+
+def test_the_other_assembly_gets_its_own_version_from_the_same_entry():
+    description = _options("GRCh37.p13")["gnomad_exomes"]["help"]["description"]
+    assert "(gnomAD) v2.1.1." in description
+    assert "4.1.1" not in description
+
+
+def test_no_option_serves_a_placeholder():
+    for assembly in ("GRCh38.p14", "GRCh37.p13"):
+        for option_id, option in _options(assembly).items():
+            description = option.get("help", {}).get("description", "")
+            assert "{version}" not in description, f"{assembly} {option_id}"
+
+
+def test_a_label_with_no_version_leaves_no_gap():
+    """The placeholder takes the space before it, so the sentence still reads."""
+    help_ = OptionHelp(option_id="x", description="Frequencies from gnomAD{version}.")
+    assert help_.as_payload("gnomAD Genomes")["description"] == (
+        "Frequencies from gnomAD."
+    )
+
+
+def test_each_assembly_is_served_only_its_own_release():
+    """gnomAD SV is v4.1 on GRCh38 and v2.1 on GRCh37, and the v4 release
+    announcement does not describe the v2 callset."""
+    grch38 = _options()["gnomad_sv"]["help"]["links"]
+    grch37 = _options("GRCh37.p13")["gnomad_sv"]["help"]["links"]
+    assert len(grch38) == 1 and "v4-structural-variants" in grch38[0]["href"]
+    assert grch37 == [{"href": "https://europepmc.org/article/MED/32461652"}]
+
+
+def test_a_point_release_keeps_its_link():
+    """Matching on the major alone: v4.2.1 still describes the v4 callset."""
+    help_ = OptionHelp(
+        option_id="x",
+        description="d",
+        links=[OptionHelpLink(href="https://example.org/v4", major_version="4")],
+    )
+    assert help_.as_payload("gnomAD SV v4.2.1")["links"] == [
+        {"href": "https://example.org/v4"}
+    ]
+
+
+def test_a_version_specific_link_is_dropped_when_the_label_has_no_version():
+    """Citing the wrong release is worse than citing none."""
+    help_ = OptionHelp(
+        option_id="x",
+        description="d",
+        links=[OptionHelpLink(href="https://example.org/v4", major_version="4")],
+    )
+    assert "links" not in help_.as_payload("gnomAD SV")
+
+
+def test_a_link_without_a_version_is_always_served():
+    help_ = OptionHelp(
+        option_id="x",
+        description="d",
+        links=[OptionHelpLink(href="https://gnomad.broadinstitute.org/")],
+    )
+    for label in ("gnomAD Exomes v2.1.1", "gnomAD Exomes"):
+        assert help_.as_payload(label)["links"] == [
+            {"href": "https://gnomad.broadinstitute.org/"}
+        ]
+
+
+def test_major_version_is_spent_not_sent():
+    """It chooses the links; the frontend has no use for it afterwards."""
+    for option in _options().values():
+        for link in option.get("help", {}).get("links", []):
+            assert "majorVersion" not in link
+            assert "major_version" not in link
 
 
 def test_a_link_without_a_label_omits_the_key():
@@ -93,9 +162,9 @@ def test_the_payload_drops_the_key_it_is_keyed_by():
         description="y",
         links=[OptionHelpLink(href="https://example.org", major_version="4")],
     )
-    assert help_.as_payload() == {
+    assert help_.as_payload("Some option v4.1") == {
         "description": "y",
-        "links": [{"href": "https://example.org", "majorVersion": "4"}],
+        "links": [{"href": "https://example.org"}],
     }
 
 

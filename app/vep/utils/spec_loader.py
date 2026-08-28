@@ -136,6 +136,11 @@ def _select_library(library: dict, config_entries: list[dict]) -> dict:
     # not the other).
     if "help" in library:
         selected["help"] = library["help"]
+    # Carried whole for the same reason as help: the filter catalogue is keyed
+    # by field, and which fields a job can actually filter on is decided from
+    # its own columns at results time, not here.
+    if "filters" in library:
+        selected["filters"] = library["filters"]
     return selected
 
 

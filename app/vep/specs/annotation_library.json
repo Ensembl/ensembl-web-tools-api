@@ -3848,5 +3848,218 @@
         ]
       }
     ]
+  },
+  "filters": {
+    "fields": [
+      {
+        "field": "consequence",
+        "label": "Predicted molecular consequence",
+        "operator_label": "is any of",
+        "editor": "consequence",
+        "single_instance": true,
+        "option_groups": [
+          {
+            "label": "Protein altering variant",
+            "options": [
+              "feature_elongation",
+              "feature_truncation",
+              "frameshift_variant",
+              "inframe_deletion",
+              "inframe_insertion",
+              "missense_variant",
+              "protein_altering_variant",
+              "start_lost",
+              "stop_gained",
+              "stop_lost",
+              "transcript_ablation",
+              "transcript_amplification"
+            ]
+          },
+          {
+            "label": "Splicing variant",
+            "options": [
+              "splice_acceptor_variant",
+              "splice_donor_5th_base_variant",
+              "splice_donor_region_variant",
+              "splice_donor_variant",
+              "splice_polypyrimidine_tract_variant",
+              "splice_region_variant"
+            ]
+          },
+          {
+            "label": "Transcript variant",
+            "options": [
+              "3_prime_UTR_variant",
+              "5_prime_UTR_variant",
+              "coding_sequence_variant",
+              "incomplete_terminal_codon_variant",
+              "intron_variant",
+              "mature_miRNA_variant",
+              "NMD_transcript_variant",
+              "non_coding_transcript_exon_variant",
+              "non_coding_transcript_variant",
+              "start_retained_variant",
+              "stop_retained_variant",
+              "synonymous_variant"
+            ]
+          },
+          {
+            "label": "Regulatory region variant",
+            "options": [
+              "regulatory_region_ablation",
+              "regulatory_region_amplification",
+              "regulatory_region_variant",
+              "TF_binding_site_variant",
+              "TFBS_ablation",
+              "TFBS_amplification"
+            ]
+          },
+          {
+            "label": "Intergenic variant",
+            "options": [
+              "downstream_gene_variant",
+              "intergenic_variant",
+              "upstream_gene_variant"
+            ]
+          }
+        ]
+      },
+      {
+        "field": "transcript",
+        "label": "Transcript",
+        "operator_label": "is any of",
+        "editor": "text",
+        "placeholder": "e.g. ENST00000341065",
+        "mono": true
+      },
+      {
+        "field": "gene_symbol",
+        "label": "Gene name",
+        "operator_label": "is any of",
+        "editor": "text",
+        "placeholder": "e.g. TP53"
+      },
+      {
+        "field": "gene_id",
+        "label": "Ensembl gene ID",
+        "operator_label": "is any of",
+        "editor": "text",
+        "placeholder": "e.g. ENSG00000141510",
+        "mono": true
+      },
+      {
+        "field": "transcript_group",
+        "label": "Transcript group",
+        "operator_label": "is any of",
+        "editor": "group",
+        "single_instance": true,
+        "options": [
+          {
+            "value": "mane_select",
+            "label": "MANE Select"
+          },
+          {
+            "value": "mane_plus_clinical",
+            "label": "MANE Plus Clinical"
+          },
+          {
+            "value": "gencode_primary",
+            "label": "GENCODE Primary"
+          },
+          {
+            "value": "canonical",
+            "label": "Canonical"
+          }
+        ]
+      },
+      {
+        "field": "allele_frequency",
+        "label": "Allele frequency",
+        "editor": "af"
+      },
+      {
+        "field": "cadd_phred",
+        "label": "Variant impact predictions",
+        "editor": "score",
+        "missing_label": "Include variants with no score",
+        "score_groups": [
+          {
+            "title": "Genome wide",
+            "options": [
+              {
+                "value": "cadd_phred",
+                "label": "CADD (PHRED)",
+                "placeholder": "e.g. 20"
+              },
+              {
+                "value": "cadd_raw",
+                "label": "CADD (RAW)",
+                "placeholder": "e.g. 3"
+              }
+            ]
+          },
+          {
+            "title": "Missense",
+            "options": [
+              {
+                "value": "alphamissense",
+                "label": "AlphaMissense",
+                "placeholder": "e.g. 0.5"
+              },
+              {
+                "value": "revel",
+                "label": "REVEL",
+                "placeholder": "e.g. 0.5"
+              },
+              {
+                "value": "clinpred",
+                "label": "ClinPred",
+                "placeholder": "e.g. 0.5"
+              },
+              {
+                "value": "eve",
+                "label": "EVE",
+                "placeholder": "e.g. 0.5"
+              },
+              {
+                "value": "popeve",
+                "label": "popEVE",
+                "placeholder": "e.g. -3"
+              }
+            ]
+          },
+          {
+            "title": "Splicing",
+            "options": [
+              {
+                "value": "spliceai_ag",
+                "label": "SpliceAI ΔS (acceptor gain)",
+                "placeholder": "e.g. 0.5"
+              },
+              {
+                "value": "spliceai_al",
+                "label": "SpliceAI ΔS (acceptor loss)",
+                "placeholder": "e.g. 0.5"
+              },
+              {
+                "value": "spliceai_dg",
+                "label": "SpliceAI ΔS (donor gain)",
+                "placeholder": "e.g. 0.5"
+              },
+              {
+                "value": "spliceai_dl",
+                "label": "SpliceAI ΔS (donor loss)",
+                "placeholder": "e.g. 0.5"
+              },
+              {
+                "value": "spliceai_any",
+                "label": "SpliceAI ΔS (any)",
+                "placeholder": "e.g. 0.5"
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

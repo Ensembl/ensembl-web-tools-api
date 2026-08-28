@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from vep.models.display_panels_model import DisplayPanel
+from vep.models.filter_spec_model import FilterField
 from vep.models.display_spec_model import DisplayPayload
 
 class VcfMetadata(BaseModel):
@@ -178,6 +179,11 @@ class Metadata(BaseModel):
     # AF sources above: present in the output *and* selected at input, since a
     # full cache can carry columns the submission never asked for.
     available_scores: list[str] = []
+    # The fields the query builder offers, and how each is presented, from the
+    # job's pinned spec — gated to what this output can actually be filtered by,
+    # as the AF sources and scores above are. None for a job pinned before the
+    # section existed.
+    filter_fields: list[FilterField] | None = None
     # The option panels this job was submitted against, pinned at submission.
     # None for jobs that predate the pin — the results view then falls back to
     # the live form-config panels, as it did before.

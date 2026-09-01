@@ -44,7 +44,7 @@ class SubmittableOption:
 
 
 def submittable_options(
-    *, species_taxonomy_id: str | None = None, assembly_name: str | None = None
+    *, assembly_name: str | None = None
 ) -> dict[str, SubmittableOption]:
     """Every option id this genome's form offers, with its type and default.
 
@@ -77,17 +77,14 @@ def submittable_options(
                                             or "sub_options" in child):
                 walk(child)
 
-    for panel in get_visible_panels(
-        species_taxonomy_id=species_taxonomy_id, assembly_name=assembly_name
-    ):
+    for panel in get_visible_panels(assembly_name=assembly_name):
         for option in panel["options"]:
             walk(option)
     return options
 
 
 def unknown_options(
-    payload: dict, *, species_taxonomy_id: str | None = None,
-    assembly_name: str | None = None
+    payload: dict, *, assembly_name: str | None = None
 ) -> list[str]:
     """The keys of `payload` this genome has no option for.
 
@@ -95,16 +92,13 @@ def unknown_options(
     mistyped option id simply does not run and the job comes back without that
     annotation and without a word. Naming them is the point of moving.
     """
-    known = submittable_options(
-        species_taxonomy_id=species_taxonomy_id, assembly_name=assembly_name
-    )
+    known = submittable_options(assembly_name=assembly_name)
     return sorted(key for key in payload if key not in known)
 
 
 def option_values(
     payload: dict,
     *,
-    species_taxonomy_id: str | None = None,
     assembly_name: str | None = None,
 ) -> tuple[dict, list[str]]:
     """This submission's option map, and the keys it set that mean nothing here.
@@ -115,9 +109,7 @@ def option_values(
     `protvar` must still come out with its sub-flags set, exactly as the
     199-field model used to arrange.
     """
-    known = submittable_options(
-        species_taxonomy_id=species_taxonomy_id, assembly_name=assembly_name
-    )
+    known = submittable_options(assembly_name=assembly_name)
     values = {}
     for option_id, option in known.items():
         value = payload.get(option_id, option.default)

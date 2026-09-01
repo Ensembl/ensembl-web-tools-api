@@ -225,7 +225,7 @@ BASE_SPEC = "base"
 
 
 # Species that carry GO / Phenotypes data files of their own. Keyed by assembly
-# so the submit path can use it — `species_taxonomy_id` is not sent at submit.
+# so the submit path can use the assembly resolved from the genome UUID.
 # Deliberately a table, not one document per species: the file names follow
 # entirely from the production name, so the rule is stated once in the document's
 # `templates` and the table only says which species have which data. The form
@@ -302,10 +302,9 @@ def resolve_merged_spec(assembly_name: str) -> MergedSpec:
     unlisted species that stops a job running — it is simply offered fewer
     options.
 
-    Only `assembly_name` is available at submission time (it is a field on
-    ConfigIniParams already); `species_taxonomy_id` is not — that is only ever
-    sent to /form_config today. Real per-species branching (as opposed to
-    per-assembly) would need that added to the submission contract.
+    The submissions endpoint resolves `assembly_name` from the genome UUID
+    before constructing ConfigIniParams. Real per-species branching (as
+    opposed to per-assembly) would need an explicit metadata field.
     """
     for prefix, spec_name in _ASSEMBLY_SPECS.items():
         if (assembly_name or "").startswith(prefix):

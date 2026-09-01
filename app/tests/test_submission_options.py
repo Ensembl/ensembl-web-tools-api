@@ -12,30 +12,24 @@ docs/form-panels-to-json.md.
 """
 
 import logging
+from types import SimpleNamespace
 
 from app.vep.models.pipeline_model import ConfigIniParams
 from app.vep.submission_options import submittable_options, unknown_options
 
-HUMAN = "9606"
-MOUSE = "10090"
-
-
-def _params(assembly: str, species: str = HUMAN, **options) -> ConfigIniParams:
+def _params(assembly: str, **options) -> ConfigIniParams:
     return ConfigIniParams(
         genome_id="g",
         assembly_name=assembly,
-        species_taxonomy_id=species,
         options=options,
     )
 
 
 def test_the_model_carries_the_job_and_a_map_of_options():
-    """Nine fields, not 207. Eight are the job's — each read by attribute
-    somewhere — and the ninth is the options."""
+    """Eight fields, not 207: seven job fields and the options map."""
     assert set(ConfigIniParams.model_fields) == {
         "genome_id",
         "assembly_name",
-        "species_taxonomy_id",
         "gff",
         "fasta",
         "force_overwrite",
@@ -72,15 +66,13 @@ def test_an_unsent_option_gets_the_default_the_spec_declares():
 def test_the_map_is_everything_this_genome_offers():
     """One entry per option the form offers, no more: the map is the contract,
     so a caller can read it without knowing what was sent."""
-    for assembly, species in (
-        ("GRCh38.p14", HUMAN),
-        ("GRCh37.p13", HUMAN),
-        ("GRCm39", MOUSE),
+    for assembly in (
+        "GRCh38.p14",
+        "GRCh37.p13",
+        "GRCm39",
     ):
-        offered = submittable_options(
-            species_taxonomy_id=species, assembly_name=assembly
-        )
-        assert set(_params(assembly, species).options) == set(offered), assembly
+        offered = submittable_options(assembly_name=assembly)
+        assert set(_params(assembly).options) == set(offered), assembly
 
 
 def test_the_awkward_shapes_survive_the_round_trip():
@@ -130,12 +122,11 @@ def test_unknown_options_names_them_without_building_a_submission():
     """The same check on its own, for a caller that wants to ask first."""
     assert unknown_options(
         {"cadd": True, "gerpp": True},
-        species_taxonomy_id=HUMAN,
         assembly_name="GRCh38.p14",
     ) == ["gerpp"]
     # On GRCh37 a real GRCh38 option is unknown in exactly the same way.
     assert unknown_options(
-        {"pli": True}, species_taxonomy_id=HUMAN, assembly_name="GRCh37.p13"
+        {"pli": True}, assembly_name="GRCh37.p13"
     ) == ["pli"]
 
 
@@ -157,3 +148,73 @@ def test_submitted_option_values_are_type_checked_and_bounded():
         _params("GRCh38.p14", updownstream_distance_bp="5000\nfasta /etc/passwd")
     with pytest.raises(ValueError, match="at most"):
         _params("GRCh38.p14", updownstream_distance_bp=1_000_001)
+
+
+def test_submission_resolves_assembly_from_genome_id(monkeypatch, tmp_path):
+    """A submission never trusts assembly/taxonomy fields from the client."""
+    import asyncio
+
+    from app.vep import vep_resources
+
+    input_path = tmp_path / "input.vcf"
+    input_path.write_text("##fileformat=VCFv4.2\n")
+    config_path = tmp_path / "config.ini"
+    config_path.write_text("")
+    calls = {}
+
+    class FakeStreamer:
+        def __init__(self, request):
+            self.parameters = SimpleNamespace(value=(
+                b'{"assembly_name":"Wibble_v1","species_taxonomy_id":"1","cadd":true}'
+            ))
+            self.genome_id = SimpleNamespace(value=b"genome-uuid")
+            self.temp_dir = tmp_path
+            self.filepath = input_path
+            self.filename = "input.vcf"
+
+        async def stream(self):
+            return True
+
+    class FakeMergedSpec:
+        config = object()
+
+        def expected_csq_columns(self, options):
+            calls["options"] = options
+            return []
+
+    async def fake_get_genome_assembly_name(genome_id):
+        calls["genome_id"] = genome_id
+        return "GRCh38.p14"
+
+    def fake_create_config(self, directory, config_spec):
+        calls["assembly_name"] = self.assembly_name
+        return SimpleNamespace(name=str(config_path))
+
+    monkeypatch.setattr(vep_resources, "Streamer", FakeStreamer)
+    monkeypatch.setattr(
+        vep_resources, "get_genome_assembly_name", fake_get_genome_assembly_name
+    )
+    monkeypatch.setattr(
+        vep_resources, "resolve_merged_spec", lambda _assembly: FakeMergedSpec()
+    )
+    monkeypatch.setattr(
+        vep_resources.ConfigIniParams, "create_config_ini_file", fake_create_config
+    )
+    monkeypatch.setattr(vep_resources, "write_spec_sidecar", lambda *_args: None)
+    monkeypatch.setattr(
+        vep_resources, "write_expected_columns_sidecar", lambda *_args: None
+    )
+    monkeypatch.setattr(
+        vep_resources, "write_display_panels_sidecar", lambda *_args: None
+    )
+    monkeypatch.setattr(
+        vep_resources, "launch_workflow", lambda _params: "workflow-id"
+    )
+
+    assert asyncio.run(vep_resources.submit_vep(request=None)) == {
+        "submission_id": "workflow-id"
+    }
+    assert calls["genome_id"] == "genome-uuid"
+    assert calls["assembly_name"] == "GRCh38.p14"
+    assert calls["options"]["cadd"] is True
+    assert "species_taxonomy_id" not in calls["options"]

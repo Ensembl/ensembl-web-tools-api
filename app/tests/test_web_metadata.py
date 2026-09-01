@@ -64,13 +64,10 @@ def test_get_genome_genebuild_uses_metadata_base(monkeypatch):
     ]
 
 
-def test_get_genome_explain_uses_metadata_base_timeout_and_threadpool(monkeypatch):
+def test_get_genome_assembly_name_uses_metadata_base_timeout_and_threadpool(monkeypatch):
     requested_calls = []
     loop_thread = {}
-    payload = {
-        "species_taxonomy_id": "9606",
-        "assembly": {"name": "GRCh38.p14"},
-    }
+    payload = {"assembly": {"name": "GRCh38.p14"}}
 
     monkeypatch.setattr(web_metadata, "WEB_METADATA_API", "https://ensembl.org/api/metadata/")
     monkeypatch.setattr(
@@ -83,11 +80,24 @@ def test_get_genome_explain_uses_metadata_base_timeout_and_threadpool(monkeypatc
 
     async def run():
         loop_thread["id"] = threading.get_ident()
-        return await web_metadata.get_genome_explain("genome-id")
+        return await web_metadata.get_genome_assembly_name("genome-id")
 
-    assert asyncio.run(run()) == payload
+    assert asyncio.run(run()) == "GRCh38.p14"
     assert len(requested_calls) == 1
     call = requested_calls[0]
     assert call["url"] == "https://ensembl.org/api/metadata/genome/genome-id/explain"
     assert call["kwargs"] == {"timeout": web_metadata.METADATA_TIMEOUT}
     assert call["thread_id"] != loop_thread["id"]
+
+
+def test_get_genome_assembly_name_rejects_an_incomplete_explain_payload(monkeypatch):
+    monkeypatch.setattr(
+        web_metadata.requests,
+        "get",
+        lambda *_args, **_kwargs: _FakeResponse({"assembly": {}}),
+    )
+
+    import pytest
+
+    with pytest.raises(ValueError, match="missing assembly.name"):
+        asyncio.run(web_metadata.get_genome_assembly_name("genome-id"))

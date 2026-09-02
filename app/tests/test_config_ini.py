@@ -940,7 +940,7 @@ def test_clinvar_line_is_assembly_specific(
         f"custom file={plugin_data_path(assembly)('clinvar_short')}/{expected_file},"
         "short_name=ClinVar,"
         "fields=CLNDN%CLNDNINCL%CLNDISDB%CLNDISDBINCL%CLNREVSTAT%CLNSIG"
-        "%CLNSIGINCL%ONCDN%ONCDNINCL%ONCDISDB"
+        "%CLNSIGCONF%CLNSIGINCL%ONCDN%ONCDNINCL%ONCDISDB"
         "%ONCDISDBINCL%ONC%ONCINCL%ONCREVSTAT%ONCSCV%ONCCONF"
         "%CLNSUBA%CLNPMID%CLNSUBN%CLNRCV%SCI%SCIREVSTAT%SCIDN"
         "%SCIDISDB%GENEINFO,"

@@ -165,7 +165,8 @@
           "emit": "plugin",
           "name": "OpenTargets",
           "params": {
-            "file": "{path}/open_targets_vep.tsv.bgz"
+            "file": "{path}/open_targets_vep.tsv.gz",
+            "cols": "gwasDiseases:gwasGeneId:gwasLocusToGeneScore:qtlBiosampleName:qtlGeneId:pValueMantissa:pValueExponent:beta"
           }
         }
       },
@@ -1452,6 +1453,7 @@
               "CLNDISDBINCL",
               "CLNREVSTAT",
               "CLNSIG",
+              "CLNSIGCONF",
               "CLNSIGINCL",
               "ONCDN",
               "ONCDNINCL",
@@ -1760,6 +1762,7 @@
           "ClinVar_CLNDISDBINCL",
           "ClinVar_CLNREVSTAT",
           "ClinVar_CLNSIG",
+          "ClinVar_CLNSIGCONF",
           "ClinVar_CLNSIGINCL",
           "ClinVar_ONCDN",
           "ClinVar_ONCDNINCL",

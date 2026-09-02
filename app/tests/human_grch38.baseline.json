@@ -5312,6 +5312,10 @@
         "label": "Predicted molecular consequence",
         "operator_label": "is any of",
         "editor": "consequence",
+        "initial_condition": {
+          "operator": "in",
+          "values": []
+        },
         "single_instance": true,
         "option_groups": [
           {
@@ -5385,14 +5389,21 @@
         "label": "Transcript",
         "operator_label": "is any of",
         "editor": "text",
-        "placeholder": "e.g. ENST00000341065",
-        "mono": true
+        "initial_condition": {
+          "operator": "in",
+          "values": []
+        },
+        "placeholder": "e.g. ENST00000341065"
       },
       {
         "field": "gene_symbol",
         "label": "Gene name",
         "operator_label": "is any of",
         "editor": "text",
+        "initial_condition": {
+          "operator": "in",
+          "values": []
+        },
         "placeholder": "e.g. TP53"
       },
       {
@@ -5400,14 +5411,21 @@
         "label": "Ensembl gene ID",
         "operator_label": "is any of",
         "editor": "text",
-        "placeholder": "e.g. ENSG00000141510",
-        "mono": true
+        "initial_condition": {
+          "operator": "in",
+          "values": []
+        },
+        "placeholder": "e.g. ENSG00000141510"
       },
       {
         "field": "transcript_group",
         "label": "Transcript group",
         "operator_label": "is any of",
         "editor": "group",
+        "initial_condition": {
+          "operator": "in",
+          "values": []
+        },
         "single_instance": true,
         "options": [
           {
@@ -5431,12 +5449,43 @@
       {
         "field": "allele_frequency",
         "label": "Allele frequency",
-        "editor": "af"
+        "editor": "af",
+        "initial_condition": {
+          "operator": "le",
+          "values": [],
+          "threshold": 0.05,
+          "match": "any"
+        },
+        "operator_options": [
+          {
+            "value": "le",
+            "label": "≤"
+          },
+          {
+            "value": "ge",
+            "label": "≥"
+          }
+        ]
       },
       {
         "field": "cadd_phred",
         "label": "Variant impact predictions",
         "editor": "score",
+        "initial_condition": {
+          "operator": "ge",
+          "values": [],
+          "include_missing": false
+        },
+        "operator_options": [
+          {
+            "value": "le",
+            "label": "≤"
+          },
+          {
+            "value": "ge",
+            "label": "≥"
+          }
+        ],
         "missing_label": "Include variants with no score",
         "score_groups": [
           {

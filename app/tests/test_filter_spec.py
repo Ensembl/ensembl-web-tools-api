@@ -52,7 +52,36 @@ def test_a_text_field_carries_what_its_editor_needs():
     transcript = next(f for f in _spec().filters.fields if f.field == "transcript")
     assert transcript.editor == "text"
     assert transcript.placeholder == "e.g. ENST00000341065"
-    assert transcript.mono is True
+    assert "mono" not in transcript.model_dump()
+
+
+def test_membership_fields_start_with_the_backend_membership_operator():
+    membership_editors = {"consequence", "text", "group"}
+    for field in _spec().filters.fields:
+        if field.editor in membership_editors:
+            assert field.initial_condition.model_dump(exclude_none=True) == {
+                "operator": "in", "values": [],
+            }
+
+
+def test_numeric_fields_carry_their_initial_values_and_operator_choices():
+    fields = {field.editor: field for field in _spec().filters.fields}
+
+    af = fields["af"]
+    assert af.initial_condition.model_dump(exclude_none=True) == {
+        "operator": "le", "values": [], "threshold": 0.05, "match": "any",
+    }
+    assert [(option.value, option.label) for option in af.operator_options] == [
+        ("le", "≤"), ("ge", "≥"),
+    ]
+
+    score = fields["score"]
+    assert score.model_dump()["initial_condition"] == {
+        "operator": "ge", "values": [], "include_missing": False,
+    }
+    assert [(option.value, option.label) for option in score.operator_options] == [
+        ("le", "≤"), ("ge", "≥"),
+    ]
 
 
 def test_the_consequence_terms_are_grouped():

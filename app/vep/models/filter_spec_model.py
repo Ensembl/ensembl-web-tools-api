@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_serializer
+from pydantic import BaseModel, ConfigDict, model_serializer, model_validator
 
 
 class FilterOption(BaseModel):
@@ -63,6 +63,24 @@ class ScoreOptionGroup(BaseModel):
     options: list[ScoreOption] = []
 
 
+class InitialFilterCondition(BaseModel):
+    """The wire values a newly-added filter row starts with."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operator: Literal["in", "le", "ge"]
+    values: list[str] = []
+    threshold: float | None = None
+    match: Literal["any", "all"] | None = None
+    include_missing: bool | None = None
+
+    @model_serializer(mode="wrap")
+    def _only_values_for_this_condition(self, handler) -> dict:
+        return {
+            key: value for key, value in handler(self).items() if value is not None
+        }
+
+
 class FilterField(BaseModel):
     """One field the query builder can filter on.
 
@@ -80,9 +98,14 @@ class FilterField(BaseModel):
     # chooses its own operator, as the allele-frequency and score editors do.
     operator_label: str = ""
     editor: Literal["consequence", "text", "group", "af", "score"]
+    # The complete API-facing state for a fresh row. Keeping it in the catalogue
+    # prevents clients from having to recognise particular field ids or editors.
+    initial_condition: InitialFilterCondition
+    # Numeric editors render a selectable operator; fixed membership editors
+    # instead use `operator_label` above.
+    operator_options: list[FilterOption] = []
     # Text editors: what to show in the empty input.
     placeholder: str | None = None
-    mono: bool = False
     # An editor that already takes many values makes a second row redundant, so
     # the field is offered once and then withdrawn.
     single_instance: bool = False
@@ -93,6 +116,14 @@ class FilterField(BaseModel):
     # offer. Which of them this job actually carries is `available_scores`.
     missing_label: str | None = None
     score_groups: list[ScoreOptionGroup] = []
+
+    @model_validator(mode="after")
+    def _initial_operator_is_offered(self) -> "FilterField":
+        if self.operator_options and self.initial_condition.operator not in {
+            option.value for option in self.operator_options
+        }:
+            raise ValueError("initial operator is not present in operator_options")
+        return self
 
     @model_serializer(mode="wrap")
     def _only_what_this_editor_uses(self, handler) -> dict:

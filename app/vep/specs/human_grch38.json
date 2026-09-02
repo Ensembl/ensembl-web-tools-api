@@ -109,7 +109,8 @@
           "emit": "plugin",
           "name": "OpenTargets",
           "params": {
-            "file": "{path}/open_targets_vep.tsv.bgz"
+            "file": "{path}/open_targets_vep.tsv.gz",
+            "cols": "gwasDiseases:gwasGeneId:gwasLocusToGeneScore:qtlBiosampleName:qtlGeneId:pValueMantissa:pValueExponent:beta"
           }
         }
       },

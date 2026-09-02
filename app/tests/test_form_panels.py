@@ -590,9 +590,7 @@ def test_option_ids_round_trip_into_a_submission():
         # locked_children (hgvs_c/hgvs_p) are display-only, not parameters.
         offered = set(option_ids(panels, include_sub_options=True))
 
-        known = submittable_options(
-            species_taxonomy_id=HUMAN, assembly_name=assembly
-        )
+        known = submittable_options(assembly_name=assembly)
         submitted = {
             option_id: (
                 True if known[option_id].type is bool else known[option_id].default
@@ -602,7 +600,6 @@ def test_option_ids_round_trip_into_a_submission():
         params = ConfigIniParams(
             genome_id="g",
             assembly_name=assembly,
-            species_taxonomy_id=HUMAN,
             options=submitted,
         )
         assert offered <= set(params.options), assembly
@@ -731,7 +728,6 @@ def test_an_unsent_option_comes_back_at_the_form_s_declared_default():
         submitted = ConfigIniParams(
             genome_id="g",
             assembly_name=assembly,
-            species_taxonomy_id=species,
             options={},
         ).options
 

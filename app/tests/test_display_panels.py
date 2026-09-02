@@ -8,8 +8,7 @@ the expected CSQ columns), then handed back on the results response.
 Two things have to hold:
   * the pin is faithful -- the sidecar round-trips get_visible_panels() exactly,
     and the panels pinned for a submission are the same ones /form_config would
-    return for that species/assembly (which is what proves species_taxonomy_id
-    is actually reaching the submission path);
+    return for that assembly;
   * the load side is defensive -- a job submitted before this existed has no
     sidecar, gets None, and keeps rendering against the live panels.
 """
@@ -36,7 +35,7 @@ HUMAN = "9606"
 MOUSE = "10090"
 
 
-def _form_config_panels(*, genome_id, species_taxonomy_id, assembly_name):
+def _form_config_panels(*, genome_id, assembly_name):
     """The `panels` the /form_config endpoint actually serves, with its genome
     metadata lookups stubbed."""
     import asyncio
@@ -50,16 +49,13 @@ def _form_config_panels(*, genome_id, species_taxonomy_id, assembly_name):
             "genebuild.last_geneset_update": "2024-01",
         }
 
-    async def fake_get_genome_explain(_genome_id):
-        return {
-            "species_taxonomy_id": species_taxonomy_id,
-            "assembly": {"name": assembly_name},
-        }
+    async def fake_get_genome_assembly_name(_genome_id):
+        return assembly_name
 
     original_genebuild = vep_resources.get_genome_genebuild
-    original_explain = vep_resources.get_genome_explain
+    original_assembly_name = vep_resources.get_genome_assembly_name
     vep_resources.get_genome_genebuild = fake_get_genome_genebuild
-    vep_resources.get_genome_explain = fake_get_genome_explain
+    vep_resources.get_genome_assembly_name = fake_get_genome_assembly_name
     try:
         response = asyncio.run(
             vep_resources.get_form_config(
@@ -69,7 +65,7 @@ def _form_config_panels(*, genome_id, species_taxonomy_id, assembly_name):
         )
     finally:
         vep_resources.get_genome_genebuild = original_genebuild
-        vep_resources.get_genome_explain = original_explain
+        vep_resources.get_genome_assembly_name = original_assembly_name
     return response["panels"]
 
 
@@ -115,24 +111,18 @@ def test_sidecar_round_trips_the_panels(tmp_path):
 
 def test_submission_pins_the_same_panels_form_config_serves():
     """The panels pinned for a human GRCh38 submission must be exactly the ones
-    /form_config returns for that species -- i.e. species_taxonomy_id really does
-    reach the submission path. Without it, get_visible_panels falls back to the
-    base panels and every human-specific panel silently disappears from the pin.
-    """
+    /form_config returns for that assembly."""
     ini_parameters = ConfigIniParams(
         genome_id="a7335667-93e7-11ec-a39d-005056b38ce3",
         assembly_name="GRCh38.p14",
-        species_taxonomy_id=HUMAN,
     )
     pinned = get_visible_panels(
-        species_taxonomy_id=ini_parameters.species_taxonomy_id,
         assembly_name=ini_parameters.assembly_name,
     )
-    # What the form_config endpoint itself serves for the same species/assembly,
+    # What the form_config endpoint itself serves for the same assembly,
     # now derived from its metadata API explain response.
     from_form_config = _form_config_panels(
         genome_id=ini_parameters.genome_id,
-        species_taxonomy_id=HUMAN,
         assembly_name="GRCh38.p14",
     )
     assert dump_display_panels(to_display_panels(pinned)) == from_form_config
@@ -148,7 +138,6 @@ def test_submission_pins_the_same_panels_form_config_serves():
 def test_form_config_uses_explain_metadata_for_non_human_panels():
     panels = _form_config_panels(
         genome_id="mouse-genome-id",
-        species_taxonomy_id=MOUSE,
         assembly_name="GRCm39",
     )
 
@@ -171,14 +160,13 @@ def test_form_config_ignores_legacy_species_query_parameters(monkeypatch):
             "genebuild.provider_version": "115",
         }
 
-    async def fake_get_genome_explain(_genome_id):
-        return {
-            "species_taxonomy_id": HUMAN,
-            "assembly": {"name": "GRCh38.p14"},
-        }
+    async def fake_get_genome_assembly_name(_genome_id):
+        return "GRCh38.p14"
 
     monkeypatch.setattr(vep_resources, "get_genome_genebuild", fake_get_genome_genebuild)
-    monkeypatch.setattr(vep_resources, "get_genome_explain", fake_get_genome_explain)
+    monkeypatch.setattr(
+        vep_resources, "get_genome_assembly_name", fake_get_genome_assembly_name
+    )
     app = FastAPI()
     app.include_router(vep_resources.router, prefix="/vep")
 
@@ -191,7 +179,7 @@ def test_form_config_ignores_legacy_species_query_parameters(monkeypatch):
     assert "allele_frequencies" in {panel["id"] for panel in response.json()["panels"]}
 
 
-def test_form_config_rejects_an_incomplete_explain_payload(monkeypatch):
+def test_form_config_rejects_a_missing_assembly_name(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from app.vep import vep_resources
@@ -199,11 +187,13 @@ def test_form_config_rejects_an_incomplete_explain_payload(monkeypatch):
     async def fake_get_genome_genebuild(_genome_id):
         return {"genebuild.provider_name": "Ensembl"}
 
-    async def fake_get_genome_explain(_genome_id):
-        return {"species_taxonomy_id": HUMAN, "assembly": {}}
+    async def fake_get_genome_assembly_name(_genome_id):
+        raise ValueError("missing assembly.name")
 
     monkeypatch.setattr(vep_resources, "get_genome_genebuild", fake_get_genome_genebuild)
-    monkeypatch.setattr(vep_resources, "get_genome_explain", fake_get_genome_explain)
+    monkeypatch.setattr(
+        vep_resources, "get_genome_assembly_name", fake_get_genome_assembly_name
+    )
     app = FastAPI()
     app.include_router(vep_resources.router, prefix="/vep")
 
@@ -223,8 +213,8 @@ def test_the_panels_no_longer_depend_on_species_taxonomy_id():
     assembly to go on), so there is no longer a way for the two to disagree and
     nothing left for the id to lose.
 
-    It is still sent, and still pins the job; it just no longer decides what the
-    form offers.
+    The submission path also resolves its assembly from the genome UUID, so the
+    taxonomy ID no longer participates in either endpoint.
     """
     with_id = get_visible_panels(
         species_taxonomy_id="9606", assembly_name="GRCh38.p14"
@@ -235,11 +225,8 @@ def test_the_panels_no_longer_depend_on_species_taxonomy_id():
     assert "allele_frequencies" in {panel["id"] for panel in without}
 
 
-def test_species_taxonomy_id_emits_no_config_ini_line(tmp_path, monkeypatch):
-    """It is submission metadata for the pin, not a VEP option."""
-    assert "species_taxonomy_id" in ConfigIniParams.model_fields
-    params = ConfigIniParams(genome_id="x", assembly_name="GRCh38.p14")
-    assert params.species_taxonomy_id == ""
+def test_species_taxonomy_id_is_not_a_submission_field():
+    assert "species_taxonomy_id" not in ConfigIniParams.model_fields
 
 
 # --- the load side never breaks an older job -----------------------------

@@ -27,7 +27,7 @@ forward from the prototype implementation.
 
 ---
 
-## The submission contract (`ConfigIniParams`: 207 fields → 9)
+## The submission contract (`ConfigIniParams`: 207 fields → 8)
 
 **Status: done, 2026-08-09.**
 
@@ -38,7 +38,7 @@ statement of what the config entries already say — after the form panels and t
 `fields=` clause — and the only one that could not tell one assembly's options
 from another's.
 
-It is now **nine** fields: eight job fields, each genuinely read, plus
+It is now **eight** fields: seven job fields, each genuinely read, plus
 
 ```python
 options: dict[str, bool | int | str] = {}

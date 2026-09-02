@@ -191,9 +191,10 @@ class ConfigIniParams(BaseModel):
     panels and the `fields=` clause, and the only one that could not tell one
     assembly's options from another's.
 
-    They are now a map, validated against the spec for this submission's
-    assembly (see `submission_options`). `extra="forbid"` so a caller still
-    passing an option as a keyword fails loudly rather than having it dropped.
+    They are now a map, validated against the assembly resolved from this
+    submission's genome UUID (see `submission_options`). `extra="forbid"` so a
+    caller still passing an option as a keyword fails loudly rather than having
+    it dropped.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -203,11 +204,8 @@ class ConfigIniParams(BaseModel):
     force_overwrite: int = 1
     transcript_version: int = 1
     canonical: int = 1
-    assembly_name: str = ""
-    # Sent so the form's panels can be pinned to this job — the same predicate
-    # /form_config uses. Without it every human-specific panel would be silently
-    # dropped from the pin. It emits no config.ini line.
-    species_taxonomy_id: str = ""
+    # Resolved by the submissions endpoint from `genome_id`; never client input.
+    assembly_name: str
     gff: str = ""
     fasta: str = ""
     # {option id: value} for every option this genome offers, at the value the
@@ -230,7 +228,6 @@ class ConfigIniParams(BaseModel):
 
         values, unknown = option_values(
             self.options,
-            species_taxonomy_id=self.species_taxonomy_id,
             assembly_name=self.assembly_name,
         )
         if unknown:
@@ -257,7 +254,7 @@ class ConfigIniParams(BaseModel):
         # Assembly of the selected species (e.g. "GRCh38.p14", "GRCh37.p13"),
         # resolved to the value the spec's `by_assembly` params key on (default
         # GRCh38) — the same notion of "which genome" the base config uses.
-        assembly_name = self.assembly_name or ""
+        assembly_name = self.assembly_name
         assembly = "GRCh37" if assembly_name.startswith("GRCh37") else "GRCh38"
 
         lines = base_config_lines(

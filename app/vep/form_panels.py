@@ -1,8 +1,8 @@
 """Which option panels/options are visible on the VEP input form for a genome.
 
-Returned by the form_config endpoint (called on species selection). For now the
-set is the same for every species ("always visible"); species-conditional rules
-will be layered on later by inspecting the genome metadata attributes.
+Returned by the form_config endpoint (called on species selection). The
+canonical assembly name determines the merged spec and therefore the options
+and panels a genome receives.
 
 Option (and sub-option) `id`s match the ConfigIniParams parameter names, so the
 form's selections round-trip back into the generated config.ini. Options may
@@ -39,33 +39,6 @@ _PANELS: list[dict] = [
 # entries to space, but leaving this undefined makes future pre-population a
 # runtime NameError.
 _CODED_OPTION_STEP = 100
-
-
-def is_human_grch37_or_38(
-    species_taxonomy_id: str | None, assembly_name: str | None
-) -> bool:
-    """True for human GRCh37 / GRCh38."""
-    return species_taxonomy_id == "9606" and (assembly_name or "").startswith(
-        ("GRCh37", "GRCh38")
-    )
-
-
-def is_human_grch38(
-    species_taxonomy_id: str | None, assembly_name: str | None
-) -> bool:
-    """True for human GRCh38."""
-    return species_taxonomy_id == "9606" and (assembly_name or "").startswith(
-        "GRCh38"
-    )
-
-
-def is_human_grch37(
-    species_taxonomy_id: str | None, assembly_name: str | None
-) -> bool:
-    """True for human GRCh37."""
-    return species_taxonomy_id == "9606" and (assembly_name or "").startswith(
-        "GRCh37"
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -485,16 +458,15 @@ def _place_spec_options(panels: list[dict], assembly_name: str | None) -> None:
 
 
 def get_visible_panels(
-    attributes: dict | None = None,
     *,
     species_taxonomy_id: str | None = None,
     assembly_name: str | None = None,
 ) -> list[dict]:
     """Return the panels/options to show for a genome.
 
-    `attributes` is the genome metadata (genebuild.* etc.). `species_taxonomy_id`
-    and `assembly_name` are passed by the client (from the selected species) so
-    visibility can depend on species/assembly — e.g. human GRCh37/38.
+    `assembly_name` is resolved from the genome UUID by the API. The taxonomy
+    keyword is retained for compatibility with direct callers but intentionally
+    has no effect: all form availability is assembly/spec-driven.
 
     Almost nothing here decides *what* a genome is offered any more: the options
     come from the config entries the genome's assembled spec carries, so an

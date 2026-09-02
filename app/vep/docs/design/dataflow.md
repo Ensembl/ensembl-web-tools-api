@@ -237,8 +237,8 @@ Selecting a species fires two request chains, plus some no-API side effects.
    `GET …/genome/{genome_id}/dataset/genebuild/attributes?attribute_names=genebuild.provider_name&…provider_version&…last_geneset_update`
    and `GET …/genome/{genome_id}/explain`.
 3. The attributes response builds the **Transcript set** dropdown (+ static
-   `symbol`/`biotype`); the explain response supplies the taxonomy ID and
-   assembly name used to select the option panels.
+   `symbol`/`biotype`); the explain response supplies the assembly name used
+   to select the option panels and validate a submission.
 4. `setDefaultParameters()` seeds `parameters`, so the call will not re-fire until
    the species changes again.
 
@@ -269,7 +269,7 @@ configuration, species presets, and GFF/FASTA lookup use the same deployment
 target.
 
 **Server-side, stage 1 — form config.** `get_genome_genebuild()` and
-`get_genome_explain()`
+`get_genome_assembly_name()`
 (`app/vep/utils/web_metadata.py`), called from `get_form_config`
 (`app/vep/vep_resources.py`).
 
@@ -278,12 +278,15 @@ target.
   `genebuild.provider_name`, `genebuild.provider_version`,
   `genebuild.last_geneset_update`.
 - Builds the **"Transcript set"** dropdown label/value (e.g. `GENCODE 50`).
-- `GET …/genome/{genome_id}/explain` returns the canonical
-  `species_taxonomy_id` and `assembly.name` used to select form panels.
+- `GET …/genome/{genome_id}/explain` returns the canonical `assembly.name`
+  used to select form panels and validate submissions.
 
 **Server-side, stage 2 — submission.** `get_vep_support_location()`
 (`app/vep/utils/web_metadata.py`), called from `create_config_ini_file`.
 
+- `get_genome_assembly_name(genome_id)` resolves the UUID before option
+  validation, spec selection, and display-panel pinning; clients never send an
+  assembly or taxonomy value with a submission.
 - `GET …/genome/{genome_id}/vep/file_paths` → `{"faa_location","gff_location"}`;
   each prefixed with `VEP_SUPPORT_PATH` (default `/tmpdir`) to form the `fasta` /
   `gff` lines in `config.ini`.
@@ -304,7 +307,7 @@ client's shared `genomeApiSlice` still does not call it directly.
 
 | Env var | Effect |
 |---|---|
-| `WEB_METADATA_API` | metadata API base (including a trailing `/`), for form configuration, species presets, and GFF/FASTA lookup |
+| `WEB_METADATA_API` | metadata API base (including a trailing `/`), for UUID-to-assembly resolution, form configuration, species presets, and GFF/FASTA lookup |
 | `VEP_SUPPORT_PATH_ROOT` | contains GFF/FASTA support files and VEP plugin datafiles |
 | `NF_WORK_DIR` | shared per-job input/output parent visible to the API and workflow compute environment |
 

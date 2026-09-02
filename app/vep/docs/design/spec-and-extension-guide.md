@@ -220,10 +220,10 @@ older notes still assume them:
   and holds the panel list, the AF sub-option *generators*, the label decoders
   and the placement — no option data and no species/assembly branching.
 - **The submission model.** `ConfigIniParams` used to declare 207 fields, 199 of
-  them one per control. It now has **nine**: eight job fields, each actually read
+  them one per control. It now has **eight**: seven job fields, each actually read
   by attribute, and one `options: dict[str, bool|int|str]` completed and checked
   against the spec. See
-  [technical-notes.md § The submission contract](./technical-notes.md#the-submission-contract-configiniparams-207-fields--9).
+  [technical-notes.md § The submission contract](./technical-notes.md#the-submission-contract-configiniparams-207-fields--8).
 
 What genuinely remains code:
 

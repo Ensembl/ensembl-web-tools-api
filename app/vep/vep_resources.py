@@ -53,7 +53,7 @@ from vep.utils.nextflow import launch_workflow, get_workflow_status
 from vep.utils.vcf_results import get_results_from_path, stream_filtered_vcf_text
 from vep.utils.tsv_export import stream_vep_tsv, flatten_vcf_lines, gzip_text_stream
 from vep.utils.results_filters import parse_filters, FilterError, ResultsFilter
-from vep.utils.web_metadata import get_genome_explain, get_genome_genebuild
+from vep.utils.web_metadata import get_genome_assembly_name, get_genome_genebuild
 from vep.utils.species_presets import get_species_presets
 from vep.utils.spec_loader import (
     resolve_merged_spec,
@@ -93,15 +93,15 @@ async def submit_vep(request: Request):
             for key, value in vep_job_parameters_dict.items()
             if key in ConfigIniParams.model_fields
         }
+        job_fields["genome_id"] = genome_id
+        job_fields["assembly_name"] = await get_genome_assembly_name(genome_id)
         # Extract the selected options from the parameters payload for validation against the spec
         options = {
             key: value
             for key, value in vep_job_parameters_dict.items()
             if key not in ConfigIniParams.model_fields
         }
-        ini_parameters = ConfigIniParams(
-            **job_fields, genome_id=genome_id, options=options
-        )
+        ini_parameters = ConfigIniParams(**job_fields, options=options)
 
         # Resolve the merged spec (config + parsing) for this job's assembly
         merged_spec = resolve_merged_spec(ini_parameters.assembly_name)
@@ -109,10 +109,7 @@ async def submit_vep(request: Request):
         expected_columns = merged_spec.expected_csq_columns(ini_parameters.options)
         # Get the visible option panels for rendering the results
         display_panels = to_display_panels(
-            get_visible_panels(
-                species_taxonomy_id=ini_parameters.species_taxonomy_id,
-                assembly_name=ini_parameters.assembly_name,
-            )
+            get_visible_panels(assembly_name=ini_parameters.assembly_name)
         )
 
         ini_file = await run_in_threadpool(
@@ -411,16 +408,9 @@ async def get_form_config(
     genome_id: str,
 ):
     try:
-        attributes, genome = await asyncio.gather(
-            get_genome_genebuild(genome_id), get_genome_explain(genome_id)
+        attributes, assembly_name = await asyncio.gather(
+            get_genome_genebuild(genome_id), get_genome_assembly_name(genome_id)
         )
-        species_taxonomy_id = genome.get("species_taxonomy_id")
-        assembly_name = (genome.get("assembly") or {}).get("name")
-        if not species_taxonomy_id or not assembly_name:
-            raise ValueError(
-                "get_form_config(): unexpected metadata API explain payload "
-                f"for {genome_id}: missing species_taxonomy_id or assembly.name"
-            )
 
         annotation_provider_name = attributes.get("genebuild.provider_name", "")
         annotation_version = attributes.get("genebuild.provider_version", "")
@@ -449,11 +439,7 @@ async def get_form_config(
         # Panels/options to show for this genome's canonical species/assembly.
         return {
             "parameters": form_config,
-            "panels": get_visible_panels(
-                attributes,
-                species_taxonomy_id=species_taxonomy_id,
-                assembly_name=assembly_name,
-            ),
+            "panels": get_visible_panels(assembly_name=assembly_name),
         }
 
     except HTTPError as e:

@@ -25,13 +25,13 @@ def get_vep_support_location(genome_id: str) -> dict:
         }
     except KeyError as e:
         e.args = (
-            f"get_vep_support_location(): unexpected metadata API payload for f{genome_id}:",
+            f"get_vep_support_location(): unexpected metadata API payload for {genome_id}:",
             *e.args,
         )
         raise
     except requests.HTTPError as e:
         e.args = (
-            f"get_vep_support_location(): error response from metadata API for f{genome_id}:",
+            f"get_vep_support_location(): error response from metadata API for {genome_id}:",
             *e.args,
         )
         raise
@@ -44,9 +44,20 @@ async def get_genome_genebuild(genome_id: str) -> GenomeAnnotationProvider:
     return await run_in_threadpool(_get_genome_genebuild, genome_id)
 
 
-async def get_genome_explain(genome_id: str) -> dict:
-    """Return the metadata API's canonical description of a genome UUID."""
-    return await run_in_threadpool(_get_genome_explain, genome_id)
+async def get_genome_assembly_name(genome_id: str) -> str:
+    """Resolve a genome UUID to the canonical assembly name used by VEP."""
+    return await run_in_threadpool(_get_genome_assembly_name, genome_id)
+
+
+def _get_genome_assembly_name(genome_id: str) -> str:
+    genome = _get_genome_explain(genome_id)
+    assembly_name = (genome.get("assembly") or {}).get("name")
+    if not isinstance(assembly_name, str) or not assembly_name:
+        raise ValueError(
+            "get_genome_assembly_name(): unexpected metadata API explain payload "
+            f"for {genome_id}: missing assembly.name"
+        )
+    return assembly_name
 
 
 def _get_genome_explain(genome_id: str) -> dict:

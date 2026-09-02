@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Iterable, Iterator, NamedTuple
+from typing import Container, TYPE_CHECKING, Callable, Iterable, Iterator, NamedTuple
 
 from pydantic import BaseModel
 
@@ -491,6 +491,27 @@ _TRANSCRIPT_GROUP_COLUMNS = (
     "MANE_PLUS_CLINICAL",
     "GENCODE_PRIMARY",
 )
+
+
+# Which columns each group's test can read. A group whose columns are all absent
+# from the output cannot match anything, so it is not offered — the same rule as
+# the AF sources and the impact scores, and it needs no notion of species: a run
+# without MANE or GENCODE simply has no such columns.
+_TRANSCRIPT_GROUP_SOURCES: dict[str, tuple[str, ...]] = {
+    "canonical": ("CANONICAL",),
+    "mane_select": ("MANE_SELECT", "MANE"),
+    "mane_plus_clinical": ("MANE_PLUS_CLINICAL", "MANE"),
+    "gencode_primary": ("GENCODE_PRIMARY",),
+}
+
+
+def available_transcript_groups(csq_columns: Container[str]) -> list[str]:
+    """The transcript groups this output can actually be filtered by."""
+    return [
+        group
+        for group, columns in _TRANSCRIPT_GROUP_SOURCES.items()
+        if any(column in csq_columns for column in columns)
+    ]
 
 
 def _max_index_of(columns, index_map: dict[str, int]) -> int | None:

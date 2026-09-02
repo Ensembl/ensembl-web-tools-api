@@ -38,6 +38,7 @@ from vep.models.display_spec_model import (
     DisplaySpec,
     DisplayTableBlock,
 )
+from vep.models.filter_spec_model import FilterSpec
 from vep.models.option_help_model import HelpSpec
 from vep.models.parsing_spec_model import ParsingSpec, PluginSpec
 from vep.utils.config_interpreter import build_fields
@@ -190,6 +191,10 @@ class MergedSpec(BaseModel):
     # `display`: every spec pinned to a job before this section existed has no
     # `help` key and must still load.
     help: HelpSpec | None = None
+    # Which fields the results query builder offers, and how each is presented.
+    # Optional like the sections above: a spec pinned before it existed has no
+    # `filters` key and must still load.
+    filters: FilterSpec | None = None
 
     def config_entries(self) -> list[ConfigEntry]:
         return self.config.entries

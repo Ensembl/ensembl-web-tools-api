@@ -35,6 +35,7 @@ from vep.utils.spec_loader import (
     resolve_merged_spec,
 )
 from vep.models.display_panels_model import DisplayPanel
+from vep.models.filter_spec_model import FilterField
 from vep.models.display_spec_model import DisplayPayload
 from vep.models.merged_spec_model import MergedSpec
 from vep.utils.spec_interpreter import (
@@ -966,6 +967,30 @@ def _resolve_display_payload(spec: MergedSpec | None) -> DisplayPayload | None:
     return current_payload.model_copy(update={"plugin_scopes": spec.plugin_scopes()})
 
 
+def _gated_filter_fields(
+    merged: MergedSpec | None, csq_columns: set[str] | None
+) -> list[FilterField] | None:
+    """The filter catalogue, less what this output cannot be filtered by.
+
+    Only the transcript groups need gating here: which scores and AF sources a
+    job carries is already served separately, and the frontend intersects the
+    catalogue with those. A group whose columns are absent would offer a choice
+    that matches nothing.
+    """
+    if merged is None or merged.filters is None:
+        return None
+    if csq_columns is None:
+        return merged.filters.fields
+    available = set(results_filters.available_transcript_groups(csq_columns))
+    gated = []
+    for field in merged.filters.fields:
+        if field.editor == "group":
+            options = [o for o in field.options if o.value in available]
+            if not options:
+                continue
+            field = field.model_copy(update={"options": options})
+        gated.append(field)
+    return gated
 def _drop_form_only_help(
     panels: list[DisplayPanel] | None, merged: MergedSpec | None
 ) -> list[DisplayPanel] | None:
@@ -995,6 +1020,7 @@ def _with_display_panels(
     *,
     spec: ParsingSpec | None = None,
     expected_columns: set[str] | None = None,
+    filter_fields: list[FilterField] | None = None,
 ) -> model.VepResultsResponse:
     """Attach the pinned panels and display layout to a response built by the
     parsing path (which knows about neither). None leaves the field absent.
@@ -1008,6 +1034,7 @@ def _with_display_panels(
     """
     response.metadata.display_panels = panels
     response.metadata.display = display
+    response.metadata.filter_fields = filter_fields
     # AF is allele-scoped, so its annotations hang off the alt alleles.
     alleles = [
         allele
@@ -1169,6 +1196,10 @@ def get_results_from_path(
     # a CSQ column the submitted options required. Non-fatal (dev warns only).
     _check_expected_columns(vcf_path, expected_columns)
     # The option panels this job was submitted against (None for older jobs).
+    display_panels = _load_pinned_display_panels(vcf_path)
+    # The filter catalogue, gated to what this output can be filtered by. Uses
+    # the same header read the expected-columns check above already needs.
+    filter_fields = _gated_filter_fields(merged, _read_csq_columns(vcf_path))
     display_panels = _drop_form_only_help(
         _load_pinned_display_panels(vcf_path), merged
     )
@@ -1185,6 +1216,7 @@ def get_results_from_path(
             display,
             spec=spec,
             expected_columns=expected_columns,
+            filter_fields=filter_fields,
         )
 
     # Fast path: if the pipeline emitted a page-index sidecar, seek to the page
@@ -1207,6 +1239,7 @@ def get_results_from_path(
             display,
             spec=spec,
             expected_columns=expected_columns,
+            filter_fields=filter_fields,
         )
 
     # Fallback (no sidecar): scan the file from the top through page*page_size
@@ -1241,6 +1274,7 @@ def get_results_from_path(
         display,
         spec=spec,
         expected_columns=expected_columns,
+        filter_fields=filter_fields,
     )
 
 

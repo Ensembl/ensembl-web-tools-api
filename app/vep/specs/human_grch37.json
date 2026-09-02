@@ -848,7 +848,32 @@
           },
           "fields": {
             "literal": [
-              "CLNSIG"
+              "CLNDN",
+              "CLNDNINCL",
+              "CLNDISDB",
+              "CLNDISDBINCL",
+              "CLNREVSTAT",
+              "CLNSIG",
+              "CLNSIGCONF",
+              "CLNSIGINCL",
+              "ONCDN",
+              "ONCDNINCL",
+              "ONCDISDB",
+              "ONCDISDBINCL",
+              "ONC",
+              "ONCINCL",
+              "ONCREVSTAT",
+              "ONCSCV",
+              "ONCCONF",
+              "CLNSUBA",
+              "CLNPMID",
+              "CLNSUBN",
+              "CLNRCV",
+              "SCI",
+              "SCIREVSTAT",
+              "SCIDN",
+              "SCIDISDB",
+              "GENEINFO"
             ]
           }
         }

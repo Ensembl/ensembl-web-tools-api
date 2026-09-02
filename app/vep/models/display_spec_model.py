@@ -762,14 +762,11 @@ class ColumnNote(BaseModel):
     A column that needs explaining ends up with a heading far longer than the
     values beneath it, and as one string it wrapped wherever the width happened
     to run out. Stating the lines lets the breaks fall where the sense does.
-    `muted` sets a line in the same quiet text the thing it describes uses, so
-    the heading demonstrates its own convention.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     text: str
-    muted: bool = False
 
 
 class TableColumn(ValuePiece):

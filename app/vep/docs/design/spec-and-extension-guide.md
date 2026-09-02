@@ -1137,7 +1137,7 @@ slot. `cells` and `rows` are mutually exclusive.
 |---|---|---|
 | `from` | list | the `<plugin>.<listField>` the rows come from |
 | `rows` | matrix | explicit `{label, values}` — the label fills the first column, each value is a `<plugin>.<field>` scalar under a value column |
-| `columns[].label` / `notes` | both | the heading, and further heading lines (`{text, muted}`) so breaks fall where the sense does |
+| `columns[].label` / `notes` | both | the heading, and further heading lines (`{text}`) so breaks fall where the sense does |
 | `columns[].align` | both | derived from `format` by house rule (numbers right); state it only where the format cannot — a number the source publishes pre-formatted as a string |
 | `columns[].sub_option` | both | a column present only when its sub-option ran, so the table's width follows the selection |
 | `columns[].lift_when_invariant` | list | when every row shares one value, show it once above the table instead of as a column |

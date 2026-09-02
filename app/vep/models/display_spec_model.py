@@ -213,6 +213,11 @@ class DisplayRow(BaseModel):
     # follow another. Geno2MP reports a count of HPO profiles plus the URL of
     # the variant's page, and no template can derive the second from the first.
     link_from: str | None = None
+    # One value packing several, each rendered and linked in its own right — the
+    # same thing a list item's cell can do, and needed for the same reason: a
+    # ClinVar custom joins the records that matched one variant with `&`, and
+    # each is its own record with its own page.
+    split: str | None = None
     # A row whose `from` is a *list*: one rendered line per element, stacked as
     # the row's value under a single label. The same element shape a list block
     # repeats, borrowed so a stacked value needs no vocabulary of its own —

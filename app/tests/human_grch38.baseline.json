@@ -4131,6 +4131,7 @@
                   {
                     "label": "ClinVar variant ID",
                     "from": "clinvar.id",
+                    "split": "&",
                     "link": {
                       "kind": "external",
                       "template": "https://www.ncbi.nlm.nih.gov/clinvar/variation/{value}/"

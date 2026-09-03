@@ -1483,13 +1483,6 @@
         "parsed_as": [
           "clinvar_sv"
         ],
-        "form": {
-          "panel": "phenotype_and_disease_associations",
-          "order": 300,
-          "label": "ClinVar structural variants",
-          "type": "boolean",
-          "default": false
-        },
         "config": {
           "emit": "custom",
           "params": {

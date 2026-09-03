@@ -993,15 +993,19 @@ def test_clinvar_master_on_with_both_sub_options_off_emits_nothing(
     assert find_line(lines, "short_name=ClinVar_SV,") is None
 
 
-def test_clinvar_sv_custom_line(monkeypatch, tmp_path):
+def test_clinvar_sv_emits_nothing_while_the_option_is_withheld(monkeypatch, tmp_path):
+    """Asking for it by name is not enough. Submittable options are read off the
+    form panels, so an entry with no `form` block is dropped from the payload
+    before the config is built — which is what makes removing that block a
+    complete switch rather than a hidden checkbox.
+
+    Restoring the block should restore the line; this failing is the signal.
+    """
     line = find_line(
         build_lines(monkeypatch, tmp_path, clinvar=True, clinvar_sv=True),
         "short_name=ClinVar_SV,",
     )
-    assert line == (
-        f"custom file={GRCH38_PLUGIN_PATH}/nstd102.GRCh38.variant_call.combined.sorted.vcf.gz,"
-        "short_name=ClinVar_SV,fields=CLNSIG%ORIGIN,format=vcf,type=exact"
-    )
+    assert line is None
 
 
 def test_gnomad_sv_custom_fields_and_overlap_cutoff(monkeypatch, tmp_path):

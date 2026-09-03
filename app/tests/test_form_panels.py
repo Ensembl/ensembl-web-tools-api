@@ -35,7 +35,7 @@ GRCH38_ONLY_OPTION_IDS = {
 
 # Reuse-tier options available for human GRCh37 as well as GRCh38 (data exists
 # for both). go/phenotypes are really multi-species, gated on human for now.
-HUMAN_37_38_EXTRA_OPTION_IDS = {"go", "phenotypes", "intact", "clinvar_sv"}
+HUMAN_37_38_EXTRA_OPTION_IDS = {"go", "phenotypes", "intact"}
 
 
 def panel_ids(panels):
@@ -127,7 +127,7 @@ def test_human_grch37_has_37_38_options_but_not_38_only():
 
     opts = option_ids(panels)
     assert "utrannotator" in opts
-    # the reuse-tier extras (go / phenotypes / intact / clinvar_sv) are offered
+    # the reuse-tier extras (go / phenotypes / intact) are offered
     assert HUMAN_37_38_EXTRA_OPTION_IDS <= opts
     # gnomAD v2 exomes/genomes/SV, but not the GRCh38-only AF sources (allofus/cnv)
     assert {"gnomad_exomes", "gnomad_genomes", "gnomad_sv"} <= opts
@@ -484,19 +484,18 @@ def test_allofus_absent_below_grch38():
         assert "allofus" not in option_ids(panels)
 
 
-def _clinvar_option(assembly):
-    panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name=assembly)
-    va = next(p for p in panels if p["id"] == "phenotype_and_disease_associations")
-    return next(o for o in va["options"] if o["id"] == "clinvar_sv")
+def test_clinvar_structural_is_not_offered():
+    """Withheld on both human assemblies: the entry still carries its parse and
+    config wiring, but with no `form` block there is nothing to tick, so nothing
+    runs it and nothing renders it. Restoring the block re-enables all three.
 
-
-def test_clinvar_structural_is_its_own_option_not_a_master_and_a_child():
-    """It used to sit under a "Clinical Significance (ClinVar)" master. Once the
-    germline data moved to Phenotypes, that master gated nothing else and
-    ticking it ran nothing, so the one real control stands on its own."""
+    Its results display is not finished — the block was unreachable under an
+    option id no form option matched — and an option that runs an annotation
+    nobody can see is worse than no option.
+    """
     for assembly in ("GRCh37.p13", "GRCh38.p14"):
-        assert _clinvar_option(assembly)["label"] == "ClinVar structural variants"
         panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name=assembly)
+        assert "clinvar_sv" not in option_ids(panels)
         assert "clinvar" not in option_ids(panels)
 
 
@@ -507,11 +506,6 @@ def test_clinvar_germline_has_no_form_control():
     for assembly in ("GRCh38.p14", "GRCh37.p13"):
         panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name=assembly)
         assert "clinvar_short" not in option_ids(panels)
-
-
-def test_clinvar_structural_available_for_both_human_assemblies():
-    for assembly in ("GRCh38.p14", "GRCh37.p13"):
-        assert "sub_options" not in _clinvar_option(assembly)
 
 
 def test_clinvar_absent_for_non_human():

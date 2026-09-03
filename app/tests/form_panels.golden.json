@@ -1390,12 +1390,6 @@
               }
             ]
           }
-        },
-        {
-          "id": "clinvar_sv",
-          "label": "ClinVar structural variants",
-          "type": "boolean",
-          "default": false
         }
       ]
     }
@@ -2527,12 +2521,6 @@
           "help": {
             "description": "Annotates variants with associated phenotypes, diseases and traits curated by Ensembl from sources including ClinVar, OMIM and the GWAS Catalog."
           }
-        },
-        {
-          "id": "clinvar_sv",
-          "label": "ClinVar structural variants",
-          "type": "boolean",
-          "default": false
         }
       ]
     }

@@ -356,7 +356,9 @@ def test_mutfunc_names_only_the_sub_flags_that_are_on(monkeypatch, tmp_path):
     )
     assert "motif=1" in line and "mod=1" in line
     assert "int=" not in line and "exp=" not in line  # unwanted ones are absent
-    assert "extended=1" in line  # always on
+    # `extended` is deliberately off: its output packs several `&`-joined fields
+    # into one column, which the parse reads as a single float and drops.
+    assert "extended" not in line
 
 
 def test_mutfunc_with_every_sub_flag_on_names_none_of_them(monkeypatch, tmp_path):
@@ -366,7 +368,7 @@ def test_mutfunc_with_every_sub_flag_on_names_none_of_them(monkeypatch, tmp_path
     assert line is not None
     for keyword in ("motif=", "int=", "mod=", "exp="):
         assert keyword not in line, line
-    assert "db=" in line and "extended=1" in line
+    assert "db=" in line and "extended" not in line
 
 
 def test_mutfunc_defaults_to_every_sub_flag_on(monkeypatch, tmp_path):

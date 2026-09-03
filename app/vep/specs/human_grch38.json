@@ -319,7 +319,6 @@
           "emit": "plugin",
           "name": "mutfunc",
           "params": {
-            "extended": "1",
             "db": "{path}/mutfunc_data.db"
           },
           "flags": {

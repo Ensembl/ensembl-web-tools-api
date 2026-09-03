@@ -140,11 +140,3 @@ def test_the_other_fields_are_untouched_by_gating():
         if field.field == "transcript_group":
             continue
         assert field in gated, field.field
-
-
-def test_a_spec_without_the_section_serves_nothing():
-    """A job pinned before the catalogue existed still renders; the frontend
-    falls back to what it knows."""
-    spec = _spec()
-    spec.filters = None
-    assert _gated_filter_fields(spec, HUMAN_COLUMNS) is None

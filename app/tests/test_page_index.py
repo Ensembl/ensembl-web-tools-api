@@ -17,7 +17,14 @@ import zlib
 import pytest
 from pydantic import FilePath
 
+from app.vep.models.display_panels_model import to_display_panels
 from app.vep.utils.bgzf import _BgzfReader
+from app.vep.utils.spec_loader import (
+    load_merged_spec,
+    write_display_panels_sidecar,
+    write_expected_columns_sidecar,
+    write_spec_sidecar,
+)
 from app.vep.utils.vcf_results import (
     _load_page_index,
     _read_indexed_page,
@@ -95,6 +102,12 @@ def write_indexed_vcf(tmp_path, text: str, *, stride: int, block_bytes: int = 64
         "checkpoints": [data_voffsets[k] for k in range(0, len(data_voffsets), stride)],
     }
     (tmp_path / "results.vcf.gz.pageidx.json").write_text(json.dumps(index))
+    write_spec_sidecar(tmp_path, load_merged_spec("human_grch38"))
+    write_expected_columns_sidecar(tmp_path, set())
+    write_display_panels_sidecar(
+        tmp_path,
+        to_display_panels([{"id": "general", "label": "General", "options": []}]),
+    )
     return vcf_path
 
 
@@ -153,7 +166,7 @@ def test_reader_seeks_across_block_boundaries(tmp_path):
     assert len(index["checkpoints"]) == 3
 
     records_seq = [
-        l for l in gzip.open(vcf_path, "rt") if not l.startswith("#")
+        line for line in gzip.open(vcf_path, "rt") if not line.startswith("#")
     ]
     with _BgzfReader(str(vcf_path)) as reader:
         # seek straight to checkpoint 2 (record index 8) and read it back

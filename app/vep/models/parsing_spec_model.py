@@ -92,14 +92,11 @@ class Match(BaseModel):
     other. See `_same` in spec_interpreter for the comparator they now share.
     """
 
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(extra="forbid")
 
     field: str
     equals: str | None = None
-    # `column` was this field's whole name back when it was `ColumnMatch`, and a
-    # spec pinned to a job before the merge still spells it that way. Accepted
-    # as an alias so those keep loading -- see the sidecar compatibility tests.
-    equals_column: str | None = Field(default=None, alias="column")
+    equals_column: str | None = None
     # Applied to the *column's* value before comparing, taking the comparable
     # part from a `key` group -- the same device `RowScope.item_pattern` and a
     # join's `right_key_pattern` use, and needed for the same reason.
@@ -726,14 +723,6 @@ class JoinSpec(BaseModel):
                 f"were (`count_into`), not both or neither; join into {self.into!r}"
             )
         return self
-
-    # Deleted as a concept -- it was write-only, and both declarations had
-    # drifted from the targets they described (what a joined-in row carries is
-    # derived now, see `MergedSpec._list_element_fields`). Still *accepted*,
-    # because a spec pinned to a job before that change carries it, and
-    # `extra="forbid"` would otherwise reject the whole sidecar and leave that
-    # job with no annotations at all. Never read.
-    item_fields: list[str] | None = None
 
     def produced_fields(self) -> list[str]:
         """The fields this join adds to each row of `into`."""

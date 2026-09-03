@@ -16,13 +16,14 @@ from pydantic import FilePath
 from app.vep.utils import vcf_results
 from app.vep.utils.spec_interpreter import apply_plugin_spec
 from app.vep.utils.spec_loader import (
-    SPEC_SIDECAR_FILE,
     load_merged_spec,
     write_spec_sidecar,
 )
 from app.vep.utils.vcf_results import _gate_af_columns, _get_alt_allele_details
+from app.vep.models.parsing_spec_model import ParsingSpec
 
 SPEC = load_merged_spec("human_grch38").parsing
+EMPTY_SPEC = ParsingSpec(plugins=[])
 
 # A CSQ header layout with structural columns plus one allele-scope frequency
 # (gnomad_exomes, incl. a per-population column to exercise the pattern_map
@@ -106,15 +107,6 @@ def test_annotations_are_the_only_annotation_data():
     assert by_consequence["clinvar"]["significance"] == ["Pathogenic"]
 
 
-def test_no_spec_means_no_generic_annotations():
-    allele = _get_alt_allele_details("A", "T", [ROW], INDEX_MAP, None)
-    assert allele.annotations == []
-    assert allele.predicted_molecular_consequences[0].annotations == []
-    # the envelope is unaffected by the absence of a spec
-    assert allele.allele_sequence == "T"
-    assert allele.predicted_molecular_consequences[0].gene_symbol == "BRCA2"
-
-
 # --- AF-population emission gate ---------------------------------------------
 # A full-cache VCF carries every ancestry; a job that selected only some AF
 # populations must still show only those. The parser's pattern_map reads every
@@ -158,14 +150,6 @@ def test_af_columns_keeps_the_overall_when_its_column_is_selected():
     )
     assert gnomad.data["overall"] == 0.01
     assert gnomad.data["populations"] == {"eas": 0.03}
-
-
-def test_af_columns_gate_is_a_no_op_without_a_spec():
-    allele = _get_alt_allele_details("A", "T", [_GATE_ROW], _GATE_INDEX, SPEC)
-    gnomad = {a.plugin: a for a in allele.annotations}["gnomad_exomes"]
-    _gate_af_columns([allele], None, {"gnomAD_exomes_AF_nfe"})
-    assert set(gnomad.data["populations"]) == {"nfe", "eas", "afr"}
-    assert gnomad.data["overall"] == 0.01
 
 
 # --- the pinned spec is cached per file ---------------------------------------
@@ -212,26 +196,13 @@ def test_a_rewritten_output_is_never_served_a_stale_spec(tmp_path, monkeypatch):
     path = _pin(tmp_path, merged)
     assert vcf_results._load_pinned_merged_spec(path) is not None
 
-    # The job is regenerated: same path, no sidecar this time.
-    (tmp_path / SPEC_SIDECAR_FILE).unlink()
+    # The job is regenerated at the same path with a different current spec.
+    replacement = load_merged_spec("human_grch37")
+    write_spec_sidecar(tmp_path, replacement)
     stat = path.stat()
     os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
 
-    assert vcf_results._load_pinned_merged_spec(path) is None
-
-
-def test_an_unreadable_sidecar_is_not_cached(tmp_path):
-    """A fault that can be repaired without the output changing: caching the
-    failure would keep serving no annotations until the file was touched."""
-    vcf_results.clear_spec_cache()
-    (tmp_path / SPEC_SIDECAR_FILE).write_text("{ not json")
-    path = tmp_path / "input_VEP.vcf.gz"
-    path.write_bytes(b"")
-    path = FilePath(path)
-
-    assert vcf_results._load_pinned_merged_spec(path) is None
-    write_spec_sidecar(tmp_path, load_merged_spec("human_grch38"))
-    assert vcf_results._load_pinned_merged_spec(path) is not None
+    assert vcf_results._load_pinned_merged_spec(path).spec_version == replacement.spec_version
 
 
 # --- annotations are pooled per variant ---------------------------------------
@@ -259,7 +230,7 @@ def _annotation(plugin, value):
 def test_equal_payloads_collapse_to_one_pool_entry():
     """The case this exists for: ClinVar was 421 copies of 14 distinct values on
     a 50-variant page, 72% of the whole response."""
-    allele = _get_alt_allele_details("A", "T", [ROW], INDEX_MAP, None)
+    allele = _get_alt_allele_details("A", "T", [ROW], INDEX_MAP, EMPTY_SPEC)
     template = allele.predicted_molecular_consequences[0]
     allele.predicted_molecular_consequences = [
         template.model_copy(update={"stable_id": f"ENST{i}",
@@ -277,7 +248,7 @@ def test_equal_payloads_collapse_to_one_pool_entry():
 def test_different_payloads_keep_their_own_entries():
     """Deduplicating by plugin would lose data: `hgvs` is genuinely different
     per transcript (744 distinct of 864 on the same page)."""
-    allele = _get_alt_allele_details("A", "T", [ROW], INDEX_MAP, None)
+    allele = _get_alt_allele_details("A", "T", [ROW], INDEX_MAP, EMPTY_SPEC)
     template = allele.predicted_molecular_consequences[0]
     allele.predicted_molecular_consequences = [
         template.model_copy(update={"stable_id": f"ENST{i}",

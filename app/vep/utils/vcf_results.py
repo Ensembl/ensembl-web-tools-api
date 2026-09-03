@@ -21,7 +21,6 @@ from vep.utils.bgzf import _BgzfReader
 from vep.utils.csq import (
     csq_index_map_from_header,
     get_csq_value,
-    get_prediction_index_map,
     has_any_column,
     split_amp,
     to_float,
@@ -32,7 +31,6 @@ from vep.utils.spec_loader import (
     load_display_panels_sidecar,
     load_expected_columns_sidecar,
     load_spec_sidecar,
-    resolve_merged_spec,
 )
 from vep.models.display_panels_model import DisplayPanel
 from vep.models.filter_spec_model import FilterField
@@ -255,20 +253,17 @@ def _parse_prediction(value: str | None) -> model.PredictionWithScore | None:
 def _spec_annotations(
     csq_values: list[str],
     index_map: dict[str, int],
-    spec: ParsingSpec | None,
+    spec: ParsingSpec,
     scope: str,
     cache: dict | None = None,
     plans: dict | None = None,
 ) -> list[model.Annotation]:
     """The generic annotations for one CSQ entry at the given scope, driving each
-    matching spec plugin through `apply_plugin_spec`. Additive to the typed
-    fields; when there is no pinned spec this is empty and nothing changes.
+    matching spec plugin through `apply_plugin_spec`.
 
     `plans` is every plugin resolved against this file's CSQ header
     (`compile_parsing_spec`). Optional: without it each plugin resolves itself
     per row, which is correct but is the cost the plans exist to remove."""
-    if spec is None:
-        return []
     annotations: list[model.Annotation] = []
     for plugin in spec.plugins:
         if plugin.scope != scope:
@@ -331,7 +326,7 @@ def _get_alt_allele_details(
     alt: str,
     csqs: list[str],
     index_map: dict[str, int],
-    spec: ParsingSpec | None = None,
+    spec: ParsingSpec,
     sv: dict | None = None,
     plans: dict | None = None,
 ) -> model.AlternativeVariantAllele:
@@ -625,7 +620,9 @@ def _get_filtered_results(
     page: int,
     vcf_path: FilePath,
     filters: list[results_filters.ResultsFilter],
-    spec: ParsingSpec | None = None,
+    spec: ParsingSpec,
+    display_panels: list[DisplayPanel],
+    display: DisplayPayload,
 ) -> model.VepResultsResponse:
     """Stream the results VCF applying the filter pipeline, retaining only the
     requested page of survivors. The page-index fast path can't be used once
@@ -697,7 +694,14 @@ def _get_filtered_results(
 
     stream = StringIO("".join(header_lines) + "".join(outcome.page))
     response = get_results_from_stream(
-        page_size, page, outcome.matched_total, stream, presliced=True, spec=spec
+        page_size,
+        page,
+        outcome.matched_total,
+        stream,
+        spec,
+        display_panels,
+        display,
+        presliced=True,
     )
     response.metadata.filters = model.FilterMetadata(
         unfiltered_total=outcome.scanned_total,
@@ -768,11 +772,9 @@ def stream_filtered_vcf_text(
 # every page. Same key discipline as the scan cache: the file's identity now, so
 # a regenerated output is never served against a stale spec.
 #
-# A None result is cached too. "This output has no sidecar" is an answer worth
-# keeping — otherwise the pre-pin jobs are the ones that re-read on every page.
 # ---------------------------------------------------------------------------
 _SPEC_CACHE_MAX_ENTRIES = 4
-_spec_cache: "OrderedDict[tuple, MergedSpec | None]" = OrderedDict()
+_spec_cache: "OrderedDict[tuple, MergedSpec]" = OrderedDict()
 _spec_cache_lock = threading.Lock()
 
 
@@ -782,12 +784,8 @@ def clear_spec_cache() -> None:
         _spec_cache.clear()
 
 
-def _load_pinned_merged_spec(vcf_path: FilePath) -> MergedSpec | None:
-    """The whole merged spec document pinned to this job, loaded defensively.
-
-    Never raises: an output with no sidecar (pre-dating the pin) or an
-    unreadable one returns None.
-    """
+def _load_pinned_merged_spec(vcf_path: FilePath) -> MergedSpec:
+    """Load and cache the complete merged spec pinned to this job."""
     key = _file_identity(vcf_path)
     if key is not None:
         with _spec_cache_lock:
@@ -795,19 +793,7 @@ def _load_pinned_merged_spec(vcf_path: FilePath) -> MergedSpec | None:
                 _spec_cache.move_to_end(key)
                 return _spec_cache[key]
 
-    try:
-        merged = load_spec_sidecar(vcf_path)
-    except Exception as exc:
-        logging.warning(
-            "Ignoring unreadable spec sidecar for %s: %s", vcf_path, exc
-        )
-        # Not cached: an unreadable sidecar is a fault that may be repaired
-        # without the output changing, and retrying it costs one read.
-        return None
-    if merged is None:
-        logging.debug(
-            "No spec sidecar for %s; no annotations will be emitted", vcf_path
-        )
+    merged = load_spec_sidecar(vcf_path)
 
     if key is not None:
         with _spec_cache_lock:
@@ -818,23 +804,17 @@ def _load_pinned_merged_spec(vcf_path: FilePath) -> MergedSpec | None:
     return merged
 
 
-def _load_pinned_spec(vcf_path: FilePath) -> ParsingSpec | None:
-    """The parsing spec pinned to this job at submission, loaded defensively.
+def _load_pinned_spec(vcf_path: FilePath) -> ParsingSpec:
+    """The parsing spec pinned to this job at submission.
 
     Since the go-flat cutover this spec is the sole source of annotation data:
     every plugin payload on the response comes from driving it through
     spec_interpreter.apply_plugin_spec.
 
-    Never raises: an output with no sidecar (pre-dating the pin) or an
-    unreadable one still parses, just with no annotations, so both fall back to
-    None.
-
     The pinned sidecar is now the whole merged document; the parsing half is what
     the results path needs, so that is what this returns.
     """
     merged = _load_pinned_merged_spec(vcf_path)
-    if merged is None:
-        return None
     spec = merged.parsing
     logging.info("Loaded pinned parsing spec %s for %s", spec.spec_version, vcf_path)
     return spec
@@ -858,29 +838,22 @@ def _read_csq_columns(vcf_path: FilePath) -> set[str] | None:
     return set(index_map) or None
 
 
-def _load_expected_columns(vcf_path: FilePath) -> set[str] | None:
+def _load_expected_columns(vcf_path: FilePath) -> set[str]:
     """The CSQ columns this job's submitted options require, pinned at submission
-    (`expected_columns.json`). Defensive: a job predating the pin (no sidecar) or
-    an unreadable one returns None. Shared by the missing-column check and the
-    AF-source gating, so the sidecar is read once."""
-    try:
-        return load_expected_columns_sidecar(vcf_path)
-    except Exception as exc:
-        logging.warning(
-            "Ignoring unreadable expected-columns sidecar for %s: %s", vcf_path, exc
-        )
-        return None
+    (`expected_columns.json`). Shared by the missing-column check and AF-source
+    gating, so the sidecar is read once."""
+    return load_expected_columns_sidecar(vcf_path)
 
 
-def _check_expected_columns(vcf_path: FilePath, expected: set[str] | None) -> None:
+def _check_expected_columns(vcf_path: FilePath, expected: set[str]) -> None:
     """Warn if any CSQ column the submitted options require is missing from the
     output header (the runtime missing-expected-field check, design §6.2). A
     missing expected column is a real contract breach — a plugin the user enabled
     produced no column — while extra columns are always tolerated.
 
-    Missing columns currently log warnings and never fail results; a missing pin
-    (output predating this) or an unreadable header is a no-op. A retry or
-    failure policy requires an explicit workflow contract.
+    Missing columns currently log warnings and never fail results; an unreadable
+    header is a no-op. A retry or failure policy requires an explicit workflow
+    contract.
     """
     if not expected:
         return
@@ -898,78 +871,17 @@ def _check_expected_columns(vcf_path: FilePath, expected: set[str] | None) -> No
         )
 
 
-def _load_pinned_display_panels(vcf_path: FilePath) -> list[DisplayPanel] | None:
-    """The option panels pinned to this job at submission, loaded defensively.
-
-    Never raises: a job submitted before this pin existed (no sidecar), or an
-    unreadable one, returns None — the results view then falls back to the live
-    form-config panels, exactly as it did before pinning.
-    """
-    try:
-        panels = load_display_panels_sidecar(vcf_path)
-    except Exception as exc:
-        logging.warning(
-            "Ignoring unreadable display-panels sidecar for %s: %s", vcf_path, exc
-        )
-        return None
+def _load_pinned_display_panels(vcf_path: FilePath) -> list[DisplayPanel]:
+    """Load the option panels pinned to this job at submission."""
+    panels = load_display_panels_sidecar(vcf_path)
     if not panels:
-        # None (no sidecar) and [] are both "nothing usable pinned". An empty
-        # list can only come from a corrupted sidecar — get_visible_panels always
-        # returns at least the always-visible panels — and treating it as a valid
-        # pin would render a job with no panels at all rather than falling back.
-        logging.debug(
-            "No display-panels sidecar for %s; results will use the live panels",
-            vcf_path,
-        )
-        return None
+        raise ValueError(f"empty display-panels sidecar for {vcf_path}")
     return panels
 
 
-def _resolve_display_payload(spec: MergedSpec | None) -> DisplayPayload | None:
-    """The display layout to render this job's annotations with.
-
-    Normally the job's *pinned* spec owns it, like everything else about the
-    job. But every job submitted before the display section existed has a pinned
-    spec with no `display` key, and would otherwise render its twelve
-    spec-driven options blank. For those — and only those — fall back to the
-    current genome's display spec, resolved from the pinned spec's own genome.
-
-    This deliberately reintroduces a little staleness, narrowly: only for
-    pre-display-section jobs, and only for labels/formats. *Which* options ran,
-    and how their columns were parsed, still come from the pin.
-    """
-    if spec is None:
-        return None
-    payload = spec.display_payload()
-    if payload is not None:
-        return payload
-    assembly = (spec.genome or {}).get("assembly", "")
-    try:
-        current = resolve_merged_spec(assembly)
-    except Exception as exc:
-        logging.warning(
-            "No current spec to supply a display section for a pinned spec "
-            "without one (assembly %r): %s", assembly, exc
-        )
-        return None
-    logging.debug(
-        "Pinned spec has no display section; using the current %r display spec",
-        assembly,
-    )
-    current_payload = current.display_payload()
-    if current_payload is None:
-        return None
-    # The scopes must still describe the *pinned* parsers, since those are what
-    # produced this job's annotations; only the layout comes from the current
-    # spec. Copied rather than rebuilt field by field: listing the fields here
-    # meant a new one silently did not reach these jobs, and the rating scales
-    # had already been lost that way.
-    return current_payload.model_copy(update={"plugin_scopes": spec.plugin_scopes()})
-
-
 def _gated_filter_fields(
-    merged: MergedSpec | None, csq_columns: set[str] | None
-) -> list[FilterField] | None:
+    merged: MergedSpec, csq_columns: set[str] | None
+) -> list[FilterField]:
     """The filter catalogue, less what this output cannot be filtered by.
 
     Only the transcript groups need gating here: which scores and AF sources a
@@ -977,8 +889,6 @@ def _gated_filter_fields(
     catalogue with those. A group whose columns are absent would offer a choice
     that matches nothing.
     """
-    if merged is None or merged.filters is None:
-        return None
     if csq_columns is None:
         return merged.filters.fields
     available = set(results_filters.available_transcript_groups(csq_columns))
@@ -991,9 +901,11 @@ def _gated_filter_fields(
             field = field.model_copy(update={"options": options})
         gated.append(field)
     return gated
+
+
 def _drop_form_only_help(
-    panels: list[DisplayPanel] | None, merged: MergedSpec | None
-) -> list[DisplayPanel] | None:
+    panels: list[DisplayPanel], merged: MergedSpec
+) -> list[DisplayPanel]:
     """The panels with form-only help removed from their options.
 
     The pin stays lossless — it records what was submitted — so this happens on
@@ -1001,8 +913,6 @@ def _drop_form_only_help(
     its (?) on the input form and loses it here, where its rows already carry
     help of their own.
     """
-    if panels is None or merged is None or merged.help is None:
-        return panels
     form_only = merged.help.form_only_options()
     if not form_only:
         return panels
@@ -1015,22 +925,20 @@ def _drop_form_only_help(
 
 def _with_display_panels(
     response: model.VepResultsResponse,
-    panels: list[DisplayPanel] | None,
-    display: DisplayPayload | None = None,
+    panels: list[DisplayPanel],
+    display: DisplayPayload,
     *,
-    spec: ParsingSpec | None = None,
-    expected_columns: set[str] | None = None,
+    spec: ParsingSpec,
+    expected_columns: set[str],
     filter_fields: list[FilterField] | None = None,
 ) -> model.VepResultsResponse:
-    """Attach the pinned panels and display layout to a response built by the
-    parsing path (which knows about neither). None leaves the field absent.
+    """Finalize the pinned display and filter metadata on a parsed response.
 
     Also gate the allele-frequency data to the AF columns the submission actually
     *selected* (the pinned expected columns), not merely whatever the output VCF
     carries — two facets of the same full-cache leak: `available_af_sources`
     (the filter's availability) and each AF annotation's populations
-    (`_gate_af_populations`). Without a pin (older jobs) both are left as the VCF
-    reported them.
+    (`_gate_af_populations`).
     """
     response.metadata.display_panels = panels
     response.metadata.display = display
@@ -1041,24 +949,23 @@ def _with_display_panels(
         for variant in response.variants
         for allele in variant.alternative_alleles
     ]
-    if expected_columns is not None:
-        response.metadata.available_af_sources = [
-            source
-            for source in response.metadata.available_af_sources
-            if source.key in expected_columns
-        ]
+    response.metadata.available_af_sources = [
+        source
+        for source in response.metadata.available_af_sources
+        if source.key in expected_columns
+    ]
         # Same full-cache leak as the AF sources: the VCF may carry impact-score
         # columns this submission never selected. The gate is the score's
         # sentinel column, not the column the filter tests — a plugin's
         # `csq_fields` (and so `expected_columns`) is deliberately
         # under-declared, e.g. SpliceAI declares only its AG column while
         # emitting all four (see results_filters.ScoreSpec).
-        response.metadata.available_scores = [
-            field
-            for field in response.metadata.available_scores
-            if results_filters.SCORE_SPECS[field].gate in expected_columns
-        ]
-        _gate_af_columns(alleles, spec, expected_columns)
+    response.metadata.available_scores = [
+        field
+        for field in response.metadata.available_scores
+        if results_filters.SCORE_SPECS[field].gate in expected_columns
+    ]
+    _gate_af_columns(alleles, spec, expected_columns)
     # Decode each All of Us annotation's max-subpopulation code(s) to a label,
     # after any gating (a gated job nulls an unselected max, so a leaked one is
     # not relabelled). Serve-time metadata only — not part of the spec digest.
@@ -1068,7 +975,7 @@ def _with_display_panels(
 
 def _gate_af_columns(
     alleles: Iterable[model.AlternativeVariantAllele],
-    spec: ParsingSpec | None,
+    spec: ParsingSpec,
     expected_columns: set[str],
 ) -> None:
     """Drop allele-frequency values the submission didn't select.
@@ -1083,8 +990,6 @@ def _gate_af_columns(
     expected set, and null a scalar field whose source column isn't. Every non-AF
     plugin, and the frequency envelope itself, is untouched.
     """
-    if spec is None:
-        return
     # plugin id -> (population gates, scalar gates), for the AF plugins only (a
     # `pattern_map` target marks one). A population key maps to its column as
     # `f"{prefix}{key}{suffix}"`; a scalar field maps to its `from` column.
@@ -1181,10 +1086,7 @@ def get_results_from_path(
     Slices the input VCF file to a smaller one
     and converts it to stream for get_results_from_stream"""
 
-    # Load the spec pinned to this job at submission. It drives the generic
-    # `annotations` on every allele and transcript consequence (threaded down to
-    # _get_alt_allele_details). A missing or unreadable pin -> None -> no
-    # annotations, never failing results.
+    # Load the complete spec and job-specific metadata pinned at submission.
     merged = _load_pinned_merged_spec(vcf_path)
     spec = _load_pinned_spec(vcf_path)
     # The CSQ columns this job's submitted options require (pinned at submission).
@@ -1195,23 +1097,19 @@ def get_results_from_path(
     # Runtime missing-expected-field check: warn if the pipeline output is missing
     # a CSQ column the submitted options required. Non-fatal (dev warns only).
     _check_expected_columns(vcf_path, expected_columns)
-    # The option panels this job was submitted against (None for older jobs).
-    display_panels = _load_pinned_display_panels(vcf_path)
     # The filter catalogue, gated to what this output can be filtered by. Uses
     # the same header read the expected-columns check above already needs.
     filter_fields = _gated_filter_fields(merged, _read_csq_columns(vcf_path))
-    display_panels = _drop_form_only_help(
-        _load_pinned_display_panels(vcf_path), merged
-    )
-    # How those options lay out, from the pin (or the current spec for jobs
-    # pinned before the display section existed).
-    display = _resolve_display_payload(merged)
+    display_panels = _drop_form_only_help(_load_pinned_display_panels(vcf_path), merged)
+    display = merged.display_payload()
 
     # Filtered requests can't use the page index (filtering shifts record
     # positions), so they take a dedicated scan-and-filter path.
     if filters:
         return _with_display_panels(
-            _get_filtered_results(page_size, page, vcf_path, filters, spec),
+            _get_filtered_results(
+                page_size, page, vcf_path, filters, spec, display_panels, display
+            ),
             display_panels,
             display,
             spec=spec,
@@ -1232,8 +1130,10 @@ def get_results_from_path(
                 page,
                 index["total_records"],
                 StringIO(header_text + rows_text),
+                spec,
+                display_panels,
+                display,
                 presliced=True,
-                spec=spec,
             ),
             display_panels,
             display,
@@ -1269,7 +1169,9 @@ def get_results_from_path(
     vcf_stream = StringIO(vcf_headers + vcf_slice)
 
     return _with_display_panels(
-        get_results_from_stream(page_size, page, total, vcf_stream, spec=spec),
+        get_results_from_stream(
+            page_size, page, total, vcf_stream, spec, display_panels, display
+        ),
         display_panels,
         display,
         spec=spec,
@@ -1280,7 +1182,10 @@ def get_results_from_path(
 
 def get_results_from_stream(
     page_size: int, page: int, total: int, vcf_stream: StringIO,
-    presliced: bool = False, spec: ParsingSpec | None = None,
+    spec: ParsingSpec,
+    display_panels: list[DisplayPanel],
+    display: DisplayPayload,
+    presliced: bool = False,
 ) -> model.VepResultsResponse:
     """Helper method to split a filestream into header and records.
 
@@ -1292,14 +1197,25 @@ def get_results_from_stream(
     for line in vcf_stream:
         (header_lines if line.startswith("#") else data_lines).append(line)
     return _get_results_from_records(
-        page_size, page, total, header_lines, data_lines, presliced, spec
+        page_size,
+        page,
+        total,
+        header_lines,
+        data_lines,
+        spec,
+        display_panels,
+        display,
+        presliced,
     )
 
 
 def _get_results_from_records(
     page_size: int, page: int, total: int,
     header_lines: list[str], data_lines: list[str],
-    presliced: bool = False, spec: ParsingSpec | None = None,
+    spec: ParsingSpec,
+    display_panels: list[DisplayPanel],
+    display: DisplayPayload,
+    presliced: bool = False,
 ) -> model.VepResultsResponse:
     """Generates a page of VCF data in the format described in
     APISpecification.yaml for a given VCFPY reader"""
@@ -1316,7 +1232,7 @@ def _get_results_from_records(
     # fixed for the file, so which columns a plugin reads, whether it ran at
     # all, and which columns a pattern_map matches are all answerable here
     # instead of on every CSQ row. See PluginPlan.
-    plans = compile_parsing_spec(prediction_index_map, spec) if spec else None
+    plans = compile_parsing_spec(prediction_index_map, spec)
 
     variants = []
     # populate variants page. `presliced` means the stream already contains
@@ -1417,6 +1333,8 @@ def _get_results_from_records(
             ),
             available_af_sources=available_af_sources,
             available_scores=available_scores,
+            display_panels=display_panels,
+            display=display,
         ),
         variants=variants,
     )

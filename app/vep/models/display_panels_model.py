@@ -6,19 +6,16 @@ The same structure is pinned per job (a sidecar beside the merged spec) and
 handed back on the results response, so the results view can lay itself out from
 the submitted panels rather than whatever the live form config says now.
 
-The models are deliberately *permissive*: the panel structure is still evolving
-(options carry `category`, `sub_options`, nested `{"type": "group", ...}` nodes,
-and select choices which are bare `{label, value}` pairs), and pinning must be
-lossless. So every field is optional, unknown keys are kept (`extra="allow"`),
-and serialisation drops the keys that were not present in the source dict. The
-result round-trips `get_visible_panels()` output exactly.
+The model covers each shape emitted by `get_visible_panels` and rejects unknown
+keys. Serialisation drops optional keys that were absent from the source so the
+current panel payload round-trips exactly.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 
 class DisplayOption(BaseModel):
@@ -26,17 +23,21 @@ class DisplayOption(BaseModel):
 
     Covers all of the shapes `form_panels` emits: a plain option, an option with
     `sub_options`, a `{"type": "group", ...}` heading whose `options` are nested
-    options, and a select's `{"label", "value"}` choices (whose `value` is kept
-    as an extra field). Nothing is required, so no shape is rejected.
+    options, and a select's `{"label", "value"}` choices.
     """
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     id: str | None = None
     label: str | None = None
     type: str | None = None
     default: Any = None
     category: str | None = None
+    help: dict | None = None
+    value: Any = None
+    min: int | None = None
+    max: int | None = None
+    requires_any_sub_option: bool | None = None
     sub_options: list[DisplayOption] | None = None
     options: list[DisplayOption] | None = None
 
@@ -51,11 +52,11 @@ class DisplayOption(BaseModel):
 class DisplayPanel(BaseModel):
     """A single option panel (e.g. "Allele frequencies") and its options."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     id: str
     label: str
-    options: list[DisplayOption] = []
+    options: list[DisplayOption] = Field(default_factory=list)
 
 
 def to_display_panels(panels: list[dict]) -> list[DisplayPanel]:

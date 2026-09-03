@@ -182,19 +182,12 @@ class MergedSpec(BaseModel):
     genome: dict | None = None
     config: ConfigSpec
     parsing: ParsingSpec
-    # How the parsed annotations are laid out in the results detail. Optional,
-    # and the default matters: every spec pinned to a job before this section
-    # existed has no `display` key and must still load (the results path then
-    # falls back to the current genome's display spec).
-    display: DisplaySpec | None = None
-    # The help behind each option's (?) button. Optional for the same reason as
-    # `display`: every spec pinned to a job before this section existed has no
-    # `help` key and must still load.
-    help: HelpSpec | None = None
-    # Which fields the results query builder offers, and how each is presented.
-    # Optional like the sections above: a spec pinned before it existed has no
-    # `filters` key and must still load.
-    filters: FilterSpec | None = None
+    # These sections are part of the current merged-spec contract. A job pins
+    # the complete document, so results never combine an old pin with pieces of
+    # the live specification.
+    display: DisplaySpec
+    help: HelpSpec
+    filters: FilterSpec
 
     def config_entries(self) -> list[ConfigEntry]:
         return self.config.entries
@@ -209,11 +202,8 @@ class MergedSpec(BaseModel):
         """
         return {plugin.plugin: plugin.scope for plugin in self.parsing.plugins}
 
-    def display_payload(self) -> DisplayPayload | None:
-        """The display spec plus its derived scopes, as served on the results
-        response. None when this document has no display section."""
-        if self.display is None:
-            return None
+    def display_payload(self) -> DisplayPayload:
+        """The display spec plus its derived scopes, as served on results."""
         return DisplayPayload(
             options=self.display.options,
             plugin_scopes=self.plugin_scopes(),
@@ -440,9 +430,6 @@ class MergedSpec(BaseModel):
         `.toPrecision`, `join`/`humanize_join` -> `.join`/`.map`). Only refs
         that resolve are shape-checked; an unresolved one is already reported
         above rather than complained about twice."""
-        if self.display is None:
-            return []
-
         targets_by_plugin = {
             plugin.plugin: {t.field: t for t in plugin.targets}
             for plugin in self.parsing.plugins
@@ -685,8 +672,6 @@ class MergedSpec(BaseModel):
         alone -- an unknown scale there is a source adding wording, which
         correctly shows no stars.
         """
-        if self.display is None:
-            return []
         targets = {
             (plugin.plugin, target.field): target
             for plugin in self.parsing.plugins

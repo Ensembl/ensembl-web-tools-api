@@ -4,12 +4,9 @@ An option given no help simply shows no tooltip, and nothing downstream errors â
 so these tests assert that the text arrived rather than trusting that it did.
 """
 
-import json
-
 import pytest
 
 from app.vep.form_panels import get_visible_panels
-from app.vep.models.merged_spec_model import MergedSpec
 from app.vep.models.option_help_model import HelpSpec, OptionHelp, OptionHelpLink
 from app.vep.utils.spec_loader import load_merged_spec
 
@@ -134,17 +131,6 @@ def test_a_link_without_a_label_omits_the_key():
     for option in _options().values():
         for link in option.get("help", {}).get("links", []):
             assert "label" not in link or link["label"]
-
-
-def test_a_spec_pinned_before_help_existed_still_loads():
-    """`help` is optional so a spec without it still loads: `_load_pinned_spec`
-    swallows a validation error and returns None, which would render those
-    results with no annotations at all."""
-    doc = json.loads(
-        load_merged_spec("human_grch38").model_dump_json(by_alias=True, exclude_none=True)
-    )
-    doc.pop("help")
-    assert MergedSpec.model_validate(doc).help is None
 
 
 def test_an_unknown_field_in_a_help_entry_is_an_error():

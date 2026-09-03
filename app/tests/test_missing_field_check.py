@@ -1,6 +1,6 @@
 """Tests for the runtime missing-expected-field check (design §6.2): at results
 time, warn if the pipeline output header is missing a CSQ column the submitted
-options required. Non-fatal — extras are ignored and a missing pin is a no-op.
+options required. Missing output columns are non-fatal and extras are ignored.
 """
 
 import gzip
@@ -76,14 +76,6 @@ def test_extra_columns_are_ignored(tmp_path, caplog):
     vcf = tmp_path / "output.vcf.gz"
     _write_vcf(vcf, ["Allele", "REVEL", "SOMETHING_EXTRA"])
     write_expected_columns_sidecar(tmp_path, {"REVEL"})
-    with caplog.at_level(logging.WARNING):
-        _check_expected_columns(FilePath(vcf), _load_expected_columns(FilePath(vcf)))
-    assert caplog.text == ""
-
-
-def test_missing_sidecar_is_a_noop(tmp_path, caplog):
-    vcf = tmp_path / "output.vcf.gz"
-    _write_vcf(vcf, ["Allele", "REVEL"])  # no expected_columns.json written
     with caplog.at_level(logging.WARNING):
         _check_expected_columns(FilePath(vcf), _load_expected_columns(FilePath(vcf)))
     assert caplog.text == ""

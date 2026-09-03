@@ -181,18 +181,14 @@ class Metadata(BaseModel):
     available_scores: list[str] = []
     # The fields the query builder offers, and how each is presented, from the
     # job's pinned spec — gated to what this output can actually be filtered by,
-    # as the AF sources and scores above are. None for a job pinned before the
-    # section existed.
+    # as the AF sources and scores above are.
     filter_fields: list[FilterField] | None = None
     # The option panels this job was submitted against, pinned at submission.
-    # None for jobs that predate the pin — the results view then falls back to
-    # the live form-config panels, as it did before.
-    display_panels: list[DisplayPanel] | None = None
+    display_panels: list[DisplayPanel]
     # How each option's parsed annotation is laid out, from the `display`
     # section of the job's pinned spec, plus the plugin->scope map derived from
-    # its `parsing` half. None only when no spec (pinned or current) has a
-    # display section at all.
-    display: DisplayPayload | None = None
+    # its `parsing` half.
+    display: DisplayPayload
 
 
 class AlternativeVariantAllele(BaseModel):

@@ -1,0 +1,215 @@
+{
+  "config": {
+    "entries": [
+      {
+        "id": "updownstream_distance",
+        "order": 5,
+        "parsed_as": [],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Locations",
+          "order": 300,
+          "label": "Up/downstream distance",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "updownstream_distance_bp",
+              "label": "Distance (bp)",
+              "type": "number",
+              "default": 5000,
+              "min": 0,
+              "max": 1000000
+            }
+          ]
+        },
+        "config": {
+          "emit": "setting",
+          "keyword": "distance",
+          "value": {
+            "from_option": "updownstream_distance_bp",
+            "as": "value"
+          }
+        }
+      },
+      {
+        "id": "hgvs",
+        "order": 10,
+        "parsed_as": [
+          "hgvs"
+        ],
+        "form": {
+          "panel": "variant_representations",
+          "order": 0,
+          "label": "HGVS",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "flag",
+          "keyword": "hgvs"
+        }
+      },
+      {
+        "id": "hgvsg",
+        "order": 11,
+        "parsed_as": [
+          "hgvs",
+          "hgvsg"
+        ],
+        "config": {
+          "emit": "flag",
+          "keyword": "hgvsg"
+        }
+      },
+      {
+        "id": "spdi",
+        "order": 12,
+        "parsed_as": [
+          "spdi"
+        ],
+        "form": {
+          "panel": "variant_representations",
+          "order": 100,
+          "label": "SPDI",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "flag",
+          "keyword": "spdi"
+        }
+      },
+      {
+        "id": "protein",
+        "order": 13,
+        "parsed_as": [
+          "protein"
+        ],
+        "form": {
+          "panel": "protein_and_functional",
+          "order": 0,
+          "label": "Protein ID",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "flag",
+          "keyword": "protein"
+        }
+      },
+      {
+        "id": "tss_distance",
+        "order": 50,
+        "parsed_as": [
+          "tss_distance"
+        ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Locations",
+          "order": 0,
+          "label": "Distance to TSS",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "TSSDistance",
+          "params": {
+            "both_direction": "1"
+          }
+        }
+      },
+      {
+        "id": "nearest_gene",
+        "order": 51,
+        "parsed_as": [
+          "nearest_gene"
+        ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Locations",
+          "order": 100,
+          "label": "Nearest gene",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "nearest_gene_both_directions",
+              "label": "Both directions",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "NearestGene",
+          "params": {
+            "gff3": "{gff}",
+            "regulatory": "0",
+            "vep_filter": "1"
+          },
+          "flags": {
+            "options": [
+              {
+                "option": "nearest_gene_both_directions",
+                "keyword": "both_directions"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "nearest_exon_jb",
+        "order": 52,
+        "parsed_as": [
+          "nearest_exon_jb"
+        ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Locations",
+          "order": 200,
+          "label": "Nearest exon junction boundary",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "nearest_exon_jb_max_range",
+              "label": "Max search range (bp)",
+              "type": "number",
+              "default": 10000
+            },
+            {
+              "id": "nearest_exon_jb_intronic",
+              "label": "Intronic",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "NearestExonJB",
+          "params": {
+            "gff3": "{gff}",
+            "vep_filter": "1",
+            "max_range": {
+              "from_option": "nearest_exon_jb_max_range",
+              "as": "value"
+            }
+          },
+          "flags": {
+            "options": [
+              {
+                "option": "nearest_exon_jb_intronic",
+                "keyword": "intronic"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "library": "annotation_library"
+}

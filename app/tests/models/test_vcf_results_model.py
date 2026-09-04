@@ -2,6 +2,7 @@ import unittest
 from pydantic import ValidationError
 
 from vep.models.vcf_results_model import (
+    Annotation,
     PaginationMetadata,
     PredictedIntergenicConsequence,
     PredictedTranscriptConsequence,
@@ -14,6 +15,11 @@ from vep.models.vcf_results_model import (
     Metadata,
     VepResultsResponse,
 )
+from vep.models.display_panels_model import DisplayPanel
+from vep.models.display_spec_model import DisplayPayload
+
+DISPLAY_PANELS = [DisplayPanel(id="general", label="General")]
+DISPLAY = DisplayPayload(options=[], plugin_scopes={})
 
 
 class TestVCFResultModel(unittest.TestCase):
@@ -36,7 +42,7 @@ class TestVCFResultModel(unittest.TestCase):
         )
         self.assertIsNone(consequence.gene_symbol)
 
-        # Valid instance without explicitly setting gene_symbol (default=None)
+        # `gene_symbol` is optional.
         consequence_no_symbol = PredictedTranscriptConsequence(
             feature_type=FeatureType.transcript,
             stable_id="ENST00000367770.8",
@@ -52,22 +58,27 @@ class TestVCFResultModel(unittest.TestCase):
         alternative_allele = AlternativeVariantAllele(
             allele_sequence="A",
             allele_type="insertion",
-            representative_population_allele_frequency=None,
+            colocated_variants=["rs123"],
+            annotations=[
+                Annotation(plugin="spdi", scope="allele", data={"spdi": "1:1:A:T"})
+            ],
             predicted_molecular_consequences=[
                 PredictedIntergenicConsequence()
             ],
         )
-        self.assertIsNone(alternative_allele.representative_population_allele_frequency)
+        self.assertEqual(alternative_allele.colocated_variants, ["rs123"])
+        self.assertEqual(alternative_allele.annotations[0].plugin, "spdi")
 
-        # Valid instance without explicitly setting representative_population_allele_frequency (default=None)
-        alternative_allele_no_freq = AlternativeVariantAllele(
+        # Optional annotation lists default to empty.
+        alternative_allele_bare = AlternativeVariantAllele(
             allele_sequence="A",
             allele_type="insertion",
             predicted_molecular_consequences=[
                 PredictedIntergenicConsequence()
             ],
         )
-        self.assertIsNone(alternative_allele_no_freq.representative_population_allele_frequency)
+        self.assertEqual(alternative_allele_bare.colocated_variants, [])
+        self.assertEqual(alternative_allele_bare.annotations, [])
 
     def test_variant(self):
         variant = Variant(
@@ -87,7 +98,7 @@ class TestVCFResultModel(unittest.TestCase):
         )
         self.assertIsNone(variant.name)
 
-        # Valid instance without explicitly setting name (default=None)
+        # `name` is optional.
         variant_no_name = Variant(
             allele_type="SNP",
             location=Location(region_name="1", start=10000, end=10001),
@@ -106,17 +117,31 @@ class TestVCFResultModel(unittest.TestCase):
 
     def test_metadata_required(self):
         metadata = Metadata(
-            pagination=PaginationMetadata(page=1, per_page=10, total=100)
+            pagination=PaginationMetadata(page=1, per_page=10, total=100),
+            display_panels=DISPLAY_PANELS,
+            display=DISPLAY,
         )
         self.assertEqual(metadata.pagination.page, 1)
 
-        # Invalid instance without pagination - should raise ValidationError
+        # Results metadata requires pagination and display metadata.
         with self.assertRaises(ValidationError):
             Metadata()
+        with self.assertRaises(ValidationError):
+            Metadata(
+                pagination=PaginationMetadata(page=1, per_page=10, total=100),
+                display=DISPLAY,
+            )
+        with self.assertRaises(ValidationError):
+            Metadata(
+                pagination=PaginationMetadata(page=1, per_page=10, total=100),
+                display_panels=DISPLAY_PANELS,
+            )
 
     def test_vep_results_response(self):
         metadata = Metadata(
-            pagination=PaginationMetadata(page=1, per_page=10, total=100)
+            pagination=PaginationMetadata(page=1, per_page=10, total=100),
+            display_panels=DISPLAY_PANELS,
+            display=DISPLAY,
         )
         variant = Variant(
             name=None,
@@ -137,6 +162,6 @@ class TestVCFResultModel(unittest.TestCase):
         self.assertEqual(response.metadata.pagination.page, 1)
         self.assertEqual(len(response.variants), 1)
 
-        # Invalid instance without metadata - should raise ValidationError
+        # A response requires metadata.
         with self.assertRaises(ValidationError):
             VepResultsResponse(variants=[variant])

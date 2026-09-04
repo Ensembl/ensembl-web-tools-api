@@ -16,7 +16,9 @@ limitations under the License.
 """
 
 import logging
+import os
 import sys
+import tempfile
 
 from loguru import logger
 from starlette.config import Config
@@ -37,7 +39,13 @@ ALLOWED_HOSTS: list[str] = config(
     cast=CommaSeparatedStrings,
     default="*",
 )
-with open("/data/blast_config.json") as f:
+
+_blast_config_path = "/data/blast_config.json"
+if not os.path.exists(_blast_config_path):
+    _blast_config_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "data", "blast_config.json"
+    )
+with open(_blast_config_path) as f:
     BLAST_CONFIG = json.load(f)
 
 
@@ -52,15 +60,17 @@ for logger_name in LOGGERS:
 
 logger.configure(handlers=[{"sink": sys.stderr, "level": LOGGING_LEVEL}])
 
-# Nextflow Configurations
-NF_TOKEN = config("NF_TOKEN")
-NF_COMPUTE_ENV_ID = config("NF_COMPUTE_ENV_ID")
-NF_PIPELINE_URL = config("NF_PIPELINE_URL")
-NF_WORK_DIR = config("NF_WORK_DIR")
-SEQERA_API = config("SEQERA_API")
-NF_WORKSPACE_ID = config("NF_WORKSPACE_ID")
+# Nextflow configuration. Supplied by envvars (k8s secret)
+NF_TOKEN = config("NF_TOKEN", default="")
+NF_COMPUTE_ENV_ID = config("NF_COMPUTE_ENV_ID", default="")
+NF_PIPELINE_URL = config("NF_PIPELINE_URL", default="")
+NF_WORK_DIR = config("NF_WORK_DIR", default=tempfile.gettempdir())
+SEQERA_API = config("SEQERA_API", default="")
+NF_WORKSPACE_ID = config("NF_WORKSPACE_ID", default="")
 
 WEB_METADATA_API = config(
-    "WEB_METADATA_API", default="https://beta.ensembl.org/api/metadata/"
+    "WEB_METADATA_API", default="https://www.ensembl.org/api/metadata/"
 )
-VEP_SUPPORT_PATH = config("VEP_SUPPORT_PATH", default="/tmpdir")
+VEP_SUPPORT_PATH_ROOT = config("VEP_SUPPORT_PATH", default="/tmpdir")
+VEP_SUPPORT_PATH = os.path.join(VEP_SUPPORT_PATH_ROOT, "organisms")
+VEP_PLUGIN_DATA_PATH = os.path.join(VEP_SUPPORT_PATH_ROOT, "vep-plugins-data")

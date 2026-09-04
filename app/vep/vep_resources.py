@@ -16,14 +16,22 @@ limitations under the License.
 
 """
 
+import asyncio
 from enum import Enum
 import json
 import logging
+import re
 
-from fastapi import Request, status, APIRouter
+from fastapi import Request, status, APIRouter, Query
 from pydantic import FilePath
 from requests import HTTPError
-from starlette.responses import JSONResponse, FileResponse
+from starlette.responses import (
+    JSONResponse,
+    FileResponse,
+    Response,
+    StreamingResponse,
+)
+from starlette.concurrency import run_in_threadpool
 
 from core.error_response import response_error_handler
 from core.logging import InterceptHandler
@@ -33,12 +41,28 @@ from vep.models.pipeline_model import (
     LaunchParams,
     PipelineParams,
     PipelineStatus,
+    output_prefix_for,
 )
 from vep.models.submission_form import Dropdown, FormConfig
-from vep.models.upload_vcf_files import Streamer, MaxBodySizeException
+from vep.models.upload_vcf_files import (
+    Streamer,
+    MaxBodySizeException,
+    UnsafeFileNameException,
+)
 from vep.utils.nextflow import launch_workflow, get_workflow_status
-from vep.utils.vcf_results import get_results_from_path
-from vep.utils.web_metadata import get_genome_metadata
+from vep.utils.vcf_results import get_results_from_path, stream_filtered_vcf_text
+from vep.utils.tsv_export import stream_vep_tsv, flatten_vcf_lines, gzip_text_stream
+from vep.utils.results_filters import parse_filters, FilterError, ResultsFilter
+from vep.utils.web_metadata import get_genome_assembly_name, get_genome_genebuild
+from vep.utils.species_presets import get_species_presets
+from vep.utils.spec_loader import (
+    resolve_merged_spec,
+    write_display_panels_sidecar,
+    write_expected_columns_sidecar,
+    write_spec_sidecar,
+)
+from vep.models.display_panels_model import to_display_panels
+from vep.form_panels import get_visible_panels
 
 logging.getLogger().handlers = [InterceptHandler()]
 
@@ -58,26 +82,57 @@ async def submit_vep(request: Request):
     try:
         request_streamer = Streamer(request=request)
         stream_result = await request_streamer.stream()
+        if not stream_result:
+            raise Exception("Failed to upload VEP input files")
         vep_job_parameters = request_streamer.parameters.value.decode()
         genome_id = request_streamer.genome_id.value.decode()
         vep_job_parameters_dict = json.loads(vep_job_parameters)
-        ini_parameters = ConfigIniParams(**vep_job_parameters_dict, genome_id=genome_id)
-        ini_file = ini_parameters.create_config_ini_file(request_streamer.temp_dir)
+
+        job_fields = {
+            key: value
+            for key, value in vep_job_parameters_dict.items()
+            if key in ConfigIniParams.model_fields
+        }
+        job_fields["genome_id"] = genome_id
+        job_fields["assembly_name"] = await get_genome_assembly_name(genome_id)
+        # Extract the selected options from the parameters payload for validation against the spec
+        options = {
+            key: value
+            for key, value in vep_job_parameters_dict.items()
+            if key not in ConfigIniParams.model_fields
+        }
+        ini_parameters = ConfigIniParams(**job_fields, options=options)
+
+        # Resolve the merged spec (config + parsing) for this job's assembly
+        merged_spec = resolve_merged_spec(ini_parameters.assembly_name)
+        # Extract the expected CSQ columns for validating the output VCF
+        expected_columns = merged_spec.expected_csq_columns(ini_parameters.options)
+        # Get the visible option panels for rendering the results
+        display_panels = to_display_panels(
+            get_visible_panels(assembly_name=ini_parameters.assembly_name)
+        )
+
+        ini_file = await run_in_threadpool(
+            ini_parameters.create_config_ini_file,
+            request_streamer.temp_dir,
+            merged_spec.config,
+        )
+        write_spec_sidecar(request_streamer.temp_dir, merged_spec)
+        write_expected_columns_sidecar(request_streamer.temp_dir, expected_columns)
+        write_display_panels_sidecar(request_streamer.temp_dir, display_panels)
 
         vep_job_config_parameters = VEPConfigParams(
             vcf=request_streamer.filepath,
             vep_config=ini_file.name,
             outdir=request_streamer.temp_dir,
+            output_prefix=output_prefix_for(request_streamer.filename),
         )
         launch_params = LaunchParams(
             paramsText=vep_job_config_parameters, workDir=request_streamer.temp_dir
         )
         pipeline_params = PipelineParams(launch=launch_params)
-        if stream_result:
-            workflow_id = launch_workflow(pipeline_params)
-            return {"submission_id": workflow_id}
-        else:
-            raise Exception("Failed to upload VEP input files")
+        workflow_id = await run_in_threadpool(launch_workflow, pipeline_params)
+        return {"submission_id": workflow_id}
     except HTTPError as e:
         try:
             msg = e.response.json()["message"]
@@ -87,6 +142,12 @@ async def submit_vep(request: Request):
         return response_error_handler(result={"status": e.response.status_code})
     except MaxBodySizeException:
         return response_error_handler(result={"status": 413})
+    except UnsafeFileNameException as e:
+        logging.warning(f"rejected upload file name: {e}")
+        return response_error_handler(result={"status": 400})
+    except ValueError as e:
+        logging.warning("invalid VEP submission: %s", e)
+        return response_error_handler(result={"status": 400})
     except Exception as e:
         logging.exception(f"{e.__class__.__name__}: {e}")
         return response_error_handler(result={"status": 500})
@@ -119,16 +180,73 @@ async def vep_status(request: Request, submission_id: str):
         return response_error_handler(result={"status": 500})
 
 
-def get_vep_results_file_path(input_vcf_file: str) -> FilePath:
+def get_vep_results_file_path(
+    input_vcf_file: str, output_prefix: str | None = None
+) -> FilePath:
     input_vcf_path = FilePath(input_vcf_file)
-    vep_results_file = input_vcf_path.with_name(
-        input_vcf_path.stem + "_VEP.vcf.gz"
+    result_name = (
+        f"{output_prefix}_VEP.vcf.gz"
+        if output_prefix
+        else input_vcf_path.stem + "_VEP.vcf.gz"
     )
-    return vep_results_file
+    return input_vcf_path.with_name(result_name)
+
+
+def _gzip_download_response(text_stream, filename: str) -> StreamingResponse:
+    return StreamingResponse(
+        gzip_text_stream(text_stream),
+        media_type="application/gzip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _results_download_response(
+    results_path: FilePath,
+    output_format: str,
+    active_filters: list[ResultsFilter] | None = None,
+) -> FileResponse | StreamingResponse:
+    is_table = output_format in ("tsv", "txt", "table")
+    table_extension = "tsv" if output_format == "tsv" else "txt"
+    base = re.sub(r"\.vcf(\.gz)?$", "", results_path.name) or "vep_results"
+    if active_filters:
+        # Filtered download (include only CSQ entries/records passing the filters)
+        vcf_text = stream_filtered_vcf_text(results_path, active_filters)
+        if is_table:
+            # Filtered download in tabular format (send over gzipped stream)
+            return _gzip_download_response(
+                flatten_vcf_lines(vcf_text),
+                f"{base}_filtered.{table_extension}.gz",
+            )
+        return _gzip_download_response(vcf_text, f"{base}_filtered.vcf.gz")
+    if is_table:
+        # Full results in tabular format
+        return _gzip_download_response(
+            stream_vep_tsv(results_path), f"{base}.{table_extension}.gz"
+        )
+    return FileResponse(
+        # Full results in VCF format
+        results_path,
+        media_type="application/gzip",
+        filename=results_path.name,
+    )
 
 
 @router.get("/submissions/{submission_id}/download", name="download_results")
-async def download_results(request: Request, submission_id: str):
+async def download_results(
+    request: Request,
+    submission_id: str,
+    format: str = "vcf",
+    filters: str | None = None,
+):
+    # Optional server-side filtering.
+    # `filters` is a JSON array of query-builder conditions.
+    try:
+        active_filters = parse_filters(filters)
+    except FilterError as exc:
+        return JSONResponse(
+            content={"details": f"Invalid filters: {exc}"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
     try:
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
@@ -136,12 +254,15 @@ async def download_results(request: Request, submission_id: str):
         )
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["input"]
-            results_file_path = get_vep_results_file_path(input_vcf_file)
+            output_prefix = workflow_status["workflow"]["params"].get(
+                "output_prefix"
+            )
+            results_file_path = get_vep_results_file_path(
+                input_vcf_file, output_prefix
+            )
             if results_file_path.exists():
-                return FileResponse(
-                    results_file_path,
-                    media_type="application/gzip",
-                    filename=results_file_path.name,
+                return _results_download_response(
+                    results_file_path, format, active_filters
                 )
             else:
                 response_msg = {
@@ -158,6 +279,13 @@ async def download_results(request: Request, submission_id: str):
                 content=response_msg, status_code=status.HTTP_404_NOT_FOUND
             )
 
+    except FilterError as exc:
+        # Compiling the filters against the file's CSQ header failed (e.g. a filter
+        # references a column this output doesn't carry) — a client error.
+        return JSONResponse(
+            content={"details": f"Invalid filters: {exc}"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
     except HTTPError as e:
         if e.response.status_code in [403, 400]:
 
@@ -176,20 +304,70 @@ async def download_results(request: Request, submission_id: str):
         return response_error_handler(result={"status": 500})
 
 
+def _results_response(**kwargs) -> Response:
+    """Return a serialized JSONResponse for the results page.
+    Pre-serialized to bytes with `model_dump_json` for performance.
+    `by_alias=True` is needed to map `source` field in the spec model to `from` in the payload.
+    """
+    payload = get_results_from_path(**kwargs)
+    return Response(
+        content=payload.model_dump_json(by_alias=True),
+        media_type="application/json",
+    )
+
+
 @router.get("/submissions/{submission_id}/results", name="view_results")
-async def fetch_results(request: Request, submission_id: str, page: int, per_page: int):
+async def fetch_results(
+    request: Request,
+    submission_id: str,
+    page: int = Query(..., ge=1),
+    per_page: int = Query(..., ge=1, le=500),
+    filters: str | None = None,
+):
     results_file_path = None
     try:
+        # Optional server-side filtering: `filters` is a JSON array of query-builder
+        # conditions. Malformed input is a client error (400), not a 500.
+        try:
+            active_filters = parse_filters(filters)
+        except FilterError as exc:
+            return JSONResponse(
+                content={"details": f"Invalid filters: {exc}"},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        def _results(**kwargs):
+            """
+            `parse_filters` only checks the filter payload shape.
+            `_results_response` compiles the filters to check that the requested 
+            columns and operators exist in the result VCF.
+            """
+            try:
+                return _results_response(**kwargs)
+            except FilterError as exc:
+                return JSONResponse(
+                    content={"details": f"Invalid filters: {exc}"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
             submission_id=submission_id, status=workflow_status
         )
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["input"]
-            results_file_path = get_vep_results_file_path(input_vcf_file)
+            output_prefix = workflow_status["workflow"]["params"].get(
+                "output_prefix"
+            )
+            results_file_path = get_vep_results_file_path(
+                input_vcf_file, output_prefix
+            )
             if results_file_path.exists():
-                return get_results_from_path(
-                    vcf_path=results_file_path, page=page, page_size=per_page
+                return await run_in_threadpool(
+                    _results,
+                    vcf_path=results_file_path,
+                    page=page,
+                    page_size=per_page,
+                    filters=active_filters,
                 )
             else:
                 response_msg = {
@@ -225,9 +403,15 @@ async def fetch_results(request: Request, submission_id: str, page: int, per_pag
 
 
 @router.get("/form_config/{genome_id}", name="get_form_config")
-async def get_form_config(request: Request, genome_id: str):
+async def get_form_config(
+    request: Request,
+    genome_id: str,
+):
     try:
-        attributes = await get_genome_metadata(genome_id)
+        attributes, assembly_name = await asyncio.gather(
+            get_genome_genebuild(genome_id), get_genome_assembly_name(genome_id)
+        )
+
         annotation_provider_name = attributes.get("genebuild.provider_name", "")
         annotation_version = attributes.get("genebuild.provider_version", "")
         last_updated_date = attributes.get("genebuild.last_geneset_update", "")
@@ -252,7 +436,11 @@ async def get_form_config(request: Request, genome_id: str):
         )
 
         form_config = FormConfig(transcript_set=transcript_set)
-        return {"parameters": form_config}
+        # Panels/options to show for this genome's canonical species/assembly.
+        return {
+            "parameters": form_config,
+            "panels": get_visible_panels(assembly_name=assembly_name),
+        }
 
     except HTTPError as e:
         if e.response.status_code == 404:
@@ -270,4 +458,14 @@ async def get_form_config(request: Request, genome_id: str):
         return response_error_handler(result={"status": e.response.status_code})
     except Exception as e:
         logging.error(f"{e.__class__.__name__}: {e}")
+        return response_error_handler(result={"status": 500})
+
+
+@router.get("/species_presets", name="get_species_presets")
+async def species_presets(request: Request):
+    """Species presets for the input form quick-select buttons."""
+    try:
+        return await get_species_presets()
+    except Exception as e:
+        logging.exception(f"{e.__class__.__name__}: {e}")
         return response_error_handler(result={"status": 500})

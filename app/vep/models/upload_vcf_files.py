@@ -17,7 +17,7 @@ limitations under the License.
 """
 
 import os
-import logging
+import re
 import tempfile
 import shutil
 
@@ -31,6 +31,13 @@ from core.config import NF_WORK_DIR
 
 MAX_FILE_SIZE = 1024 * 1024 * 1024 * 2  # 2GB
 MAX_REQUEST_BODY_SIZE = MAX_FILE_SIZE + 1024
+SAFE_FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$")
+
+
+class UnsafeFileNameException(Exception):
+    def __init__(self, file_name: str):
+        self.file_name = file_name
+        super().__init__(f"unacceptable file name: {file_name!r}")
 
 
 class MaxBodySizeException(Exception):
@@ -54,7 +61,7 @@ class Streamer:
         self.request = request
         self.filename = self.request.headers.get("Filename", "temp_name")
         self.file_name_validator(self.filename)
-        self.temp_dir = tempfile.mkdtemp(dir=NF_WORK_DIR)
+        self.temp_dir = tempfile.mkdtemp(dir=NF_WORK_DIR or None)
         self.filepath = os.path.join(
             str(self.temp_dir), os.path.basename(self.filename)
         )
@@ -68,6 +75,8 @@ class Streamer:
     def file_name_validator(file_name: str | None = None):
         if not file_name:
             raise Exception
+        if not SAFE_FILENAME.fullmatch(file_name):
+            raise UnsafeFileNameException(file_name)
 
     async def stream(self):
         body_validator = MaxBodySizeValidator(MAX_REQUEST_BODY_SIZE)
@@ -81,11 +90,15 @@ class Streamer:
                 self.parser.data_received(chunk)
 
             if self.filename == "temp_name":
+                multipart_name = os.path.basename(
+                    self._input_file.multipart_filename or "input"
+                )
+                self.file_name_validator(multipart_name)
                 os.rename(
                     self.filepath,
-                    os.path.join(self.temp_dir, self._input_file.multipart_filename),
+                    os.path.join(self.temp_dir, multipart_name),
                 )
-                self.filename = self._input_file.multipart_filename
+                self.filename = multipart_name
                 self.filepath = os.path.join(self.temp_dir, self.filename)
             return True
 

@@ -292,8 +292,16 @@ components:
           properties:
             pagination:
               $ref: '#/components/schemas/PaginationMetadata'
+            display:
+              type: object
+            display_panels:
+              type: array
+              items:
+                type: object
           required:
             - pagination
+            - display
+            - display_panels
         variants:
           type: array
           items:

@@ -1,0 +1,925 @@
+{
+  "genome": {
+    "species_taxonomy_id": "9606",
+    "assembly": "GRCh37"
+  },
+  "config": {
+    "entries": [
+      {
+        "id": "intact",
+        "order": 27,
+        "parsed_as": [
+          "intact"
+        ],
+        "form": {
+          "panel": "protein_and_functional",
+          "category": "Functional",
+          "order": 300,
+          "label": "IntAct",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "intact_feature_ac",
+              "label": "Feature AC",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_feature_short_label",
+              "label": "Feature short label",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_ap_ac",
+              "label": "Affected protein AC",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_interaction_participants",
+              "label": "Interaction participants",
+              "type": "boolean",
+              "default": false
+            },
+            {
+              "id": "intact_pmid",
+              "label": "PubMed ID",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "IntAct",
+          "params": {
+            "mutation_file": "{path}/mutations.tsv",
+            "mapping_file": "{path}/mutation_gc_map.txt.gz"
+          },
+          "flags": {
+            "options": [
+              {
+                "option": "intact_feature_ac",
+                "keyword": "feature_ac"
+              },
+              {
+                "option": "intact_feature_short_label",
+                "keyword": "feature_short_label"
+              },
+              {
+                "option": "intact_ap_ac",
+                "keyword": "ap_ac"
+              },
+              {
+                "option": "intact_interaction_participants",
+                "keyword": "interaction_participants"
+              },
+              {
+                "option": "intact_pmid",
+                "keyword": "pmid"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "dosage_sensitivity",
+        "order": 29,
+        "parsed_as": [
+          "dosage_sensitivity"
+        ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Constraint",
+          "order": 700,
+          "label": "Dosage sensitivity",
+          "type": "boolean",
+          "default": false,
+          "sub_options": [
+            {
+              "id": "dosage_sensitivity_cover",
+              "label": "Require full transcript overlap",
+              "type": "boolean",
+              "default": false
+            }
+          ]
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "DosageSensitivity",
+          "params": {
+            "file": "{path}/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz",
+            "cover": {
+              "from_option": "dosage_sensitivity_cover",
+              "as": "int"
+            }
+          }
+        }
+      },
+      {
+        "id": "phenotypes",
+        "order": 30,
+        "parsed_as": [
+          "phenotype_data",
+          "phenotype_gene"
+        ],
+        "form": {
+          "panel": "phenotype_and_disease_associations",
+          "order": 100,
+          "label": "Phenotypes",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "Phenotypes",
+          "params": {
+            "file": "{path}/Phenotypes.pm_homo_sapiens_116_GRCh37.gvf.gz",
+            "cols": "type&source&phenotype&id&external_id&risk_allele",
+            "exclude_sources": "HGMD-PUBLIC&COSMIC&ClinVar"
+          }
+        },
+        "forces_on": [
+          "clinvar_short"
+        ]
+      },
+      {
+        "id": "go",
+        "order": 31,
+        "parsed_as": [
+          "go"
+        ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Additional molecular consequence predictions",
+          "order": 900,
+          "label": "Gene Ontology",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "GO",
+          "params": {
+            "file": "{path}/GO.pm_homo_sapiens_116_GRCh37.gff.gz"
+          }
+        }
+      },
+      {
+        "id": "alphamissense",
+        "order": 40,
+        "parsed_as": [
+          "alphamissense"
+        ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Missense",
+          "order": 0,
+          "label": "AlphaMissense",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "AlphaMissense",
+          "params": {
+            "file": {
+              "by_assembly": {
+                "GRCh38": "{path}/AlphaMissense_hg38.tsv.gz",
+                "GRCh37": "{path}/AlphaMissense_hg19.tsv.gz"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "cadd",
+        "order": 41,
+        "parsed_as": [
+          "cadd"
+        ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Genome wide",
+          "order": 400,
+          "label": "CADD",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "CADD",
+          "params": {
+            "snv": {
+              "by_assembly": {
+                "GRCh38": "{path}/CADD_GRCh38_1.7_whole_genome_SNVs.tsv.gz",
+                "GRCh37": "{path}/CADD_GRCh37_1.7_whole_genome_SNVs.tsv.gz"
+              }
+            },
+            "indels": {
+              "by_assembly": {
+                "GRCh38": "{path}/CADD_GRCh38_1.7_InDels.tsv.gz",
+                "GRCh37": "{path}/CADD_GRCh37_1.7_InDels.tsv.gz"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "revel",
+        "order": 42,
+        "parsed_as": [
+          "revel"
+        ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Missense",
+          "order": 100,
+          "label": "REVEL",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "REVEL",
+          "params": {
+            "file": {
+              "by_assembly": {
+                "GRCh38": "{path}/new_tabbed_revel_grch38.tsv.gz",
+                "GRCh37": "{path}/new_tabbed_revel_grch37.tsv.gz"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "loeuf",
+        "order": 43,
+        "parsed_as": [
+          "loeuf"
+        ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Constraint",
+          "order": 600,
+          "label": "LOEUF",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "LOEUF",
+          "params": {
+            "file": {
+              "by_assembly": {
+                "GRCh38": "{path}/loeuf_dataset_grch38.tsv.gz",
+                "GRCh37": "{path}/loeuf_dataset_grch37.tsv.gz"
+              }
+            },
+            "match_by": "gene"
+          }
+        }
+      },
+      {
+        "id": "geno2mp",
+        "order": 44,
+        "parsed_as": [
+          "geno2mp"
+        ],
+        "form": {
+          "panel": "phenotype_and_disease_associations",
+          "order": 0,
+          "label": "Geno2MP",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "Geno2MP",
+          "params": {
+            "file": {
+              "by_assembly": {
+                "GRCh38": "{path}/Geno2MP.variants_GRCh38.vcf.gz",
+                "GRCh37": "{path}/Geno2MP.variants_GRCh37.vcf.gz"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "clinpred",
+        "order": 45,
+        "parsed_as": [
+          "clinpred"
+        ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Missense",
+          "order": 200,
+          "label": "ClinPred",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "ClinPred",
+          "params": {
+            "file": {
+              "by_assembly": {
+                "GRCh38": "{path}/ClinPred_hg38_sorted_tabbed.tsv.gz",
+                "GRCh37": "{path}/ClinPred_tabbed.tsv.gz"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "spliceai",
+        "order": 46,
+        "parsed_as": [
+          "spliceai"
+        ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Splicing",
+          "order": 300,
+          "label": "SpliceAI",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "SpliceAI",
+          "params": {
+            "snv": {
+              "by_assembly": {
+                "GRCh38": "{path}/spliceai_scores.masked.snv.ensembl_mane.grch38.110.vcf.gz",
+                "GRCh37": "{path}/spliceai_scores.masked.snv.hg19.vcf.gz"
+              }
+            },
+            "indel": {
+              "by_assembly": {
+                "GRCh38": "{path}/spliceai_scores.masked.indel.hg38.vcf.gz",
+                "GRCh37": "{path}/spliceai_scores.masked.indel.hg19.vcf.gz"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "utrannotator",
+        "order": 47,
+        "parsed_as": [
+          "utr_annotation"
+        ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Additional molecular consequence predictions",
+          "order": 400,
+          "label": "UTRAnnotator",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "UTRAnnotator",
+          "params": {
+            "file": {
+              "by_assembly": {
+                "GRCh38": "{path}/uORF_5UTR_GRCh38_PUBLIC.txt",
+                "GRCh37": "{path}/uORF_5UTR_GRCh37_PUBLIC.txt"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "nmd",
+        "order": 48,
+        "parsed_as": [
+          "nmd"
+        ],
+        "form": {
+          "panel": "genes_and_transcripts",
+          "category": "Additional molecular consequence predictions",
+          "order": 500,
+          "label": "NMD",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "NMD"
+        }
+      },
+      {
+        "id": "gnomad_exomes",
+        "order": 55,
+        "parsed_as": [
+          "gnomad_exomes_v2"
+        ],
+        "form": {
+          "panel": "allele_frequencies",
+          "category": "Short variants",
+          "order": 0,
+          "label": "gnomAD Exomes v2.1.1",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "custom",
+          "omit_if_no_fields": true,
+          "params": {
+            "file": "{path}/gnomad.exomes.r2.1.sites.chr###CHR###_AF.vcf.gz",
+            "short_name": "gnomAD_exomes",
+            "format": "vcf",
+            "type": "exact"
+          },
+          "fields": {
+            "builder": "gnomad_v2",
+            "base": "AF",
+            "subsets": [
+              {
+                "option": "gnomad_exomes_subset_full",
+                "prefix": "",
+                "label": "Full dataset",
+                "default": true
+              },
+              {
+                "option": "gnomad_exomes_subset_controls",
+                "prefix": "controls",
+                "label": "Controls"
+              },
+              {
+                "option": "gnomad_exomes_subset_non_neuro",
+                "prefix": "non_neuro",
+                "label": "Non-neuro"
+              },
+              {
+                "option": "gnomad_exomes_subset_non_topmed",
+                "prefix": "non_topmed",
+                "label": "Non-TOPMed"
+              },
+              {
+                "option": "gnomad_exomes_subset_non_cancer",
+                "prefix": "non_cancer",
+                "label": "Non-cancer"
+              }
+            ],
+            "ancestries": [
+              {
+                "option": "gnomad_exomes_all",
+                "code": "",
+                "label": "All",
+                "default": true
+              },
+              {
+                "option": "gnomad_exomes_popmax",
+                "code": "popmax",
+                "sex_split": false,
+                "label": "Maximum across populations"
+              },
+              {
+                "option": "gnomad_exomes_afr",
+                "code": "afr",
+                "label": "African & African-American"
+              },
+              {
+                "option": "gnomad_exomes_amr",
+                "code": "amr",
+                "label": "Admixed American"
+              },
+              {
+                "option": "gnomad_exomes_asj",
+                "code": "asj",
+                "label": "Ashkenazi Jewish"
+              },
+              {
+                "option": "gnomad_exomes_eas",
+                "code": "eas",
+                "subpops": [
+                  {
+                    "option": "gnomad_exomes_eas_kor",
+                    "code": "kor",
+                    "label": "Korean"
+                  },
+                  {
+                    "option": "gnomad_exomes_eas_jpn",
+                    "code": "jpn",
+                    "label": "Japanese"
+                  },
+                  {
+                    "option": "gnomad_exomes_eas_oea",
+                    "code": "oea",
+                    "label": "Other East Asian"
+                  }
+                ],
+                "label": "East Asian"
+              },
+              {
+                "option": "gnomad_exomes_fin",
+                "code": "fin",
+                "label": "Finnish"
+              },
+              {
+                "option": "gnomad_exomes_nfe",
+                "code": "nfe",
+                "subpops": [
+                  {
+                    "option": "gnomad_exomes_nfe_seu",
+                    "code": "seu",
+                    "label": "Southern European"
+                  },
+                  {
+                    "option": "gnomad_exomes_nfe_bgr",
+                    "code": "bgr",
+                    "label": "Bulgarian"
+                  },
+                  {
+                    "option": "gnomad_exomes_nfe_onf",
+                    "code": "onf",
+                    "label": "Other non-Finnish European"
+                  },
+                  {
+                    "option": "gnomad_exomes_nfe_swe",
+                    "code": "swe",
+                    "label": "Swedish"
+                  },
+                  {
+                    "option": "gnomad_exomes_nfe_nwe",
+                    "code": "nwe",
+                    "label": "North-Western European"
+                  },
+                  {
+                    "option": "gnomad_exomes_nfe_est",
+                    "code": "est",
+                    "label": "Estonian"
+                  }
+                ],
+                "label": "Non-Finnish European"
+              },
+              {
+                "option": "gnomad_exomes_oth",
+                "code": "oth",
+                "label": "Other / uncertain"
+              },
+              {
+                "option": "gnomad_exomes_sas",
+                "code": "sas",
+                "label": "South Asian"
+              }
+            ],
+            "sexes": [
+              {
+                "suffix": "both",
+                "code": "",
+                "label": "Combined",
+                "default": true
+              },
+              {
+                "suffix": "female",
+                "code": "female",
+                "label": "XX"
+              },
+              {
+                "suffix": "male",
+                "code": "male",
+                "label": "XY"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "gnomad_genomes",
+        "order": 56,
+        "parsed_as": [
+          "gnomad_genomes_v2"
+        ],
+        "form": {
+          "panel": "allele_frequencies",
+          "category": "Short variants",
+          "order": 100,
+          "label": "gnomAD Genomes v2.1",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "custom",
+          "omit_if_no_fields": true,
+          "params": {
+            "file": "{path}/gnomad.genomes.r2.1.sites.chr###CHR###_noVEP_AF.vcf.gz",
+            "short_name": "gnomAD_genomes",
+            "format": "vcf",
+            "type": "exact"
+          },
+          "fields": {
+            "builder": "gnomad_v2",
+            "base": "AF",
+            "subsets": [
+              {
+                "option": "gnomad_genomes_subset_full",
+                "prefix": "",
+                "label": "Full dataset",
+                "default": true
+              },
+              {
+                "option": "gnomad_genomes_subset_controls",
+                "prefix": "controls",
+                "label": "Controls"
+              },
+              {
+                "option": "gnomad_genomes_subset_non_neuro",
+                "prefix": "non_neuro",
+                "label": "Non-neuro"
+              },
+              {
+                "option": "gnomad_genomes_subset_non_topmed",
+                "prefix": "non_topmed",
+                "label": "Non-TOPMed"
+              }
+            ],
+            "ancestries": [
+              {
+                "option": "gnomad_genomes_all",
+                "code": "",
+                "label": "All",
+                "default": true
+              },
+              {
+                "option": "gnomad_genomes_popmax",
+                "code": "popmax",
+                "sex_split": false,
+                "label": "Maximum across populations"
+              },
+              {
+                "option": "gnomad_genomes_afr",
+                "code": "afr",
+                "label": "African & African-American"
+              },
+              {
+                "option": "gnomad_genomes_amr",
+                "code": "amr",
+                "label": "Admixed American"
+              },
+              {
+                "option": "gnomad_genomes_asj",
+                "code": "asj",
+                "label": "Ashkenazi Jewish"
+              },
+              {
+                "option": "gnomad_genomes_eas",
+                "code": "eas",
+                "label": "East Asian"
+              },
+              {
+                "option": "gnomad_genomes_fin",
+                "code": "fin",
+                "label": "Finnish"
+              },
+              {
+                "option": "gnomad_genomes_nfe",
+                "code": "nfe",
+                "subpops": [
+                  {
+                    "option": "gnomad_genomes_nfe_seu",
+                    "code": "seu",
+                    "label": "Southern European"
+                  },
+                  {
+                    "option": "gnomad_genomes_nfe_onf",
+                    "code": "onf",
+                    "label": "Other non-Finnish European"
+                  },
+                  {
+                    "option": "gnomad_genomes_nfe_nwe",
+                    "code": "nwe",
+                    "label": "North-Western European"
+                  },
+                  {
+                    "option": "gnomad_genomes_nfe_est",
+                    "code": "est",
+                    "label": "Estonian"
+                  }
+                ],
+                "label": "Non-Finnish European"
+              },
+              {
+                "option": "gnomad_genomes_oth",
+                "code": "oth",
+                "label": "Other / uncertain"
+              }
+            ],
+            "sexes": [
+              {
+                "suffix": "both",
+                "code": "",
+                "label": "Combined",
+                "default": true
+              },
+              {
+                "suffix": "female",
+                "code": "female",
+                "label": "XX"
+              },
+              {
+                "suffix": "male",
+                "code": "male",
+                "label": "XY"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "gnomad_sv",
+        "order": 57,
+        "parsed_as": [
+          "gnomad_sv_v2"
+        ],
+        "form": {
+          "panel": "allele_frequencies",
+          "category": "Structural variants",
+          "order": 200,
+          "label": "gnomAD SV v2.1",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "custom",
+          "params": {
+            "file": "{path}/gnomad_v2.1_sv.sites_AF.vcf.gz",
+            "type": "exact",
+            "short_name": "gnomAD_SV",
+            "format": "vcf",
+            "overlap_cutoff": {
+              "from_option": "gnomad_sv_overlap_cutoff",
+              "as": "value"
+            }
+          },
+          "fields": {
+            "builder": "gnomad_structural",
+            "join": "%",
+            "populations": [
+              {
+                "option": "gnomad_sv",
+                "codes": [
+                  "SVTYPE"
+                ],
+                "label": "gnomAD SV v2.1"
+              },
+              {
+                "option": "gnomad_sv_af",
+                "codes": [
+                  "AF"
+                ],
+                "label": "All",
+                "default": true,
+                "population": ""
+              },
+              {
+                "option": "gnomad_sv_af_afr",
+                "codes": [
+                  "AFR_AF"
+                ],
+                "label": "African",
+                "population": "AFR"
+              },
+              {
+                "option": "gnomad_sv_af_amr",
+                "codes": [
+                  "AMR_AF"
+                ],
+                "label": "Admixed American",
+                "population": "AMR"
+              },
+              {
+                "option": "gnomad_sv_af_eas",
+                "codes": [
+                  "EAS_AF"
+                ],
+                "label": "East Asian",
+                "population": "EAS"
+              },
+              {
+                "option": "gnomad_sv_af_eur",
+                "codes": [
+                  "EUR_AF"
+                ],
+                "label": "European",
+                "population": "EUR"
+              },
+              {
+                "option": "gnomad_sv_af_oth",
+                "codes": [
+                  "OTH_AF"
+                ],
+                "label": "Other",
+                "population": "OTH"
+              }
+            ]
+          },
+          "fields_after": "format"
+        }
+      },
+      {
+        "id": "clinvar_short",
+        "order": 60,
+        "parsed_as": [
+          "clinvar"
+        ],
+        "requires": [
+          "phenotypes"
+        ],
+        "config": {
+          "emit": "custom",
+          "params": {
+            "file": {
+              "by_assembly": {
+                "GRCh38": "{path}/clinvar.vcf.gz",
+                "GRCh37": "{path}/clinvar.vcf.gz"
+              }
+            },
+            "short_name": "ClinVar",
+            "format": "vcf",
+            "type": "exact"
+          },
+          "fields": {
+            "literal": [
+              "CLNDN",
+              "CLNDNINCL",
+              "CLNDISDB",
+              "CLNDISDBINCL",
+              "CLNREVSTAT",
+              "CLNSIG",
+              "CLNSIGCONF",
+              "CLNSIGINCL",
+              "ONCDN",
+              "ONCDNINCL",
+              "ONCDISDB",
+              "ONCDISDBINCL",
+              "ONC",
+              "ONCINCL",
+              "ONCREVSTAT",
+              "ONCSCV",
+              "ONCCONF",
+              "CLNSUBA",
+              "CLNPMID",
+              "CLNSUBN",
+              "CLNRCV",
+              "SCI",
+              "SCIREVSTAT",
+              "SCIDN",
+              "SCIDISDB",
+              "GENEINFO"
+            ]
+          }
+        }
+      },
+      {
+        "id": "clinvar_sv",
+        "order": 61,
+        "parsed_as": [
+          "clinvar_sv"
+        ],
+        "config": {
+          "emit": "custom",
+          "params": {
+            "file": "{path}/nstd102.GRCh37.variant_call.combined.sorted.vcf.gz",
+            "short_name": "ClinVar_SV",
+            "format": "vcf",
+            "type": "exact"
+          },
+          "fields": {
+            "literal": [
+              "CLNSIG",
+              "ORIGIN"
+            ]
+          }
+        }
+      },
+      {
+        "id": "protein",
+        "order": 13,
+        "parsed_as": [
+          "protein"
+        ],
+        "form": {
+          "panel": "protein_and_functional",
+          "category": "Protein",
+          "order": 0,
+          "label": "Protein ID",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "flag",
+          "keyword": "protein"
+        }
+      }
+    ]
+  },
+  "library": "annotation_library"
+}

@@ -1,0 +1,67 @@
+<svg viewBox="0 0 1080 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ts ds">
+  <title id="ts">API calls when a species is selected</title>
+  <desc id="ds">Selecting a species triggers chain A (form config via the tools API to the metadata API) and chain B (example_objects from the metadata API then the variation GraphQL), with dev-mode toggles noted.</desc>
+  <style>
+    text{font-family:system-ui,'Inter',sans-serif;}
+    .title{fill:#16202b;font-weight:700;font-size:16px;}
+    .head{fill:#eef2f6;stroke:#c4cdd8;rx:7;}
+    .headt{fill:#16202b;font-weight:600;font-size:12px;}
+    .heads{fill:#5a6776;font-size:9.5px;}
+    .life{stroke:#c4cdd8;stroke-width:1.4;stroke-dasharray:3 5;}
+    .msg{fill:#26313d;font-size:11px;}
+    .int{stroke:#5b6b7a;stroke-width:1.6;}
+    .ext{stroke:#e8800c;stroke-width:1.6;}
+    .ret{stroke-dasharray:5 4;}
+    .noteb{fill:#eef2f6;stroke:#c4cdd8;rx:5;}
+    .notet{fill:#46525f;font-size:10px;}
+    .band{fill:#eef2f6;stroke:#c4cdd8;stroke-dasharray:4 4;rx:7;opacity:0.7;}
+    .bandlbl{fill:#5a6776;font-weight:700;font-size:10.5px;}
+    .lgd{fill:#5a6776;font-size:10.5px;}
+  </style>
+  <defs>
+    <marker id="sI" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5b6b7a"/></marker>
+    <marker id="sE" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#e8800c"/></marker>
+  </defs>
+
+  <text class="title" x="22" y="28">API calls on species selection</text>
+
+  <rect class="head" x="55" y="46" width="150" height="42"/><text class="headt" x="130" y="64" text-anchor="middle">Browser</text><text class="heads" x="130" y="79" text-anchor="middle">beta-web-vep</text>
+  <rect class="head" x="345" y="46" width="170" height="42"/><text class="headt" x="430" y="64" text-anchor="middle">Tools API (local fork)</text><text class="heads" x="430" y="79" text-anchor="middle">/api/tools</text>
+  <rect class="head" x="640" y="46" width="160" height="42"/><text class="headt" x="720" y="64" text-anchor="middle">Metadata API</text><text class="heads" x="720" y="79" text-anchor="middle">Ensembl</text>
+  <rect class="head" x="895" y="46" width="160" height="42"/><text class="headt" x="975" y="64" text-anchor="middle">Variation GraphQL</text><text class="heads" x="975" y="79" text-anchor="middle">Ensembl</text>
+
+  <line class="life" x1="130" y1="88" x2="130" y2="500"/>
+  <line class="life" x1="430" y1="88" x2="430" y2="500"/>
+  <line class="life" x1="720" y1="88" x2="720" y2="500"/>
+  <line class="life" x1="975" y1="88" x2="975" y2="500"/>
+
+  <rect class="noteb" x="60" y="100" width="280" height="30"/><text class="notet" x="200" y="119" text-anchor="middle">setSelectedSpecies → resets params, expands Variants</text>
+
+  <!-- chain A band -->
+  <rect class="band" x="44" y="146" width="760" height="118"/>
+  <text class="bandlbl" x="56" y="162">CHAIN A · form config</text>
+  <g text-anchor="middle">
+    <line class="int" x1="130" y1="186" x2="425" y2="186" marker-end="url(#sI)"/><text class="msg" x="278" y="180">GET /vep/form_config/{genome}</text>
+    <line class="ext" x1="430" y1="216" x2="715" y2="216" marker-end="url(#sE)"/><text class="msg" x="573" y="210">GET …/genebuild/attributes</text>
+    <line class="ext ret" x1="720" y1="244" x2="435" y2="244" marker-end="url(#sE)"/><text class="msg" x="578" y="238">provider name + version</text>
+    <line class="int ret" x1="430" y1="260" x2="135" y2="260" marker-end="url(#sI)"/><text class="msg" x="280" y="254">transcript_set + symbol/biotype</text>
+  </g>
+
+  <!-- chain B band -->
+  <rect class="band" x="44" y="284" width="1011" height="122"/>
+  <text class="bandlbl" x="56" y="300">CHAIN B · example input</text>
+  <g text-anchor="middle">
+    <line class="ext" x1="130" y1="324" x2="715" y2="324" marker-end="url(#sE)"/><text class="msg" x="420" y="318">GET …/genome/{genome}/example_objects</text>
+    <line class="ext ret" x1="720" y1="352" x2="135" y2="352" marker-end="url(#sE)"/><text class="msg" x="425" y="346">[{ id, type }]</text>
+    <line class="ext" x1="130" y1="382" x2="970" y2="382" marker-end="url(#sE)"/><text class="msg" x="545" y="376">POST /graphql/variation { genomeId, variantId }</text>
+    <line class="ext ret" x1="975" y1="400" x2="135" y2="400" marker-end="url(#sE)"/><text class="msg" x="545" y="394">variant → vcfString (Example data)</text>
+  </g>
+
+  <!-- API behavior -->
+  <rect class="noteb" x="44" y="420" width="1011" height="44"/>
+  <text class="notet" x="56" y="438">Chain A calls the tools API for form configuration and the selected genome's attributes.</text>
+  <text class="notet" x="56" y="453">Chain B requests example objects and variation details through the Ensembl APIs.</text>
+
+  <line class="int" x1="56" y1="490" x2="88" y2="490" marker-end="url(#sI)"/><text class="lgd" x="94" y="494">tools API (/api/tools)</text>
+  <line class="ext" x1="280" y1="490" x2="312" y2="490" marker-end="url(#sE)"/><text class="lgd" x="318" y="494">Ensembl metadata / variation API · return (dashed)</text>
+</svg>

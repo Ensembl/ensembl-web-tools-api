@@ -5,6 +5,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from vep.models.display_panels_model import DisplayPanel
+from vep.models.filter_spec_model import FilterField
+from vep.models.display_spec_model import DisplayPayload
+
 class VcfMetadata(BaseModel):
     variant_count: int = Field(
         description="Total number of variant records in the VCF file"
@@ -17,6 +21,19 @@ class PaginationMetadata(BaseModel):
     page: int
     per_page: int
     total: int
+
+
+class Annotation(BaseModel):
+    """A generic, spec-driven plugin annotation: the payload produced by
+    `spec_interpreter.apply_plugin_spec` for one plugin, tagged with its plugin
+    id and scope. This is the only source of annotation data on the wire — the
+    envelope (variant/allele/consequence) stays typed; the annotations
+    themselves are generic (`data`). A plugin absent from the list means "did
+    not run / no data"."""
+
+    plugin: str  # spec plugin id, e.g. "mavedb", "gnomad_exomes"
+    scope: str  # "allele" | "transcript"
+    data: dict[str, Any]
 
 
 class PredictedIntergenicConsequence(BaseModel):
@@ -39,6 +56,30 @@ class Strand(Enum):
     reverse = "reverse"
 
 
+# --- Protein & functional annotations (consequence level) -------------------
+
+
+class UniprotIds(BaseModel):
+    """Uniprot cross-references for the protein product (from VEP --uniprot)."""
+    swissprot: str | None = None
+    trembl: str | None = None
+    uniparc: str | None = None
+    isoform: str | None = None
+
+
+class ProteinMatch(BaseModel):
+    """A protein structure/domain match (from the VEP DOMAINS field), e.g.
+    AlphaFold-DB or PDB mappings."""
+    source: str = Field(..., description="e.g. 'AFDB-ENSP_mappings'")
+    id: str = Field(..., description="e.g. 'AF-Q9UGM6-F1'")
+
+
+class PredictionWithScore(BaseModel):
+    """A categorical prediction plus its score, e.g. SIFT 'tolerated(0.15)'."""
+    prediction: str | None = None
+    score: float | None = None
+
+
 class PredictedTranscriptConsequence(BaseModel):
     feature_type: FeatureType
     stable_id: str = Field(..., description="transcript stable id, versioned")
@@ -48,6 +89,35 @@ class PredictedTranscriptConsequence(BaseModel):
     is_canonical: bool
     consequences: list[str]
     strand: Strand
+    # MANE (human GRCh38 only): is_mane_select flags the MANE Select transcript;
+    # mane_select_refseq_id is its matched RefSeq id (e.g. NM_001242672.3).
+    is_mane_select: bool = False
+    is_mane_plus_clinical: bool = False
+    mane_select_refseq_id: str | None = None
+    # GENCODE primary (human GRCh38 only): flags the GENCODE primary transcript,
+    # from the GENCODE_PRIMARY column produced by `flag_gencode_primary`.
+    is_gencode_primary: bool = False
+    # Protein & functional annotations (optional; populated when the relevant
+    # VEP options/plugins were enabled for the run).
+    #
+    # TODO: uniprot / protein_matches / sift / polyphen are the unspecced tail
+    # of the go-flat cutover — deliberately left typed for now, still to be
+    # converted to plugin specs. No sample data carries their columns, so no
+    # spec could be validated for them. (ensembl_protein_id was the last of this
+    # tail to convert — it is now the `protein` parse plugin.) Everything else
+    # moved to `annotations`.
+    uniprot: UniprotIds | None = None
+    protein_matches: list[ProteinMatch] = []
+    sift: PredictionWithScore | None = None
+    polyphen: PredictionWithScore | None = None
+    # Generic spec-driven annotations for this transcript consequence (scope
+    # "transcript"). The only source of annotation data beside the tail above.
+    # Built here and read by the results code and its tests, but never sent:
+    # the same payload repeats across every transcript it applies to (ClinVar
+    # was 421 copies of 14 distinct values on a 50-variant page), so what goes
+    # on the wire is `annotation_refs` into the variant's pool.
+    annotations: list[Annotation] = Field(default_factory=list, exclude=True)
+    annotation_refs: list[int] = []
 
 
 class ReferenceVariantAllele(BaseModel):
@@ -60,14 +130,90 @@ class Location(BaseModel):
     end: int
 
 
+class FilterStat(BaseModel):
+    """How many records a single active filter removed (among those that reached
+    it in the pipeline). Captured so the filter ordering can be tuned later."""
+
+    field: str
+    removed: int
+
+
+class FilterMetadata(BaseModel):
+    """Summary of server-side filtering, present only when filters were applied."""
+
+    unfiltered_total: int = Field(
+        description="Total records before any filtering"
+    )
+    filtered_total: int = Field(
+        description="Records remaining after all filters (the paginated total)"
+    )
+    stats: list[FilterStat] = Field(
+        description="Per-filter removed counts, in the order the pipeline ran"
+    )
+
+
+class AfSource(BaseModel):
+    """An allele-frequency column available to filter on (i.e. an AF option that
+    was selected at input). `population` is empty for the source's overall AF."""
+
+    key: str = Field(description="CSQ column name, e.g. gnomAD_exomes_AF_nfe")
+    source: str = Field(
+        description="gnomad_exomes | gnomad_genomes | all_of_us"
+    )
+    population: str = Field(description="Population code, or '' for overall")
+    label: str = Field(
+        description="Human label for this population (from the form), e.g. "
+        "'Non-Finnish European · Female'; 'All' for the overall AF"
+    )
+
+
 class Metadata(BaseModel):
     pagination: PaginationMetadata
+    filters: FilterMetadata | None = None
+    # AF columns present in this result set (the AF options chosen at input),
+    # so the frontend can populate the allele-frequency filter.
+    available_af_sources: list[AfSource] = []
+    # Which variant impact scores this job carries ("cadd_phred", "revel",
+    # "spliceai_any", …; see results_filters.SCORE_SPECS), so the frontend offers
+    # those filters only where there is something to filter on. Same rule as the
+    # AF sources above: present in the output *and* selected at input, since a
+    # full cache can carry columns the submission never asked for.
+    available_scores: list[str] = []
+    # The fields the query builder offers, and how each is presented, from the
+    # job's pinned spec — gated to what this output can actually be filtered by,
+    # as the AF sources and scores above are.
+    filter_fields: list[FilterField] | None = None
+    # The option panels this job was submitted against, pinned at submission.
+    display_panels: list[DisplayPanel]
+    # How each option's parsed annotation is laid out, from the `display`
+    # section of the job's pinned spec, plus the plugin->scope map derived from
+    # its `parsing` half.
+    display: DisplayPayload
 
 
 class AlternativeVariantAllele(BaseModel):
     allele_sequence: str
     allele_type: str
-    representative_population_allele_frequency: float | None = None
+    # A secondary line for a structural allele shown beneath `allele_sequence`
+    # (which is the symbolic form, `<DEL>` / `<BND>`): the span in bases for
+    # sized SVs (e.g. "765 bp", from abs(SVLEN) or END - POS), or a breakend's two
+    # loci ("2:321681 ↔ 17:198982"). None for simple variants. Lets the table show
+    # `<DEL>` with its size instead of treating the symbolic allele as a sequence.
+    structural_variant_detail: str | None = None
+    # TODO: colocated_variants is part of the unspecced tail of the go-flat
+    # cutover — deliberately left typed for now, still to be converted to a
+    # plugin spec (no sample data carries its column, so no spec could be
+    # validated for it).
+    colocated_variants: list[str] = []  # Existing_variation
+    # Generic spec-driven annotations for this allele (scope "allele"). Same
+    # across all of this allele's transcripts, and the only annotations
+    # available for intergenic variants (which have no transcript rows).
+    # Built here and read by the results code and its tests, but never sent:
+    # the same payload repeats across every transcript it applies to (ClinVar
+    # was 421 copies of 14 distinct values on a 50-variant page), so what goes
+    # on the wire is `annotation_refs` into the variant's pool.
+    annotations: list[Annotation] = Field(default_factory=list, exclude=True)
+    annotation_refs: list[int] = []
     predicted_molecular_consequences: list[
         PredictedTranscriptConsequence | PredictedIntergenicConsequence
     ]
@@ -82,6 +228,12 @@ class Variant(BaseModel):
     location: Location
     reference_allele: ReferenceVariantAllele
     alternative_alleles: list[AlternativeVariantAllele]
+    # Every distinct annotation payload on this variant, once. The alleles and
+    # consequences below point into it by index (`annotation_refs`) rather than
+    # each carrying its own copy. Pooled per variant rather than per response:
+    # measured, a response-wide pool saved a further 0.04 MB of 1.15 MB, which
+    # is not worth making a variant depend on its neighbours.
+    annotation_pool: list[Annotation] = []
 
 
 class VepResultsResponse(BaseModel):

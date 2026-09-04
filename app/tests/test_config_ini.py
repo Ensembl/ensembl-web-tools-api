@@ -1,0 +1,1096 @@
+"""Golden-file tests for VEP config.ini construction
+(ConfigIniParams.create_config_ini_file).
+
+create_config_ini_file is now a thin runtime: the always-on base
+(base_config_lines) plus the option-driven lines the config interpreter emits
+from the config spec. These tests assert the *literal* lines that come out, so
+they are the independent oracle that the base+interpreter path reproduces the
+config.ini the hardcoded builder used to emit (the role the now-retired
+differential test test_config_interpreter.py played against that builder).
+
+These tests monkeypatch the metadata lookup so no network call is made, build
+the ini into a tmp dir, read it back, and assert on the emitted lines.
+"""
+
+import re
+
+import pytest
+
+from app.vep.models.pipeline_model import ConfigIniParams, plugin_data_path
+from app.vep.utils.spec_loader import load_merged_spec
+
+GFF = "/vep_support/test.gff3.gz"
+FASTA = "/vep_support/test.fa"
+GRCH38_PLUGIN_PATH = plugin_data_path("GRCh38.p14")("base")
+
+# The config half of the bundled merged spec drives the interpreter. Human
+# GRCh38 for both assemblies under test — the spec's by_assembly params pick the
+# GRCh37 files when the submission's assembly resolves to GRCh37 (mirroring the
+# single map set the old builder keyed by assembly).
+CONFIG_SPEC = load_merged_spec("human_grch38").config
+CONFIG_SPEC_37 = load_merged_spec("human_grch37").config
+
+
+def build_lines(monkeypatch, tmp_path, *, assembly="GRCh38.p14", **kwargs):
+    """Build a config.ini for the given assembly/options and return its lines."""
+    monkeypatch.setattr(
+        "app.vep.models.pipeline_model.get_vep_support_location",
+        lambda genome_id: {"gff_location": GFF, "faa_location": FASTA},
+    )
+    params = ConfigIniParams(
+        genome_id="genome-under-test", assembly_name=assembly, options=kwargs
+    )
+    params.create_config_ini_file(str(tmp_path), CONFIG_SPEC)
+    return (tmp_path / "config.ini").read_text().splitlines()
+
+
+def build_lines_37(monkeypatch, tmp_path, **kwargs):
+    """Build a config.ini against the GRCh37 spec (its own config entries)."""
+    monkeypatch.setattr(
+        "app.vep.models.pipeline_model.get_vep_support_location",
+        lambda genome_id: {"gff_location": GFF, "faa_location": FASTA},
+    )
+    params = ConfigIniParams(
+        genome_id="genome-under-test", assembly_name="GRCh37.p13", options=kwargs
+    )
+    params.create_config_ini_file(str(tmp_path), CONFIG_SPEC_37)
+    return (tmp_path / "config.ini").read_text().splitlines()
+
+
+def find_line(lines, needle):
+    """The first line containing `needle`, or None."""
+    return next((line for line in lines if needle in line), None)
+
+
+def plugin_lines(lines):
+    return [line for line in lines if line.startswith("plugin ")]
+
+
+# --- 1. always-on defaults ---------------------------------------------------
+
+
+def test_always_on_defaults(monkeypatch, tmp_path):
+    lines = build_lines(monkeypatch, tmp_path)
+    for expected in [
+        "force_overwrite 1",
+        "numbers 1",
+        "symbol 1",
+        "biotype 1",
+        "gene_version 1",
+        "transcript_version 1",
+        "canonical 1",
+        "database 0",
+        f"gff {GFF}",
+        f"fasta {FASTA}",
+    ]:
+        assert expected in lines
+
+
+def test_no_fork_line(monkeypatch, tmp_path):
+    """Forking is left to the pipeline's own VEP invocation, not the ini."""
+    assert find_line(build_lines(monkeypatch, tmp_path), "fork") is None
+
+
+@pytest.mark.parametrize(
+    "assembly", ["GRCh38.p14", "GRCh37.p13", "GRCm39", "ARS-UCD1.2"]
+)
+def test_gene_version_always_on_for_every_species(monkeypatch, tmp_path, assembly):
+    assert "gene_version 1" in build_lines(monkeypatch, tmp_path, assembly=assembly)
+
+
+@pytest.mark.parametrize(
+    "assembly,expected",
+    [
+        ("GRCh38.p14", True),  # human GRCh38 only
+        ("GRCh37.p13", False),
+        ("GRCm39", False),
+        ("ARS-UCD1.2", False),
+    ],
+)
+def test_flag_gencode_primary_is_grch38_only(
+    monkeypatch, tmp_path, assembly, expected
+):
+    lines = build_lines(monkeypatch, tmp_path, assembly=assembly)
+    assert ("flag_gencode_primary 1" in lines) is expected
+
+
+# --- 2. flag options ---------------------------------------------------------
+
+
+def test_flag_options_render_as_one_or_zero(monkeypatch, tmp_path):
+    lines = build_lines(
+        monkeypatch, tmp_path, hgvs=True, hgvsg=False, spdi=True, protein=False
+    )
+    assert "hgvs 1" in lines
+    assert "hgvsg 0" in lines
+    assert "spdi 1" in lines
+    assert "protein 0" in lines
+
+
+# --- up/downstream distance (a bare `setting` keyword) -----------------------
+
+
+def test_updownstream_distance_off_emits_no_line(monkeypatch, tmp_path):
+    assert find_line(build_lines(monkeypatch, tmp_path), "distance ") is None
+
+
+def test_updownstream_distance_emits_the_field_value(monkeypatch, tmp_path):
+    lines = build_lines(
+        monkeypatch,
+        tmp_path,
+        updownstream_distance=True,
+        updownstream_distance_bp=20000,
+    )
+    assert "distance 20000" in lines
+
+
+def test_updownstream_distance_defaults_to_5000(monkeypatch, tmp_path):
+    lines = build_lines(monkeypatch, tmp_path, updownstream_distance=True)
+    assert "distance 5000" in lines
+
+
+# --- 3. mane gating ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "assembly,expected",
+    [
+        ("GRCh38.p14", True),  # human reference
+        ("GRCm39", True),  # mouse reference
+        ("GRCh37.p13", False),  # human GRCh37 has no MANE
+        ("T2T-CHM13v2.0", False),  # human T2T
+        ("ARS-UCD1.2", False),  # non-human (cow)
+    ],
+)
+def test_mane_gating(monkeypatch, tmp_path, assembly, expected):
+    lines = build_lines(monkeypatch, tmp_path, assembly=assembly)
+    assert ("mane 1" in lines) is expected
+
+
+# --- 4. assembly line --------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "assembly,expected",
+    [
+        ("GRCh38.p14", "assembly GRCh38"),
+        ("GRCh37.p13", "assembly GRCh37"),
+        ("T2T-CHM13v2.0", None),
+        ("GRCm39", None),
+    ],
+)
+def test_assembly_line(monkeypatch, tmp_path, assembly, expected):
+    lines = build_lines(monkeypatch, tmp_path, assembly=assembly)
+    assembly_lines = [line for line in lines if line.startswith("assembly ")]
+    if expected is None:
+        assert assembly_lines == []
+    else:
+        assert assembly_lines == [expected]
+
+
+# --- 5. per-assembly plugin files --------------------------------------------
+
+# option -> (substring only in the GRCh38 file, substring only in the GRCh37 file)
+ASSEMBLY_PLUGIN_MARKERS = {
+    "alphamissense": ("AlphaMissense_hg38", "AlphaMissense_hg19"),
+    "cadd": ("CADD_GRCh38", "CADD_GRCh37"),
+    "revel": ("revel_grch38", "revel_grch37"),
+    "loeuf": ("loeuf_dataset_grch38", "loeuf_dataset_grch37"),
+    "geno2mp": ("Geno2MP.variants_GRCh38", "Geno2MP.variants_GRCh37"),
+    "utrannotator": ("GRCh38_PUBLIC", "GRCh37_PUBLIC"),
+}
+
+
+@pytest.mark.parametrize("option,markers", ASSEMBLY_PLUGIN_MARKERS.items())
+def test_per_assembly_plugin_files(monkeypatch, tmp_path, option, markers):
+    grch38_marker, grch37_marker = markers
+
+    lines38 = build_lines(
+        monkeypatch, tmp_path, assembly="GRCh38.p14", **{option: True}
+    )
+    assert find_line(lines38, grch38_marker) is not None
+    assert find_line(lines38, grch37_marker) is None
+
+    lines37 = build_lines(
+        monkeypatch, tmp_path, assembly="GRCh37.p13", **{option: True}
+    )
+    assert find_line(lines37, grch37_marker) is not None
+    assert find_line(lines37, grch38_marker) is None
+
+
+@pytest.mark.parametrize(
+    "assembly,entry_id,suffix",
+    [
+        ("GRCh38.p14", "revel", "grch38"),
+        ("GRCh37.p13", "phenotypes", "grch37/Phenotypes_data_files"),
+        ("ARS-UCD1.2", "go", "other_species/GO_data_files"),
+        ("GRCh38.p14", "gnomad_exomes", "grch38/gnomAD_exomes"),
+    ],
+)
+def test_plugin_data_path_selects_assembly_and_dataset_directories(
+    assembly, entry_id, suffix
+):
+    assert plugin_data_path(assembly)(entry_id).endswith(
+        f"vep-plugins-data/{suffix}"
+    )
+
+
+def test_plugin_lines_use_configured_plugin_data_root(monkeypatch, tmp_path):
+    lines = build_lines(monkeypatch, tmp_path, revel=True, go=True)
+    assert find_line(lines, "vep-plugins-data/grch38/new_tabbed_revel_grch38")
+    assert find_line(lines, "vep-plugins-data/grch38/GO_data_files/GO.pm_")
+
+
+def test_spliceai_selects_the_assembly_specific_snv_file(monkeypatch, tmp_path):
+    line38 = find_line(
+        build_lines(monkeypatch, tmp_path, assembly="GRCh38.p14", spliceai=True),
+        "plugin SpliceAI",
+    )
+    line37 = find_line(
+        build_lines(monkeypatch, tmp_path, assembly="GRCh37.p13", spliceai=True),
+        "plugin SpliceAI",
+    )
+    assert "snv=" in line38
+    assert "spliceai_scores.masked.snv.ensembl_mane.grch38.110.vcf.gz" in line38
+    assert "spliceai_scores.masked.snv.hg19.vcf.gz" in line37
+    assert "snv_ensembl=" not in line38
+    assert "snv_ensembl=" not in line37
+
+
+# --- 6. static (assembly-independent) plugins --------------------------------
+
+
+@pytest.mark.parametrize(
+    "option,prefix",
+    [
+        ("mavedb", "plugin MaveDB,"),
+        ("opentargets", "plugin OpenTargets,"),
+        ("eve", "plugin EVE,"),
+        ("phenotypes", "plugin Phenotypes,"),
+        ("riboseqorfs", "plugin RiboseqORFs,"),
+    ],
+)
+def test_static_plugins_emit_expected_line(monkeypatch, tmp_path, option, prefix):
+    lines = build_lines(monkeypatch, tmp_path, **{option: True})
+    assert any(line.startswith(prefix) for line in lines)
+
+
+def test_phenotypes_requests_its_columns(monkeypatch, tmp_path):
+    # The Phenotypes plugin only reports the fields named in `cols`, written
+    # straight after the data file. Same set on both assemblies.
+    for build, assembly, genome_build in (
+        (build_lines, "GRCh38", "GRCh38"),
+        (build_lines_37, "GRCh37", "GRCh37"),
+    ):
+        line = find_line(build(monkeypatch, tmp_path, phenotypes=True), "plugin Phenotypes,")
+        assert line is not None, assembly
+        assert line.endswith(
+            f"/Phenotypes.pm_homo_sapiens_116_{genome_build}.gvf.gz,"
+            # No `clinvar_clin_sig`: ClinVar's clinical significance comes
+            # from its own custom now, under the same Phenotypes option.
+            #
+            # `external_id` sits between `id` and `risk_allele` — the plugin's
+            # own column order, not ours, so it cannot be appended at the end.
+            # It is the accession that addresses the record at its source
+            # (the OMIM or Orphanet entry), where `id` is the gene or variant
+            # the association hangs off, and it is what the phenotype links
+            # are built from.
+            "cols=type&source&phenotype&id&external_id&risk_allele,"
+            # The sources this option does not surface. COSMIC and HGMD-PUBLIC
+            # are withheld deliberately — both carry licensing conditions — and
+            # ClinVar because its associations arrive through its own custom
+            # annotation, in far more detail than this plugin's one line. The
+            # parse pattern excludes ClinVar as well, so a job submitted before
+            # this was requested still shows it only once.
+            "exclude_sources=HGMD-PUBLIC&COSMIC&ClinVar"
+        ), line
+
+
+# --- 7. sub-flag plugins (ProtVar / mutfunc / DosageSensitivity) -------------
+
+
+def test_protvar_sub_flags(monkeypatch, tmp_path):
+    # defaults: all three sub-options on
+    default_line = find_line(
+        build_lines(monkeypatch, tmp_path, protvar=True), "plugin ProtVar"
+    )
+    assert "stability=1,pocket=1,int=1" in default_line
+
+    # a partial selection is reflected one-to-one
+    partial_line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            protvar=True,
+            protvar_stability=False,
+            protvar_pocket=True,
+            protvar_int=False,
+        ),
+        "plugin ProtVar",
+    )
+    assert "stability=0,pocket=1,int=0" in partial_line
+
+
+def test_protvar_forces_hgvsg_computed(monkeypatch, tmp_path):
+    # ProtVar builds its link from HGVSg, so selecting it forces `hgvsg 1` even
+    # when the HGVSg option itself is off. The HGVSg row still stays hidden: the
+    # results view gates display on the user's own selection, not on the flag.
+    lines = build_lines(monkeypatch, tmp_path, protvar=True, hgvsg=False)
+    assert "hgvsg 1" in lines
+
+    # Without ProtVar, an unselected HGVSg stays off.
+    off_lines = build_lines(monkeypatch, tmp_path, protvar=False, hgvsg=False)
+    assert "hgvsg 0" in off_lines
+
+
+def test_mutfunc_names_only_the_sub_flags_that_are_on(monkeypatch, tmp_path):
+    """mutfunc does everything when told nothing, so the config names the subset
+    that is wanted rather than every flag with a 0/1."""
+    line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            mutfunc=True,
+            mutfunc_motif=True,
+            mutfunc_int=False,
+            mutfunc_mod=True,
+            mutfunc_exp=False,
+        ),
+        "plugin mutfunc",
+    )
+    assert "motif=1" in line and "mod=1" in line
+    assert "int=" not in line and "exp=" not in line  # unwanted ones are absent
+    # `extended` is deliberately off: its output packs several `&`-joined fields
+    # into one column, which the parse reads as a single float and drops.
+    assert "extended" not in line
+
+
+def test_mutfunc_with_every_sub_flag_on_names_none_of_them(monkeypatch, tmp_path):
+    """An empty flag list is how the plugin is asked for everything, so the
+    all-on case must not spell the flags out."""
+    line = find_line(build_lines(monkeypatch, tmp_path, mutfunc=True), "plugin mutfunc")
+    assert line is not None
+    for keyword in ("motif=", "int=", "mod=", "exp="):
+        assert keyword not in line, line
+    assert "db=" in line and "extended" not in line
+
+
+def test_mutfunc_defaults_to_every_sub_flag_on(monkeypatch, tmp_path):
+    """Enabling the option alone means all four, not none — the counterpart of
+    the line above being flagless."""
+    from app.vep.models.pipeline_model import ConfigIniParams
+
+    params = ConfigIniParams(
+        genome_id="g", assembly_name="GRCh38", options={"mutfunc": True}
+    )
+    assert [
+        params.options[flag]
+        for flag in ("mutfunc_motif", "mutfunc_int", "mutfunc_mod", "mutfunc_exp")
+    ] == [True, True, True, True]
+
+
+def test_mutfunc_with_no_sub_flag_emits_nothing(monkeypatch, tmp_path):
+    """The state that cannot be expressed: a flagless line already means all, so
+    'none' must not emit one. The form switches the master off instead; this is
+    the backstop for a submission that arrives in that state anyway."""
+    line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            mutfunc=True,
+            mutfunc_motif=False,
+            mutfunc_int=False,
+            mutfunc_mod=False,
+            mutfunc_exp=False,
+        ),
+        "plugin mutfunc",
+    )
+    assert line is None
+
+
+@pytest.mark.parametrize("cover,expected", [(False, "cover=0"), (True, "cover=1")])
+def test_dosage_sensitivity_cover(monkeypatch, tmp_path, cover, expected):
+    line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            dosage_sensitivity=True,
+            dosage_sensitivity_cover=cover,
+        ),
+        "plugin DosageSensitivity",
+    )
+    assert expected in line
+
+
+# --- 8. IntAct tri-state -----------------------------------------------------
+
+
+def test_intact_no_sub_options_is_base_line(monkeypatch, tmp_path):
+    line = find_line(
+        build_lines(monkeypatch, tmp_path, intact=True), "plugin IntAct"
+    )
+    assert f"mutation_file={GRCH38_PLUGIN_PATH}/mutations.tsv" in line
+    assert "mapping_file=" in line
+    assert "all=1" not in line
+    assert "=1" not in line.split("mapping_file=")[1]  # no sub-flags appended
+
+
+def test_intact_all_sub_options_lists_them_rather_than_all(monkeypatch, tmp_path):
+    """Selecting everything used to collapse to `all=1`, which also switched on
+    feature_annotation — sparse, and awkward to parse. Every selection is now
+    named explicitly, so the emitted columns are exactly the ones chosen."""
+    line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            intact=True,
+            intact_feature_ac=True,
+            intact_feature_short_label=True,
+            intact_ap_ac=True,
+            intact_interaction_participants=True,
+            intact_pmid=True,
+        ),
+        "plugin IntAct",
+    )
+    assert line.endswith(
+        ",feature_ac=1,feature_short_label=1,ap_ac=1,"
+        "interaction_participants=1,pmid=1"
+    )
+    assert "all=1" not in line
+    assert "feature_annotation" not in line
+
+
+def test_intact_partial_sub_options_lists_selected_in_order(monkeypatch, tmp_path):
+    line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            intact=True,
+            intact_feature_ac=True,
+            intact_pmid=True,
+        ),
+        "plugin IntAct",
+    )
+    assert line.endswith(",feature_ac=1,pmid=1")  # fixed order, only the selected
+    assert "all=1" not in line
+
+
+# --- 9. gff3-based Genes & transcripts plugins -------------------------------
+
+
+def test_tss_distance_reports_both_directions(monkeypatch, tmp_path):
+    """`both_direction=1` makes the plugin report downstream variants too, as a
+    negative distance — without it only upstream ones are measured."""
+    assert find_line(build_lines(monkeypatch, tmp_path), "plugin TSSDistance") is None
+    line = find_line(
+        build_lines(monkeypatch, tmp_path, tss_distance=True), "plugin TSSDistance"
+    )
+    assert line == "plugin TSSDistance,both_direction=1"
+
+
+def test_nearest_gene_base_line(monkeypatch, tmp_path):
+    # Default (single, upstream): gff3 + regulatory=0 + vep_filter=1, no
+    # both_directions clause.
+    line = find_line(
+        build_lines(monkeypatch, tmp_path, nearest_gene=True), "plugin NearestGene"
+    )
+    assert line == f"plugin NearestGene,gff3={GFF},regulatory=0,vep_filter=1"
+
+
+def test_nearest_gene_both_directions_appended_only_when_selected(monkeypatch, tmp_path):
+    line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            nearest_gene=True,
+            nearest_gene_both_directions=True,
+        ),
+        "plugin NearestGene",
+    )
+    assert line == (
+        f"plugin NearestGene,gff3={GFF},regulatory=0,vep_filter=1,both_directions=1"
+    )
+
+
+def test_nearest_exon_jb_base_line(monkeypatch, tmp_path):
+    # Default: gff3 + vep_filter=1 + max_range (default 10000), no intronic clause.
+    line = find_line(
+        build_lines(monkeypatch, tmp_path, nearest_exon_jb=True), "plugin NearestExonJB"
+    )
+    assert line == f"plugin NearestExonJB,gff3={GFF},vep_filter=1,max_range=10000"
+
+
+def test_nearest_exon_jb_range_and_intronic(monkeypatch, tmp_path):
+    # A custom max_range plus the intronic flag (appended only when selected).
+    line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            nearest_exon_jb=True,
+            nearest_exon_jb_max_range=25000,
+            nearest_exon_jb_intronic=True,
+        ),
+        "plugin NearestExonJB",
+    )
+    assert line == (
+        f"plugin NearestExonJB,gff3={GFF},vep_filter=1,max_range=25000,intronic=1"
+    )
+
+
+# --- 10. disabled options omitted -------------------------------------------
+
+
+def test_disabled_options_emit_no_plugin_lines(monkeypatch, tmp_path):
+    # everything left at its default (off) => no `plugin ...` lines at all
+    assert plugin_lines(build_lines(monkeypatch, tmp_path)) == []
+
+
+# --- 11. gnomAD exomes custom line (ancestry x sex field grammar) ------------
+
+
+def gnomad_exomes_line(lines):
+    return find_line(lines, "short_name=gnomAD_exomes")
+
+
+def gnomad_exomes_fields(lines):
+    line = gnomad_exomes_line(lines)
+    if line is None:
+        return None
+    return re.search(r"fields=([^,]+)", line).group(1)
+
+
+def test_gnomad_exomes_off_emits_no_line(monkeypatch, tmp_path):
+    assert gnomad_exomes_line(build_lines(monkeypatch, tmp_path)) is None
+
+
+def test_gnomad_exomes_default_is_all_both_ukb_included(monkeypatch, tmp_path):
+    # enabling with defaults (All + Both + include UKB) => fields=AF
+    line = gnomad_exomes_line(build_lines(monkeypatch, tmp_path, gnomad_exomes=True))
+    assert line is not None
+    assert (
+        f"file={plugin_data_path('GRCh38.p14')('gnomad_exomes')}"
+        "/gnomad.exomes.v4.1.1.sites.minimal.chr###CHR###.vcf.bgz" in line
+    )
+    assert "short_name=gnomAD_exomes" in line
+    assert line.endswith("format=vcf,type=exact")
+    assert "fields=AF," in line
+
+
+def test_gnomad_exomes_all_female_and_male(monkeypatch, tmp_path):
+    # spec example 1: All, Female and Male -> AF_XX%AF_XY
+    fields = gnomad_exomes_fields(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            gnomad_exomes=True,
+            gnomad_exomes_all_both=False,
+            gnomad_exomes_all_female=True,
+            gnomad_exomes_all_male=True,
+        )
+    )
+    assert fields == "AF_XX%AF_XY"
+
+
+def test_gnomad_exomes_non_ukb_male(monkeypatch, tmp_path):
+    # spec example 2: All, male, excluding UK Biobank -> AF_non_ukb_XY
+    fields = gnomad_exomes_fields(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            gnomad_exomes=True,
+            gnomad_exomes_include_ukb=False,
+            gnomad_exomes_all_both=False,
+            gnomad_exomes_all_male=True,
+        )
+    )
+    assert fields == "AF_non_ukb_XY"
+
+
+def test_gnomad_exomes_multiple_ancestries_ordered(monkeypatch, tmp_path):
+    # afr (both) + nfe (female); ancestry order preserved, sex suffix applied
+    fields = gnomad_exomes_fields(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            gnomad_exomes=True,
+            gnomad_exomes_all=False,
+            gnomad_exomes_afr=True,
+            gnomad_exomes_nfe=True,
+            gnomad_exomes_nfe_both=False,
+            gnomad_exomes_nfe_female=True,
+        )
+    )
+    assert fields == "AF_afr%AF_nfe_XX"
+
+
+def test_gnomad_exomes_enabled_but_nothing_selected_emits_no_line(
+    monkeypatch, tmp_path
+):
+    # on, but "All" (the only default-on ancestry) has no sex selected => no line
+    line = gnomad_exomes_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            gnomad_exomes=True,
+            gnomad_exomes_all_both=False,
+        )
+    )
+    assert line is None
+
+
+# --- 11b. gnomAD v2 field builder (GRCh37 exomes/genomes) --------------------
+# Imported via `vep.` (not `app.vep.`) so the models are the same class objects
+# the interpreter's isinstance checks use under PYTHONPATH=app.
+
+
+def test_gnomad_v2_build_fields_grammar():
+    """`[subset_]AF[_anc[_subpop]][_sex]` over each selected subset x ancestry x
+    (sex or sub-pop); popmax is a plain toggle; sex codes are male/female (not
+    v4's XX/XY). The subset prefixes the whole code."""
+    from vep.utils.config_interpreter import build_fields
+    from vep.models.config_spec_model import (
+        GnomadV2Fields,
+        GnomadV2Subset,
+        GnomadV2Ancestry,
+        GnomadV2Subpop,
+        SexCode,
+    )
+
+    fields = GnomadV2Fields(
+        builder="gnomad_v2",
+        subsets=[
+            GnomadV2Subset(option="s_full", prefix=""),
+            GnomadV2Subset(option="s_controls", prefix="controls"),
+        ],
+        ancestries=[
+            GnomadV2Ancestry(option="a_all", code=""),
+            GnomadV2Ancestry(option="a_popmax", code="popmax", sex_split=False),
+            GnomadV2Ancestry(
+                option="a_nfe",
+                code="nfe",
+                subpops=[GnomadV2Subpop(option="a_nfe_seu", code="seu")],
+            ),
+        ],
+        sexes=[
+            SexCode(suffix="both", code=""),
+            SexCode(suffix="female", code="female"),
+            SexCode(suffix="male", code="male"),
+        ],
+    )
+    options = {
+        "s_full": True, "s_controls": True,
+        "a_all": True, "a_all_both": True, "a_all_male": True,  # not female
+        "a_popmax": True,
+        "a_nfe": True, "a_nfe_female": True, "a_nfe_seu": True,  # not both/male
+    }
+    assert build_fields(fields, options) == [
+        "AF", "AF_male", "AF_popmax", "AF_nfe_female", "AF_nfe_seu",
+        "controls_AF", "controls_AF_male", "controls_AF_popmax",
+        "controls_AF_nfe_female", "controls_AF_nfe_seu",
+    ]
+
+
+def gnomad_exomes_v2_fields(lines):
+    line = find_line(lines, "short_name=gnomAD_exomes")
+    return re.search(r"fields=([^,]+),format", line).group(1) if line else None
+
+
+def test_gnomad_exomes_v2_default_is_overall_af(monkeypatch, tmp_path):
+    # enabling with defaults (full subset + All + Combined) => fields=AF
+    lines = build_lines_37(monkeypatch, tmp_path, gnomad_exomes=True)
+    line = find_line(lines, "short_name=gnomAD_exomes")
+    assert line is not None
+    assert "gnomad.exomes.r2.1.sites.chr###CHR###_AF.vcf.gz" in line
+    assert gnomad_exomes_v2_fields(lines) == "AF"
+
+
+def test_gnomad_exomes_v2_subset_ancestry_subpop_combination(monkeypatch, tmp_path):
+    # non_neuro subset x (afr XX + NFE Southern-European sub-pop): the subset
+    # prefixes every code, and sub-pops take no sex.
+    fields = gnomad_exomes_v2_fields(
+        build_lines_37(
+            monkeypatch,
+            tmp_path,
+            gnomad_exomes=True,
+            gnomad_exomes_all=False,
+            gnomad_exomes_afr=True,
+            gnomad_exomes_afr_both=False,
+            gnomad_exomes_afr_female=True,
+            gnomad_exomes_nfe=True,
+            gnomad_exomes_nfe_both=False,
+            gnomad_exomes_nfe_seu=True,
+            gnomad_exomes_subset_non_neuro=True,
+        )
+    )
+    assert fields == (
+        "AF_afr_female%AF_nfe_seu"
+        "%non_neuro_AF_afr_female%non_neuro_AF_nfe_seu"
+    )
+
+
+def test_gnomad_exomes_v2_popmax(monkeypatch, tmp_path):
+    # popmax is a plain toggle (no sex), per subset.
+    fields = gnomad_exomes_v2_fields(
+        build_lines_37(
+            monkeypatch,
+            tmp_path,
+            gnomad_exomes=True,
+            gnomad_exomes_all=False,
+            gnomad_exomes_popmax=True,
+        )
+    )
+    assert fields == "AF_popmax"
+
+
+def test_gnomad_genomes_v2_has_no_sas_or_non_cancer(monkeypatch, tmp_path):
+    # genomes v2 is the smaller shape: no non_cancer subset, no South Asian.
+    lines = build_lines_37(monkeypatch, tmp_path, gnomad_genomes=True)
+    line = find_line(lines, "short_name=gnomAD_genomes")
+    assert line is not None
+    assert "gnomad.genomes.r2.1.sites.chr###CHR###_noVEP_AF.vcf.gz" in line
+    assert re.search(r"fields=([^,]+),format", line).group(1) == "AF"
+
+
+def test_gnomad_sv_v2_grch37_prefix_named_populations(monkeypatch, tmp_path):
+    # GRCh37 SV is v2: 5 continental pops, PREFIX-named (`AFR_AF`, not v4's
+    # `AF_afr`). SVTYPE rides on the master; the overall AF is on by default.
+    def sv_fields(**kwargs):
+        line = find_line(
+            build_lines_37(monkeypatch, tmp_path, gnomad_sv=True, **kwargs),
+            "short_name=gnomAD_SV",
+        )
+        assert line is not None and "gnomad_v2.1_sv.sites_AF.vcf.gz" in line
+        return re.search(r"fields=([^,]+)", line).group(1)
+
+    assert sv_fields() == "SVTYPE%AF"  # default: master + overall AF
+    assert sv_fields(
+        gnomad_sv_af_afr=True, gnomad_sv_af_eur=True, gnomad_sv_af_oth=True
+    ) == "SVTYPE%AF%AFR_AF%EUR_AF%OTH_AF"
+    assert sv_fields(
+        gnomad_sv_af_afr=True, gnomad_sv_af_amr=True, gnomad_sv_af_eas=True,
+        gnomad_sv_af_eur=True, gnomad_sv_af_oth=True,
+    ) == "SVTYPE%AF%AFR_AF%AMR_AF%EAS_AF%EUR_AF%OTH_AF"
+
+
+# --- 12. gnomAD genomes custom line (no UKB subset; ami/remaining/grpmax) -----
+
+
+def gnomad_genomes_line(lines):
+    return find_line(lines, "short_name=gnomAD_genomes")
+
+
+def gnomad_genomes_fields(lines):
+    line = gnomad_genomes_line(lines)
+    if line is None:
+        return None
+    return re.search(r"fields=([^,]+)", line).group(1)
+
+
+def test_gnomad_genomes_off_emits_no_line(monkeypatch, tmp_path):
+    assert gnomad_genomes_line(build_lines(monkeypatch, tmp_path)) is None
+
+
+def test_gnomad_genomes_default_line(monkeypatch, tmp_path):
+    line = gnomad_genomes_line(build_lines(monkeypatch, tmp_path, gnomad_genomes=True))
+    assert line is not None
+    assert (
+        f"file={plugin_data_path('GRCh38.p14')('gnomad_genomes')}"
+        "/gnomad.genomes.v4.1.1.sites.minimal.chr###CHR###.vcf.bgz" in line
+    )
+    assert "short_name=gnomAD_genomes" in line
+    assert line.endswith("format=vcf,type=exact")
+    assert "fields=AF%AF_grpmax," in line  # default: All + Both, plus grpmax
+
+
+def test_gnomad_genomes_has_no_ukb_param(monkeypatch, tmp_path):
+    # genomes has no UK Biobank subset, so no _non_ukb fields are possible
+    assert "gnomad_genomes_include_ukb" not in ConfigIniParams.model_fields
+
+
+def test_gnomad_genomes_ancestry_and_sex(monkeypatch, tmp_path):
+    # Amish (both) + Remaining (male)
+    fields = gnomad_genomes_fields(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            gnomad_genomes=True,
+            gnomad_genomes_all=False,
+            gnomad_genomes_grpmax=False,  # on by default; off here to isolate ancestry+sex
+            gnomad_genomes_ami=True,
+            gnomad_genomes_remaining=True,
+            gnomad_genomes_remaining_both=False,
+            gnomad_genomes_remaining_male=True,
+        )
+    )
+    assert fields == "AF_ami%AF_remaining_XY"
+
+
+def test_gnomad_genomes_grpmax_has_no_sex_split(monkeypatch, tmp_path):
+    # grpmax on its own -> single AF_grpmax (no XX/XY)
+    fields = gnomad_genomes_fields(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            gnomad_genomes=True,
+            gnomad_genomes_all=False,
+            gnomad_genomes_grpmax=True,
+        )
+    )
+    assert fields == "AF_grpmax"
+
+
+def test_gnomad_genomes_all_plus_grpmax(monkeypatch, tmp_path):
+    # default All (both) plus grpmax -> AF%AF_grpmax. Both are on by default, so
+    # this is the default line; passing grpmax explicitly keeps the pairing
+    # pinned if that default is ever flipped back.
+    fields = gnomad_genomes_fields(
+        build_lines(monkeypatch, tmp_path, gnomad_genomes=True, gnomad_genomes_grpmax=True)
+    )
+    assert fields == "AF%AF_grpmax"
+
+
+# --- 13. NIH All of Us custom line -------------------------------------------
+
+
+def allofus_line(lines):
+    return find_line(lines, "short_name=AoU")
+
+
+def allofus_fields(lines):
+    line = allofus_line(lines)
+    if line is None:
+        return None
+    return re.search(r"fields=([^,]+)", line).group(1)
+
+
+def test_allofus_off_emits_no_line(monkeypatch, tmp_path):
+    assert allofus_line(build_lines(monkeypatch, tmp_path)) is None
+
+
+def test_allofus_default_line(monkeypatch, tmp_path):
+    line = allofus_line(build_lines(monkeypatch, tmp_path, allofus=True))
+    assert line is not None
+    assert (
+        f"file={plugin_data_path('GRCh38.p14')('allofus')}"
+        "/AllOfUs_chr###CHR###.vcf.gz" in line
+    )
+    assert "short_name=AoU" in line
+    assert line.endswith("format=vcf,type=exact")
+    # suggested defaults: the overall AF and the maximum subpopulation, the
+    # latter contributing both its AF and the subpopulation it came from
+    assert "fields=gvs_all_af%gvs_max_af%gvs_max_subpop," in line
+
+
+def test_allofus_max_emits_two_fields(monkeypatch, tmp_path):
+    # "Maximum subpopulation" contributes both gvs_max_af and gvs_max_subpop
+    fields = allofus_fields(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            allofus=True,
+            allofus_all=False,
+            allofus_max=True,
+        )
+    )
+    assert fields == "gvs_max_af%gvs_max_subpop"
+
+
+def test_allofus_multiple_populations_in_order(monkeypatch, tmp_path):
+    # order follows ALLOFUS_POPULATIONS (all, max, afr, ...)
+    fields = allofus_fields(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            allofus=True,
+            allofus_max=False,  # isolate the ordering from the default max
+            allofus_afr=True,
+            allofus_sas=True,
+        )
+    )
+    assert fields == "gvs_all_af%gvs_afr_af%gvs_sas_af"
+
+
+def test_allofus_enabled_but_nothing_selected_emits_no_line(monkeypatch, tmp_path):
+    line = allofus_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            allofus=True,
+            allofus_all=False,
+            allofus_max=False,  # both suggested defaults off
+        )
+    )
+    assert line is None
+
+
+# --- 14. ClinVar clinical significance (human GRCh37/38) ---------------------
+
+
+def test_clinvar_off_emits_no_line(monkeypatch, tmp_path):
+    assert find_line(build_lines(monkeypatch, tmp_path), "short_name=ClinVar") is None
+
+
+@pytest.mark.parametrize(
+    "assembly,expected_file",
+    [("GRCh38.p14", "clinvar.vcf.gz"), ("GRCh37.p13", "clinvar.vcf.gz")],
+)
+def test_clinvar_line_is_assembly_specific(
+    monkeypatch, tmp_path, assembly, expected_file
+):
+    # Phenotypes is what turns the ClinVar custom on now (see forces_on).
+    line = find_line(
+        build_lines(monkeypatch, tmp_path, assembly=assembly, phenotypes=True),
+        "short_name=ClinVar,",
+    )
+    assert line == (
+        f"custom file={plugin_data_path(assembly)('clinvar_short')}/{expected_file},"
+        "short_name=ClinVar,"
+        "fields=CLNDN%CLNDNINCL%CLNDISDB%CLNDISDBINCL%CLNREVSTAT%CLNSIG"
+        "%CLNSIGCONF%CLNSIGINCL%ONCDN%ONCDNINCL%ONCDISDB"
+        "%ONCDISDBINCL%ONC%ONCINCL%ONCREVSTAT%ONCSCV%ONCCONF"
+        "%CLNSUBA%CLNPMID%CLNSUBN%CLNRCV%SCI%SCIREVSTAT%SCIDN"
+        "%SCIDISDB%GENEINFO,"
+        "format=vcf,type=exact"
+    )
+
+
+def test_clinvar_is_emitted_for_grch37_too(monkeypatch, tmp_path):
+    """GRCh37 has its own config entries, so verify its ClinVar custom remains
+    aligned with the GRCh38 definition rather than merely exercising GRCh38 with
+    a GRCh37 assembly name."""
+    line = find_line(
+        build_lines_37(monkeypatch, tmp_path, phenotypes=True), "short_name=ClinVar,"
+    )
+    expected = find_line(
+        build_lines(
+            monkeypatch, tmp_path, assembly="GRCh37.p13", phenotypes=True
+        ),
+        "short_name=ClinVar,",
+    )
+    assert line == expected
+
+
+def test_clinvar_short_requires_phenotypes(monkeypatch, tmp_path):
+    # A stale `clinvar_short` from an edit/rerun must not emit its custom on its
+    # own: the germline data is served under Phenotypes, and the
+    # `requires: ["phenotypes"]` gate is what says so.
+    lines = build_lines(monkeypatch, tmp_path, phenotypes=False, clinvar_short=True)
+    assert find_line(lines, "short_name=ClinVar,") is None
+
+
+def test_phenotypes_turns_on_the_clinvar_custom(monkeypatch, tmp_path):
+    # ClinVar has no option of its own any more: selecting Phenotypes runs the
+    # custom behind the scenes. The structural one is unaffected — it still
+    # belongs to the `clinvar` master and stays opt-in.
+    lines = build_lines(monkeypatch, tmp_path, phenotypes=True)
+    assert find_line(lines, "short_name=ClinVar,") is not None
+    assert find_line(lines, "short_name=ClinVar_SV,") is None
+
+
+def test_clinvar_master_on_with_both_sub_options_off_emits_nothing(
+    monkeypatch, tmp_path
+):
+    # The master is still only a gate for the structural custom, and Phenotypes
+    # is off here, so neither custom runs.
+    lines = build_lines(
+        monkeypatch, tmp_path, clinvar=True, clinvar_short=False, clinvar_sv=False
+    )
+    assert find_line(lines, "short_name=ClinVar,") is None
+    assert find_line(lines, "short_name=ClinVar_SV,") is None
+
+
+def test_clinvar_sv_emits_nothing_while_the_option_is_withheld(monkeypatch, tmp_path):
+    """Asking for it by name is not enough. Submittable options are read off the
+    form panels, so an entry with no `form` block is dropped from the payload
+    before the config is built — which is what makes removing that block a
+    complete switch rather than a hidden checkbox.
+
+    Restoring the block should restore the line; this failing is the signal.
+    """
+    line = find_line(
+        build_lines(monkeypatch, tmp_path, clinvar=True, clinvar_sv=True),
+        "short_name=ClinVar_SV,",
+    )
+    assert line is None
+
+
+def test_gnomad_sv_custom_fields_and_overlap_cutoff(monkeypatch, tmp_path):
+    # SVTYPE is gated on the master so it is always in `fields=`; the overall AF
+    # is on by default; a selected population adds its code. `overlap_cutoff`
+    # takes the select's value verbatim. `fields=` is written after `format`.
+    line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            gnomad_sv=True,
+            gnomad_sv_af=True,
+            gnomad_sv_af_afr=True,
+            gnomad_sv_overlap_cutoff="90",
+        ),
+        "short_name=gnomAD_SV",
+    )
+    assert line == (
+        f"custom file={plugin_data_path('GRCh38.p14')('gnomad_sv')}"
+        "/gnomad.v4.1.sv.sites_AF.vcf.gz,"
+        "type=exact,short_name=gnomAD_SV,format=vcf,"
+        "fields=SVTYPE%AF%AF_afr,overlap_cutoff=90"
+    )
+
+    # Only SVTYPE when no AF is selected (overall off, no populations).
+    svtype_only = find_line(
+        build_lines(monkeypatch, tmp_path, gnomad_sv=True, gnomad_sv_af=False),
+        "short_name=gnomAD_SV",
+    )
+    assert "fields=SVTYPE," in svtype_only
+
+
+def test_gnomad_cnv_custom_fields_and_overlap_cutoff(monkeypatch, tmp_path):
+    # Same shape as gnomAD SV but *sample* frequencies (SF) and its own file.
+    line = find_line(
+        build_lines(
+            monkeypatch,
+            tmp_path,
+            gnomad_cnv=True,
+            gnomad_cnv_sf=True,
+            gnomad_cnv_sf_nfe=True,
+            gnomad_cnv_overlap_cutoff="80",
+        ),
+        "short_name=gnomAD_CNV",
+    )
+    assert line == (
+        f"custom file={plugin_data_path('GRCh38.p14')('gnomad_cnv')}"
+        "/gnomad.v4.1.cnv.all_SF.vcf.gz,"
+        "type=exact,short_name=gnomAD_CNV,format=vcf,"
+        "fields=SVTYPE%SF%SF_nfe,overlap_cutoff=80"
+    )
+
+
+def test_gencode_promoters_custom_has_no_fields_clause(monkeypatch, tmp_path):
+    # A gff-overlap custom (fields=None) writes no `fields=` clause at all — VEP
+    # emits the source's attributes itself. The line matches the authored order.
+    line = find_line(
+        build_lines(monkeypatch, tmp_path, gencode_promoters=True),
+        "short_name=GENCODE_Promoter",
+    )
+    assert line == (
+        f"custom file={GRCH38_PLUGIN_PATH}/gencode.v49.promoter_windows.sorted.gff3.gz,"
+        "gff_type=gencode_promoter,format=gff,short_name=GENCODE_Promoter,type=overlap"
+    )
+    assert "fields=" not in line
+
+
+def test_gerp_plugin_takes_its_file_positionally(monkeypatch, tmp_path):
+    # The Conservation plugin wants its bigwig by position, not by name, so the
+    # entry uses `args` rather than `params` — the value is emitted bare, with no
+    # `key=` in front of it.
+    line = find_line(build_lines(monkeypatch, tmp_path, gerp=True), "plugin Conservation")
+    assert line == (
+        f"plugin Conservation,{GRCH38_PLUGIN_PATH}"
+        "/gerp_conservation_scores.homo_sapiens.GRCh38.bw"
+    )
+    assert "=" not in line.split(",", 1)[1]
+
+
+def test_gerp_off_emits_no_line(monkeypatch, tmp_path):
+    lines = build_lines(monkeypatch, tmp_path, gerp=False)
+    assert not [line for line in lines if "Conservation" in line]

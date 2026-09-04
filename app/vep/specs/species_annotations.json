@@ -1,0 +1,501 @@
+{
+  "templates": {
+    "go": {
+      "id": "go",
+      "order": 31,
+      "parsed_as": [
+        "go"
+      ],
+      "form": {
+        "panel": "genes_and_transcripts",
+        "category": "Additional molecular consequence predictions",
+        "order": 900,
+        "label": "Gene Ontology",
+        "type": "boolean",
+        "default": false
+      },
+      "config": {
+        "emit": "plugin",
+        "name": "GO",
+        "params": {
+          "file": "{path}/GO.pm_{production_name}_116.gff.gz"
+        }
+      }
+    },
+    "phenotypes": {
+      "id": "phenotypes",
+      "order": 30,
+      "parsed_as": [
+        "phenotype_data",
+        "phenotype_gene"
+      ],
+      "form": {
+        "panel": "phenotype_and_disease_associations",
+        "order": 100,
+        "label": "Phenotypes",
+        "type": "boolean",
+        "default": false
+      },
+      "config": {
+        "emit": "plugin",
+        "name": "Phenotypes",
+        "params": {
+          "file": "{path}/Phenotypes.pm_{production_name}_116.gvf.gz",
+          "cols": "type&source&phenotype&id&external_id&risk_allele",
+          "exclude_sources": "HGMD-PUBLIC&COSMIC&ClinVar"
+        }
+      }
+    },
+    "cadd": {
+      "id": "cadd",
+      "order": 41,
+      "parsed_as": [
+        "cadd"
+      ],
+      "form": {
+        "panel": "variant_impact_predictions",
+        "category": "Genome wide",
+        "order": 400,
+        "label": "CADD",
+        "type": "boolean",
+        "default": false
+      },
+      "config": {
+        "emit": "plugin",
+        "name": "CADD",
+        "params": {
+          "snv": "{path}/{file}"
+        }
+      }
+    }
+  },
+  "species": [
+    {
+      "assembly": "CAU__Wild1.0",
+      "production_name": "anas_platyrhynchos",
+      "species_taxonomy_id": "8839",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "CAU_duck1.0",
+      "production_name": "anas_platyrhynchos_platyrhynchos",
+      "species_taxonomy_id": "8839",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Bison_UMD1.0",
+      "production_name": "bison_bison_bison",
+      "species_taxonomy_id": "9901",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "LU_Bosgru_v3.0",
+      "production_name": "bos_grunniens",
+      "species_taxonomy_id": "30521",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "ARS-UCD2.0",
+      "production_name": "bos_taurus",
+      "species_taxonomy_id": "9913",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "mCalJac1.pat.X",
+      "production_name": "callithrix_jacchus",
+      "species_taxonomy_id": "9483",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "CamDro2",
+      "production_name": "camelus_dromedarius",
+      "species_taxonomy_id": "9838",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "ROS_Cfam_1.0",
+      "production_name": "canis_lupus_familiaris",
+      "species_taxonomy_id": "9612",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "Dog10K_Boxer_Tasha",
+      "production_name": "canis_lupus_familiarisboxer",
+      "species_taxonomy_id": "9612",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "ARS1",
+      "production_name": "capra_hircus",
+      "species_taxonomy_id": "9925",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "Cavpor3.0",
+      "production_name": "cavia_porcellus",
+      "species_taxonomy_id": "10141",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Chlorocebus_sabeus_1.1",
+      "production_name": "chlorocebus_sabaeus",
+      "species_taxonomy_id": "60711",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "KH",
+      "production_name": "ciona_intestinalis",
+      "species_taxonomy_id": "7719",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Ch_v2.0.2",
+      "production_name": "clupea_harengus",
+      "species_taxonomy_id": "7950",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Coturnix_japonica_2.0",
+      "production_name": "coturnix_japonica",
+      "species_taxonomy_id": "93934",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "GRCz11",
+      "production_name": "danio_rerio",
+      "species_taxonomy_id": "7955",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "dlabrax2021",
+      "production_name": "dicentrarchus_labrax",
+      "species_taxonomy_id": "13489",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "BDGP6.46",
+      "production_name": "drosophila_melanogaster",
+      "species_taxonomy_id": "7227",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "EquCab3.0",
+      "production_name": "equus_caballus",
+      "species_taxonomy_id": "9796",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "F.catus_Fca126_mat1.0",
+      "production_name": "felis_catus",
+      "species_taxonomy_id": "9685",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "Felis_catus_9.0",
+      "production_name": "felis_catus_abyssinian",
+      "species_taxonomy_id": "9685",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "FicAlb1.5",
+      "production_name": "ficedula_albicollis",
+      "species_taxonomy_id": "59894",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "bGalGal1.mat.broiler.GRCg7b",
+      "production_name": "gallus_gallus",
+      "species_taxonomy_id": "9031",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "GRCg6a",
+      "production_name": "gallus_gallus_gca000002315v5",
+      "species_taxonomy_id": "9031",
+      "datasets": [
+        "go",
+        "phenotypes",
+        "cadd"
+      ],
+      "files": {
+        "cadd": "chCADD_updated.tsv.gz"
+      }
+    },
+    {
+      "assembly": "Macaca_fascicularis_6.0",
+      "production_name": "macaca_fascicularis",
+      "species_taxonomy_id": "9541",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Mmul_10",
+      "production_name": "macaca_mulatta",
+      "species_taxonomy_id": "9544",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "ASM171598v2",
+      "production_name": "manacus_vitellinus",
+      "species_taxonomy_id": "328815",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Turkey_5.1",
+      "production_name": "meleagris_gallopavo",
+      "species_taxonomy_id": "9103",
+      "datasets": [
+        "go",
+        "cadd"
+      ],
+      "files": {
+        "cadd": "tCADD.tsv.gz"
+      }
+    },
+    {
+      "assembly": "Mmur_3.0",
+      "production_name": "microcebus_murinus",
+      "species_taxonomy_id": "30608",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "MicOch1.0",
+      "production_name": "microtus_ochrogaster",
+      "species_taxonomy_id": "79684",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "GRCm39",
+      "production_name": "mus_musculus",
+      "species_taxonomy_id": "10090",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "NNQGG.v01",
+      "production_name": "neovison_vison",
+      "species_taxonomy_id": "452646",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Nleu_3.0",
+      "production_name": "nomascus_leucogenys",
+      "species_taxonomy_id": "61853",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "USDA_OmykA_1.1",
+      "production_name": "oncorhynchus_mykiss",
+      "species_taxonomy_id": "8022",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "O_niloticus_UMD_NMBU",
+      "production_name": "oreochromis_niloticus",
+      "species_taxonomy_id": "8128",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "mOrnAna1.p.v1",
+      "production_name": "ornithorhynchus_anatinus",
+      "species_taxonomy_id": "9258",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "OryCun2.0",
+      "production_name": "oryctolagus_cuniculus",
+      "species_taxonomy_id": "9986",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "ARS-UI_Ramb_v3.0",
+      "production_name": "ovis_aries",
+      "species_taxonomy_id": "9940",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "Oar_v3.1",
+      "production_name": "ovis_aries_texel",
+      "species_taxonomy_id": "9940",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "Pan_tro_3.0",
+      "production_name": "pan_troglodytes",
+      "species_taxonomy_id": "9598",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Parus_major1.1",
+      "production_name": "parus_major",
+      "species_taxonomy_id": "9157",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "HU_Pman_2.1",
+      "production_name": "peromyscus_maniculatus_bairdii",
+      "species_taxonomy_id": "230844",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Susie_PABv2",
+      "production_name": "pongo_abelii",
+      "species_taxonomy_id": "9601",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "GRCr8",
+      "production_name": "rattus_norvegicus",
+      "species_taxonomy_id": "10116",
+      "datasets": [
+        "go",
+        "phenotypes"
+      ]
+    },
+    {
+      "assembly": "R64-1-1",
+      "production_name": "saccharomyces_cerevisiae",
+      "species_taxonomy_id": "4932",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Ssal_v3.1",
+      "production_name": "salmo_salar",
+      "species_taxonomy_id": "8030",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "SLUC_FBN_1",
+      "production_name": "sander_lucioperca",
+      "species_taxonomy_id": "283035",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Sdu_1.0",
+      "production_name": "seriola_dumerili",
+      "species_taxonomy_id": "41447",
+      "datasets": [
+        "go"
+      ]
+    },
+    {
+      "assembly": "Sscrofa11.1",
+      "production_name": "sus_scrofa",
+      "species_taxonomy_id": "9823",
+      "datasets": [
+        "go",
+        "phenotypes",
+        "cadd"
+      ],
+      "files": {
+        "cadd": "ALL_pCADD-PHRED-scores.tsv.gz"
+      }
+    },
+    {
+      "assembly": "bTaeGut1_v1.p",
+      "production_name": "taeniopygia_guttata",
+      "species_taxonomy_id": "59729",
+      "datasets": [
+        "go"
+      ]
+    }
+  ]
+}

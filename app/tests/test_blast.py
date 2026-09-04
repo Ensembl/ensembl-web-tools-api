@@ -1,9 +1,14 @@
 from fastapi.testclient import TestClient
 import json
+import os
 import pytest
 from blast import blast
 from app.main import app
 from core.config import API_PREFIX
+
+# Fixtures live beside this file. Resolving them against the working directory
+# instead only worked when pytest was invoked from app/.
+TESTS_DIR = os.path.dirname(__file__)
 
 
 # Test config endpoint
@@ -19,7 +24,7 @@ def test_read_config():
 # Load example BLAST job payload
 @pytest.fixture
 def blast_payload():
-    with open("tests/blast_payload.json") as f:
+    with open(os.path.join(TESTS_DIR, "blast_payload.json")) as f:
         return json.load(f)
 
 

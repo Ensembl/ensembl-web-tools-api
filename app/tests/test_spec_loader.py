@@ -3,9 +3,7 @@ resolution, and the sidecar that pins the merged document to a job.
 """
 
 import json
-from pathlib import Path
 
-import pytest
 from pydantic import FilePath
 
 from app.vep.utils.spec_loader import (
@@ -31,6 +29,9 @@ SAMPLE = {
     "genome": {"assembly": "GRCh38"},
     "config": {"entries": []},
     "parsing": {"plugins": []},
+    "display": {"options": []},
+    "help": {"options": []},
+    "filters": {"fields": []},
 }
 
 
@@ -42,6 +43,9 @@ def test_digest_is_independent_of_key_order():
         "parsing": {"plugins": []},
         "config": {"entries": []},
         "genome": {"assembly": "GRCh38"},
+        "filters": {"fields": []},
+        "help": {"options": []},
+        "display": {"options": []},
     }
     assert _content_digest(SAMPLE) == _content_digest(reordered)
 
@@ -88,26 +92,6 @@ def test_bundled_human_grch38_spec_loads_and_has_a_real_digest():
     assert spec.spec_version != "sha256:" + "0" * 64
     assert len(spec.config_entries()) > 0
     assert len(spec.parse_plugins()) > 0
-
-
-# --- Phase 0: shared-library assembly equivalence --------------------------
-
-
-def test_assembled_grch38_matches_the_pre_split_baseline():
-    """The library-split refactor gate: assembling human_grch38 from the shared
-    `annotation_library` + its thin config document must reproduce the pre-split
-    monolith *exactly* — same content digest, so no job's pinned spec, expected
-    columns or parsing changes. `human_grch38.baseline.json` is a byte copy of the
-    monolith taken before the split; loading it as a self-contained document must
-    match the assembled result."""
-    baseline = load_merged_spec_file(
-        Path(__file__).parent / "human_grch38.baseline.json"
-    )
-    assembled = load_merged_spec("human_grch38")
-    assert assembled.spec_version == baseline.spec_version
-    assert assembled.model_dump(mode="json", by_alias=True) == baseline.model_dump(
-        mode="json", by_alias=True
-    )
 
 
 # --- Phase 1: library selection (the subset a genome offers) ----------------
@@ -333,11 +317,6 @@ def test_write_and_load_spec_sidecar_round_trip(tmp_path):
     assert len(loaded.config_entries()) == len(spec.config_entries())
 
 
-def test_load_spec_sidecar_missing_is_none(tmp_path):
-    (tmp_path / "output.vcf.gz").write_bytes(b"")
-    assert load_spec_sidecar(FilePath(tmp_path / "output.vcf.gz")) is None
-
-
 # --- expected-columns sidecar (the per-job missing-field check) --------------
 
 
@@ -350,11 +329,6 @@ def test_expected_columns_sidecar_round_trip(tmp_path):
     assert loaded == columns
 
 
-def test_load_expected_columns_sidecar_missing_is_none(tmp_path):
-    (tmp_path / "output.vcf.gz").write_bytes(b"")
-    assert load_expected_columns_sidecar(FilePath(tmp_path / "output.vcf.gz")) is None
-
-
 def test_write_spec_sidecar_overwrites_the_previous_one(tmp_path):
     """Writing a sidecar again for the same job replaces its previous pin."""
     write_spec_sidecar(tmp_path, load_merged_spec("human_grch38"))
@@ -365,9 +339,6 @@ def test_write_spec_sidecar_overwrites_the_previous_one(tmp_path):
 
 
 # --- _load_pinned_spec: the results-time seam (vcf_results) -----------------
-# The defensive wrapper get_results_from_path uses to load the pinned spec at
-# results time. It must never let a missing or corrupt pin break parsing, and it
-# returns the parsing half of the merged document.
 
 
 def test_load_pinned_spec_returns_the_sidecar_parsing_when_present(tmp_path):
@@ -377,18 +348,6 @@ def test_load_pinned_spec_returns_the_sidecar_parsing_when_present(tmp_path):
     assert spec is not None
     assert spec.spec_version == load_merged_spec("human_grch38").spec_version
     assert len(spec.plugins) > 0
-
-
-def test_load_pinned_spec_missing_sidecar_is_none(tmp_path):
-    (tmp_path / "output.vcf.gz").write_bytes(b"")
-    assert _load_pinned_spec(FilePath(tmp_path / "output.vcf.gz")) is None
-
-
-def test_load_pinned_spec_unreadable_sidecar_is_none_not_raised(tmp_path):
-    """A corrupt pin must fall back, not 500 the results endpoint."""
-    (tmp_path / SPEC_SIDECAR_FILE).write_text("{ not valid json")
-    (tmp_path / "output.vcf.gz").write_bytes(b"")
-    assert _load_pinned_spec(FilePath(tmp_path / "output.vcf.gz")) is None
 
 
 def test_species_cadd_uses_a_named_file_and_only_snv():

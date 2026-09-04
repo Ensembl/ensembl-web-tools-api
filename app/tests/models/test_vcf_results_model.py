@@ -15,6 +15,11 @@ from vep.models.vcf_results_model import (
     Metadata,
     VepResultsResponse,
 )
+from vep.models.display_panels_model import DisplayPanel
+from vep.models.display_spec_model import DisplayPayload
+
+DISPLAY_PANELS = [DisplayPanel(id="general", label="General")]
+DISPLAY = DisplayPayload(options=[], plugin_scopes={})
 
 
 class TestVCFResultModel(unittest.TestCase):
@@ -113,17 +118,31 @@ class TestVCFResultModel(unittest.TestCase):
 
     def test_metadata_required(self):
         metadata = Metadata(
-            pagination=PaginationMetadata(page=1, per_page=10, total=100)
+            pagination=PaginationMetadata(page=1, per_page=10, total=100),
+            display_panels=DISPLAY_PANELS,
+            display=DISPLAY,
         )
         self.assertEqual(metadata.pagination.page, 1)
 
         # Invalid instance without pagination - should raise ValidationError
         with self.assertRaises(ValidationError):
             Metadata()
+        with self.assertRaises(ValidationError):
+            Metadata(
+                pagination=PaginationMetadata(page=1, per_page=10, total=100),
+                display=DISPLAY,
+            )
+        with self.assertRaises(ValidationError):
+            Metadata(
+                pagination=PaginationMetadata(page=1, per_page=10, total=100),
+                display_panels=DISPLAY_PANELS,
+            )
 
     def test_vep_results_response(self):
         metadata = Metadata(
-            pagination=PaginationMetadata(page=1, per_page=10, total=100)
+            pagination=PaginationMetadata(page=1, per_page=10, total=100),
+            display_panels=DISPLAY_PANELS,
+            display=DISPLAY,
         )
         variant = Variant(
             name=None,

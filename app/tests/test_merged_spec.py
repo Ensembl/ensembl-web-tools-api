@@ -47,6 +47,9 @@ def _doc(config_entries, parse_plugins):
         "genome": {"assembly": "GRCh38"},
         "config": {"entries": config_entries},
         "parsing": {"plugins": parse_plugins},
+        "display": {"options": []},
+        "help": {"options": []},
+        "filters": {"fields": []},
     }
 
 

@@ -18,6 +18,7 @@ from app.vep import vep_resources
 from app.vep.utils import results_filters as rf
 from app.vep.utils.tsv_export import flatten_vcf_lines
 from app.vep.utils.vcf_results import stream_filtered_vcf_text
+from app.vep.utils.spec_loader import load_merged_spec, write_spec_sidecar
 
 # CSQ layout used across these tests: Consequence + the transcript-group columns.
 CSQ_COLS = ["Allele", "Consequence", "Feature", "CANONICAL", "GENCODE_PRIMARY"]
@@ -120,6 +121,7 @@ def test_flatten_vcf_lines_over_a_prefiltered_line_emits_fewer_rows():
 def _write_vcf(path, data_lines):
     with gzip.open(path, "wt") as handle:
         handle.writelines(_vcf_lines(data_lines))
+    write_spec_sidecar(path.parent, load_merged_spec("human_grch38"))
 
 
 def test_stream_filtered_vcf_text_preserves_header_and_filters_records(tmp_path):

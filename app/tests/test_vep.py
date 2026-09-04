@@ -1,17 +1,26 @@
 from io import StringIO
 import gzip
 import os
-import tempfile
+import shutil
+import sys
 from pydantic import FilePath
 import pytest
 
-from app.vep.models import vcf_results_model as model
 from app.vep.utils.vcf_results import (
+    _get_alt_allele_details,
+    _set_allele_type,
     get_results_from_path,
     get_results_from_stream,
 )
 from app.vep.utils.csq import get_prediction_index_map, get_csq_value
 from app.vep.utils.tsv_export import stream_vep_tsv, gzip_text_stream
+from vep.models.display_panels_model import to_display_panels
+from app.vep.utils.spec_loader import (
+    load_merged_spec,
+    write_display_panels_sidecar,
+    write_expected_columns_sidecar,
+    write_spec_sidecar,
+)
 
 # A representative CSQ column list, used to build a CSQ header fixture for the
 # index-map test. `get_prediction_index_map` indexes whatever columns a header
@@ -26,11 +35,6 @@ TARGET_COLUMNS = [
     "mutfunc_motif", "mutfunc_int", "mutfunc_mod", "mutfunc_exp",
     "MaveDB_score", "MaveDB_accession", "MaveDB_pro",
 ]
-from app.vep.utils.vcf_results import (
-    _set_allele_type,
-    _get_alt_allele_details,
-)
-
 CSQ_DESCRIPTION = "Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position|Amino_acids|Codons|Existing_variation|REF_ALLELE|UPLOADED_ALLELE|DISTANCE|STRAND|FLAGS|SYMBOL_SOURCE|HGNC_ID|CANONICAL|SIFT|PolyPhen|AF|CLIN_SIG|SOMATIC|PHENO|MOTIF_NAME|MOTIF_POS|HIGH_INF_POS|MOTIF_SCORE_CHANGE|TRANSCRIPTION_FACTORS"
 
 CSQ_1 = "T|upstream_gene_variant|MODIFIER|FAM138F|ENSG00000282591|Transcript|ENST00000631376.1|lncRNA||||||||||rs868831437|C|C/T|4978|-1||HGNC|HGNC:33581|YES|||0.4860||||||||"
@@ -91,6 +95,26 @@ chr19	82829	id_21	T	A	50	PASS	CSQ={CSQ_2}
 # resolved when pytest was invoked from app/, which is why this whole module
 # ended up excluded from every test run rather than fixed.
 VCF_PATH = FilePath(os.path.join(os.path.dirname(__file__), "test_vep.vcf"))
+MERGED_SPEC = load_merged_spec("human_grch38")
+PARSING_SPEC = MERGED_SPEC.parsing
+DISPLAY = MERGED_SPEC.display_payload()
+DISPLAY_PANELS = to_display_panels(
+    [{"id": "general", "label": "General", "options": []}]
+)
+
+
+@pytest.fixture(autouse=True)
+def current_job_sidecars(tmp_path, monkeypatch):
+    """Run path-based tests against a current job with all required pins."""
+    vcf_path = tmp_path / "test_vep.vcf"
+    shutil.copyfile(VCF_PATH, vcf_path)
+    write_spec_sidecar(tmp_path, MERGED_SPEC)
+    write_expected_columns_sidecar(tmp_path, set())
+    write_display_panels_sidecar(
+        tmp_path,
+        DISPLAY_PANELS,
+    )
+    monkeypatch.setattr(sys.modules[__name__], "VCF_PATH", FilePath(vcf_path))
 
 def test_get_prediction_index_map():
 
@@ -129,19 +153,18 @@ def test_get_csq_value():
     assert get_csq_value(csq_values, "TEST_NUM", -1, index_map) == 2
     assert get_csq_value(csq_values, "TEST_BOOL", False, index_map)
     assert get_csq_value(csq_values, "TEST_MISSING", "ERROR", index_map) == "ERROR"
-    assert get_csq_value(csq_values, "TEST_EMPTY", None, index_map) == None
+    assert get_csq_value(csq_values, "TEST_EMPTY", None, index_map) is None
 
 
 def test_get_alt_allele_details():
     index_map = get_prediction_index_map(CSQ_DESCRIPTION)
     csq_list = [CSQ_1, CSQ_2, CSQ_NO_FREQ]
 
-    results = _get_alt_allele_details("C", "T", csq_list, index_map)
+    results = _get_alt_allele_details("C", "T", csq_list, index_map, PARSING_SPEC)
     #assert type(results) == model.AlternativeVariantAllele
     assert results.allele_sequence == "T"
     assert results.allele_type == "SNV"
-    # the retained allele-level typed tail; no spec was passed, so the generic
-    # annotations are empty (this fixture is a pre-plugin CSQ header anyway)
+    # This fixture has none of the pinned spec's plugin columns.
     assert results.colocated_variants == ["rs868831437"]
     assert results.annotations == []
     assert len(results.predicted_molecular_consequences) == 2
@@ -158,7 +181,7 @@ def test_get_alt_allele_no_consequence():
 
     csq_list = [CSQ_NO_CON]
 
-    results = _get_alt_allele_details("C", "T", csq_list, index_map)
+    results = _get_alt_allele_details("C", "T", csq_list, index_map, PARSING_SPEC)
 
     #assert type(results) == model.AlternativeVariantAllele
     assert results.allele_sequence == "T"
@@ -172,13 +195,13 @@ def test_get_alt_allele_details_intergenic():
     csq_list = [CSQ_2]
 
     # model.AlternativeVariantAllele
-    results = _get_alt_allele_details("C", "A", csq_list, index_map)
+    results = _get_alt_allele_details("C", "A", csq_list, index_map, PARSING_SPEC)
 
     #assert type(results) == model.AlternativeVariantAllele
     assert results.allele_sequence == "A"
     assert results.allele_type == "SNV"
     assert len(results.predicted_molecular_consequences) == 1
-    assert results.predicted_molecular_consequences[0].feature_type == None
+    assert results.predicted_molecular_consequences[0].feature_type is None
     assert len(results.predicted_molecular_consequences[0].consequences) == 1
     assert (
         results.predicted_molecular_consequences[0].consequences[0]
@@ -187,7 +210,15 @@ def test_get_alt_allele_details_intergenic():
 
 def test_get_results_from_stream():
     variant_count = 3
-    results = get_results_from_stream(100, 1, variant_count, StringIO(TEST_VCF))
+    results = get_results_from_stream(
+        100,
+        1,
+        variant_count,
+        StringIO(TEST_VCF),
+        PARSING_SPEC,
+        DISPLAY_PANELS,
+        DISPLAY,
+    )
 
     print(results.variants)
     assert len(results.variants) == variant_count
@@ -376,7 +407,13 @@ def test_alleles_keep_the_order_they_appear_in():
     """
     alleles = ["T", "A", "G", "TT", "AA", "GG"]
     results = get_results_from_stream(
-        100, 1, 1, StringIO(_multi_allele_vcf(alleles))
+        100,
+        1,
+        1,
+        StringIO(_multi_allele_vcf(alleles)),
+        PARSING_SPEC,
+        DISPLAY_PANELS,
+        DISPLAY,
     )
     assert [
         a.allele_sequence for a in results.variants[0].alternative_alleles
@@ -387,7 +424,13 @@ def test_repeated_alleles_are_still_deduplicated():
     """Order is the fix; deduplication is what it must not lose. VEP emits one
     CSQ row per transcript, so every allele appears many times over."""
     results = get_results_from_stream(
-        100, 1, 1, StringIO(_multi_allele_vcf(["T", "A", "T", "G", "A"]))
+        100,
+        1,
+        1,
+        StringIO(_multi_allele_vcf(["T", "A", "T", "G", "A"])),
+        PARSING_SPEC,
+        DISPLAY_PANELS,
+        DISPLAY,
     )
     assert [
         a.allele_sequence for a in results.variants[0].alternative_alleles

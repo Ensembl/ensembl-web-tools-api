@@ -15,8 +15,21 @@ from pydantic import FilePath
 from app.vep.utils import results_filters as rf
 from app.vep.utils import vcf_results
 from app.vep.utils.vcf_results import get_results_from_path
-from app.vep.utils.spec_loader import load_merged_spec
+from vep.models.display_panels_model import to_display_panels
+from app.vep.utils.spec_loader import (
+    load_merged_spec,
+    write_display_panels_sidecar,
+    write_expected_columns_sidecar,
+    write_spec_sidecar,
+)
 from app.vep.models import vcf_results_model as model
+
+MERGED_SPEC = load_merged_spec("human_grch38")
+PARSING_SPEC = MERGED_SPEC.parsing
+DISPLAY = MERGED_SPEC.display_payload()
+DISPLAY_PANELS = to_display_panels(
+    [{"id": "general", "label": "General", "options": []}]
+)
 
 CSQ_DESC = (
     "Consequence annotations from Ensembl VEP. Format: "
@@ -76,6 +89,12 @@ def _write_vcf(path, records: list[str]) -> str:
     vcf_path = path / "results.vcf.gz"
     with gzip.open(vcf_path, "wt") as handle:
         handle.write(text)
+    write_spec_sidecar(path, MERGED_SPEC)
+    write_expected_columns_sidecar(path, set())
+    write_display_panels_sidecar(
+        path,
+        DISPLAY_PANELS,
+    )
     return str(vcf_path)
 
 
@@ -497,7 +516,7 @@ def _af_filter(operator, threshold, match="any", values=None) -> rf.ResultsFilte
 
 
 def test_af_columns_discovery_excludes_subpop_label():
-    assert rf.af_columns(AF_INDEX_MAP) == [
+    assert rf.af_columns(AF_INDEX_MAP, PARSING_SPEC) == [
         "gnomAD_exomes_AF",
         "gnomAD_exomes_AF_nfe",
         "AoU_gvs_all_af",
@@ -507,61 +526,51 @@ def test_af_columns_discovery_excludes_subpop_label():
 def test_af_source_descriptor():
     # Each descriptor carries a decoded population `label` (from form_panels): the
     # overall AF is "All", a compound gnomAD code decodes to its form label.
-    assert rf.af_source_descriptor("gnomAD_exomes_AF") == {
+    def descriptor(column):
+        return rf.af_source_descriptor(column, PARSING_SPEC)
+    assert descriptor("gnomAD_exomes_AF") == {
         "key": "gnomAD_exomes_AF",
         "source": "gnomad_exomes",
         "population": "",
         "label": "All",
     }
-    assert rf.af_source_descriptor("gnomAD_genomes_AF_grpmax") == {
+    assert descriptor("gnomAD_genomes_AF_grpmax") == {
         "key": "gnomAD_genomes_AF_grpmax",
         "source": "gnomad_genomes",
         "population": "grpmax",
         "label": "Maximum across all groups",
     }
-    assert rf.af_source_descriptor("AoU_gvs_all_af") == {
+    assert descriptor("AoU_gvs_all_af") == {
         "key": "AoU_gvs_all_af",
         "source": "all_of_us",
         "population": "",
         "label": "All",
     }
-    assert rf.af_source_descriptor("AoU_gvs_afr_af")["population"] == "afr"
-    assert rf.af_source_descriptor("AoU_gvs_afr_af")["label"] == "African"
-    assert rf.af_source_descriptor("gnomAD_exomes_AF_nfe_XX")["label"] == (
+    assert descriptor("AoU_gvs_afr_af")["population"] == "afr"
+    assert descriptor("AoU_gvs_afr_af")["label"] == "African"
+    assert descriptor("gnomAD_exomes_AF_nfe_XX")["label"] == (
         "Non-Finnish European · XX"
     )
     # gnomAD SV: the AF columns are AF sources; the SV id / SVTYPE columns are not.
-    assert rf.af_source_descriptor("gnomAD_SV_AF") == {
+    assert descriptor("gnomAD_SV_AF") == {
         "key": "gnomAD_SV_AF",
         "source": "gnomad_sv",
         "population": "",
         "label": "All",
     }
-    assert rf.af_source_descriptor("gnomAD_SV_AF_rmi")["label"] == "Remaining"
-    assert rf.af_source_descriptor("gnomAD_SV") is None
-    assert rf.af_source_descriptor("gnomAD_SV_SVTYPE") is None
+    assert descriptor("gnomAD_SV_AF_rmi")["label"] == "Remaining"
+    assert descriptor("gnomAD_SV") is None
+    assert descriptor("gnomAD_SV_SVTYPE") is None
     # gnomAD CNV: sample frequencies (SF prefix), "remaining" spelled out.
-    assert rf.af_source_descriptor("gnomAD_CNV_SF") == {
+    assert descriptor("gnomAD_CNV_SF") == {
         "key": "gnomAD_CNV_SF",
         "source": "gnomad_cnv",
         "population": "",
         "label": "All",
     }
-    assert rf.af_source_descriptor("gnomAD_CNV_SF_remaining")["label"] == "Remaining"
-    assert rf.af_source_descriptor("gnomAD_CNV") is None
-    assert rf.af_source_descriptor("SYMBOL") is None
-
-
-def test_af_source_descriptor_spec_driven_matches_legacy_for_grch38():
-    # Passing the GRCh38 (v4) spec produces exactly what the spec-less path does —
-    # the spec-driven derivation is a superset, not a behaviour change.
-    spec = load_merged_spec("human_grch38").parsing
-    for column in (
-        "gnomAD_exomes_AF", "gnomAD_exomes_AF_nfe_XX", "gnomAD_genomes_AF_grpmax",
-        "gnomAD_SV_AF", "gnomAD_SV_AF_rmi", "gnomAD_SV", "gnomAD_CNV_SF",
-        "AoU_gvs_all_af", "AoU_gvs_afr_af", "AoU_gvs_max_subpop", "SYMBOL",
-    ):
-        assert rf.af_source_descriptor(column, spec) == rf.af_source_descriptor(column)
+    assert descriptor("gnomAD_CNV_SF_remaining")["label"] == "Remaining"
+    assert descriptor("gnomAD_CNV") is None
+    assert descriptor("SYMBOL") is None
 
 
 def test_af_source_descriptor_grch37_v2_grammar():
@@ -605,8 +614,7 @@ def test_af_source_descriptor_grch37_sv_v2_prefix_grammar():
 
 
 def test_af_columns_discovers_v2_subset_columns():
-    # v2's subset-prefixed AF columns (which the old `gnomAD_exomes_AF` prefix
-    # missed) are found both spec-driven and by the spec-less filter-path fallback.
+    # v2's subset-prefixed AF columns come from the pinned spec's grammar.
     spec = load_merged_spec("human_grch37").parsing
     index_map = {
         name: i
@@ -619,7 +627,6 @@ def test_af_columns_discovers_v2_subset_columns():
         "gnomAD_exomes_AF", "gnomAD_exomes_controls_AF_afr", "gnomAD_exomes_AF_popmax",
     ]
     assert rf.af_columns(index_map, spec) == expected
-    assert rf.af_columns(index_map) == expected  # spec-less fallback
 
 
 def test_af_le_any_keeps_when_one_meets():
@@ -627,7 +634,7 @@ def test_af_le_any_keeps_when_one_meets():
         _af_record(1, [_af_entry("0.3", "0.01", "0.5")]),  # nfe 0.01 <= 0.05 -> keep
         _af_record(2, [_af_entry("0.3", "0.2", "0.5")]),  # none <= 0.05 -> drop
     ]
-    compiled = rf.compile_filters([_af_filter("le", 0.05, "any")], AF_INDEX_MAP)
+    compiled = rf.compile_filters([_af_filter("le", 0.05, "any")], AF_INDEX_MAP, PARSING_SPEC)
     kept, stats = rf.apply_filter_pipeline(lines, compiled)
     assert len(kept) == 1
     assert kept[0] == lines[0]
@@ -639,7 +646,7 @@ def test_af_le_all_requires_every_value():
         _af_record(1, [_af_entry("0.3", "0.01", "0.5")]),  # not all <= 0.05 -> drop
         _af_record(2, [_af_entry("0.01", "0.02", "0.03")]),  # all <= 0.05 -> keep
     ]
-    compiled = rf.compile_filters([_af_filter("le", 0.05, "all")], AF_INDEX_MAP)
+    compiled = rf.compile_filters([_af_filter("le", 0.05, "all")], AF_INDEX_MAP, PARSING_SPEC)
     kept, _ = rf.apply_filter_pipeline(lines, compiled)
     assert len(kept) == 1
     assert kept[0] == lines[1]
@@ -648,7 +655,7 @@ def test_af_le_all_requires_every_value():
 def test_af_ge():
     line = _af_record(1, [_af_entry("0.3", "0.01", "0.5")])
     kept_ge, _ = rf.apply_filter_pipeline(
-        [line], rf.compile_filters([_af_filter("ge", 0.4, "any")], AF_INDEX_MAP)
+        [line], rf.compile_filters([_af_filter("ge", 0.4, "any")], AF_INDEX_MAP, PARSING_SPEC)
     )
     assert len(kept_ge) == 1  # aou 0.5 >= 0.4
 
@@ -657,14 +664,14 @@ def test_af_rejects_equality():
     """`==` is gone: these are floats, so equality is a question the data can
     rarely answer, and it was never the useful test for a frequency."""
     with pytest.raises(rf.FilterError):
-        rf.compile_filters([_af_filter("eq", 0.01, "any")], AF_INDEX_MAP)
+        rf.compile_filters([_af_filter("eq", 0.01, "any")], AF_INDEX_MAP, PARSING_SPEC)
 
 
 def test_af_specific_columns_only():
     lines = [_af_record(1, [_af_entry("0.3", "0.3", "0.5")])]
     # test only the exomes overall column; 0.3 > 0.05 -> drop
     compiled = rf.compile_filters(
-        [_af_filter("le", 0.05, "any", values=["gnomAD_exomes_AF"])], AF_INDEX_MAP
+        [_af_filter("le", 0.05, "any", values=["gnomAD_exomes_AF"])], AF_INDEX_MAP, PARSING_SPEC
     )
     kept, _ = rf.apply_filter_pipeline(lines, compiled)
     assert kept == []
@@ -676,7 +683,7 @@ def test_af_no_data_is_kept():
     common -- and dropping it hid exactly the novel variants a rare-variant
     filter is usually hunting for."""
     lines = [_af_record(1, [_af_entry("", "", "")])]
-    compiled = rf.compile_filters([_af_filter("le", 0.05, "any")], AF_INDEX_MAP)
+    compiled = rf.compile_filters([_af_filter("le", 0.05, "any")], AF_INDEX_MAP, PARSING_SPEC)
     kept, _ = rf.apply_filter_pipeline(lines, compiled)
     assert len(kept) == 1
 
@@ -686,7 +693,7 @@ def test_af_no_data_is_kept_whatever_the_comparison():
     comparison points -- a `ge` filter must not start dropping them again."""
     lines = [_af_record(1, [_af_entry(".", "", "")])]
     for operator in ("le", "ge"):
-        compiled = rf.compile_filters([_af_filter(operator, 0.05, "any")], AF_INDEX_MAP)
+        compiled = rf.compile_filters([_af_filter(operator, 0.05, "any")], AF_INDEX_MAP, PARSING_SPEC)
         kept, _ = rf.apply_filter_pipeline(lines, compiled)
         assert len(kept) == 1, operator
 
@@ -695,7 +702,7 @@ def test_af_present_data_still_decides_even_with_no_data_alongside():
     """The change is only about having nothing at all: a column with data still
     excludes the allele when it fails."""
     lines = [_af_record(1, [_af_entry("0.9", "", "")])]
-    compiled = rf.compile_filters([_af_filter("le", 0.05, "any")], AF_INDEX_MAP)
+    compiled = rf.compile_filters([_af_filter("le", 0.05, "any")], AF_INDEX_MAP, PARSING_SPEC)
     kept, _ = rf.apply_filter_pipeline(lines, compiled)
     assert kept == []
 
@@ -703,7 +710,7 @@ def test_af_present_data_still_decides_even_with_no_data_alongside():
 def test_af_ignores_missing_but_tests_present():
     # exomes empty (ignored), nfe 0.01 present and <= 0.05 -> keep
     lines = [_af_record(1, [_af_entry("", "0.01", "")])]
-    compiled = rf.compile_filters([_af_filter("le", 0.05, "any")], AF_INDEX_MAP)
+    compiled = rf.compile_filters([_af_filter("le", 0.05, "any")], AF_INDEX_MAP, PARSING_SPEC)
     kept, _ = rf.apply_filter_pipeline(lines, compiled)
     assert len(kept) == 1
 
@@ -713,6 +720,7 @@ def test_af_rejects_in_operator():
         rf.compile_filters(
             [rf.ResultsFilter(field=rf.ALLELE_FREQUENCY_FIELD, operator="in", values=[])],
             AF_INDEX_MAP,
+            PARSING_SPEC,
         )
 
 
@@ -814,6 +822,8 @@ def _response_with_af_sources() -> model.VepResultsResponse:
     return model.VepResultsResponse(
         metadata=model.Metadata(
             pagination=model.PaginationMetadata(page=1, per_page=10, total=0),
+            display_panels=DISPLAY_PANELS,
+            display=DISPLAY,
             available_af_sources=[
                 model.AfSource(key="gnomAD_exomes_AF", source="gnomad_exomes", population="", label="All"),
                 model.AfSource(key="gnomAD_genomes_AF", source="gnomad_genomes", population="", label="All"),
@@ -826,7 +836,8 @@ def _response_with_af_sources() -> model.VepResultsResponse:
 def test_af_sources_gated_to_the_expected_columns():
     # The output VCF carries both, but only exomes was selected (in the pin).
     gated = vcf_results._with_display_panels(
-        _response_with_af_sources(), None, None,
+        _response_with_af_sources(), DISPLAY_PANELS, DISPLAY,
+        spec=PARSING_SPEC,
         expected_columns={"gnomAD_exomes_AF", "CADD_PHRED"},
     )
     assert [s.key for s in gated.metadata.available_af_sources] == ["gnomAD_exomes_AF"]
@@ -836,18 +847,11 @@ def test_af_sources_all_dropped_when_no_af_was_selected():
     # AF columns are in the VCF but none is in the pinned expected set -> the AF
     # filter is offered nothing (so the frontend hides it).
     gated = vcf_results._with_display_panels(
-        _response_with_af_sources(), None, None,
+        _response_with_af_sources(), DISPLAY_PANELS, DISPLAY,
+        spec=PARSING_SPEC,
         expected_columns={"CADD_PHRED", "CLIN_SIG"},
     )
     assert gated.metadata.available_af_sources == []
-
-
-def test_af_sources_untouched_without_a_pin():
-    # Older jobs (no expected-columns sidecar) keep the VCF-reported sources.
-    gated = vcf_results._with_display_panels(
-        _response_with_af_sources(), None, None, expected_columns=None
-    )
-    assert len(gated.metadata.available_af_sources) == 2
 
 
 # --- All of Us max_subpopulation decoded to a label at serve time -----------
@@ -899,12 +903,18 @@ def test_with_display_panels_labels_max_subpopulation():
     )
     response = model.VepResultsResponse(
         metadata=model.Metadata(
-            pagination=model.PaginationMetadata(page=1, per_page=10, total=1)
+            pagination=model.PaginationMetadata(page=1, per_page=10, total=1),
+            display_panels=DISPLAY_PANELS,
+            display=DISPLAY,
         ),
         variants=[variant],
     )
     out = vcf_results._with_display_panels(
-        response, None, None, expected_columns=None
+        response,
+        DISPLAY_PANELS,
+        DISPLAY,
+        spec=PARSING_SPEC,
+        expected_columns={"AoU_gvs_max_subpop"},
     )
     data = out.variants[0].alternative_alleles[0].annotations[0].data
     assert data["max_subpopulation_label"] == "European"
@@ -1366,6 +1376,8 @@ def _response_with_scores(fields: list[str]) -> model.VepResultsResponse:
     return model.VepResultsResponse(
         metadata=model.Metadata(
             pagination=model.PaginationMetadata(page=1, per_page=10, total=0),
+            display_panels=DISPLAY_PANELS,
+            display=DISPLAY,
             available_scores=list(fields),
         ),
         variants=[],
@@ -1386,7 +1398,8 @@ def test_spliceai_fields_stay_available_on_the_sentinel_column_alone():
         rf.SPLICEAI_ANY_FIELD,
     ]
     gated = vcf_results._with_display_panels(
-        _response_with_scores(spliceai_fields), None, None,
+        _response_with_scores(spliceai_fields), DISPLAY_PANELS, DISPLAY,
+        spec=PARSING_SPEC,
         expected_columns={"SpliceAI_pred_DS_AG"},
     )
     assert gated.metadata.available_scores == spliceai_fields
@@ -1398,19 +1411,11 @@ def test_scores_the_submission_did_not_select_are_dropped():
         _response_with_scores(
             [rf.CADD_PHRED_FIELD, rf.REVEL_FIELD, rf.SPLICEAI_ANY_FIELD]
         ),
-        None, None,
+        DISPLAY_PANELS, DISPLAY,
+        spec=PARSING_SPEC,
         expected_columns={"CADD_PHRED", "gnomAD_exomes_AF"},
     )
     assert gated.metadata.available_scores == [rf.CADD_PHRED_FIELD]
-
-
-def test_scores_untouched_without_a_pin():
-    """Older jobs (no expected-columns sidecar) keep what the VCF reported."""
-    fields = [rf.CADD_PHRED_FIELD, rf.EVE_FIELD]
-    gated = vcf_results._with_display_panels(
-        _response_with_scores(fields), None, None, expected_columns=None
-    )
-    assert gated.metadata.available_scores == fields
 
 
 def test_every_score_field_has_a_builder():

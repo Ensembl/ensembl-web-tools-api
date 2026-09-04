@@ -107,8 +107,8 @@ def _select_library(library: dict, config_entries: list[dict]) -> dict:
     when *every* plugin it reads is among them — so an assembled spec never
     advertises an option the genome has no data for, and the display↔parsing
     consistency check still resolves (no dangling plugin ref). GRCh38 enables all
-    of them, so it selects the whole library unchanged (the Phase 0 baseline
-    holds); a genome with fewer entries gets a smaller spec.
+    of them, so it selects the whole library unchanged; a genome with fewer
+    entries gets a smaller spec.
     """
     enabled_plugins = {
         plugin
@@ -342,14 +342,9 @@ def write_spec_sidecar(directory: str | Path, spec: MergedSpec) -> Path:
     return path
 
 
-def load_spec_sidecar(vcf_path: FilePath) -> MergedSpec | None:
-    """The merged spec pinned alongside `vcf_path`'s directory, or None if there
-    isn't one (e.g. output from before this existed). Keyed off the VCF path the
-    same way results_meta.json and the page-index sidecar are, via `.with_name()`."""
-    sidecar_path = vcf_path.with_name(SPEC_SIDECAR_FILE)
-    if not sidecar_path.exists():
-        return None
-    return load_merged_spec_file(sidecar_path)
+def load_spec_sidecar(vcf_path: FilePath) -> MergedSpec:
+    """Load the complete merged spec pinned alongside `vcf_path`."""
+    return load_merged_spec_file(vcf_path.with_name(SPEC_SIDECAR_FILE))
 
 
 def write_expected_columns_sidecar(
@@ -362,13 +357,9 @@ def write_expected_columns_sidecar(
     return path
 
 
-def load_expected_columns_sidecar(vcf_path: FilePath) -> set[str] | None:
-    """The expected CSQ columns pinned alongside `vcf_path`, or None if there is
-    no sidecar (output from before this existed). Keyed off the VCF path via
-    `.with_name()`, like the spec and page-index sidecars."""
+def load_expected_columns_sidecar(vcf_path: FilePath) -> set[str]:
+    """Load the expected CSQ columns pinned alongside `vcf_path`."""
     sidecar_path = vcf_path.with_name(EXPECTED_COLUMNS_SIDECAR_FILE)
-    if not sidecar_path.exists():
-        return None
     return set(json.loads(sidecar_path.read_text()))
 
 
@@ -383,12 +374,7 @@ def write_display_panels_sidecar(
     return path
 
 
-def load_display_panels_sidecar(vcf_path: FilePath) -> list[DisplayPanel] | None:
-    """The option panels pinned alongside `vcf_path`, or None if there is no
-    sidecar (output from before this existed — such a job keeps rendering
-    against the live form-config panels). Keyed off the VCF path via
-    `.with_name()`, like the spec and expected-columns sidecars."""
+def load_display_panels_sidecar(vcf_path: FilePath) -> list[DisplayPanel]:
+    """Load the option panels pinned alongside `vcf_path`."""
     sidecar_path = vcf_path.with_name(DISPLAY_PANELS_SIDECAR_FILE)
-    if not sidecar_path.exists():
-        return None
     return to_display_panels(json.loads(sidecar_path.read_text()))

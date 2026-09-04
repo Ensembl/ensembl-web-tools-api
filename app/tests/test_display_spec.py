@@ -8,13 +8,8 @@ things have to hold:
     time like the config<->parsing half (this is what stops the labels drifting
     from the parsers);
   * scopes are *derived*, never authored -- the display rows name a plugin only,
-    and the allele-vs-transcript answer comes from `parsing`;
-  * the load side is *defensive* -- a spec pinned before this section existed has
-    no `display` key, must still load, and its job must still render (falling
-    back to the current genome's display spec).
+    and the allele-vs-transcript answer comes from `parsing`.
 """
-
-import json
 
 import pytest
 from pydantic import FilePath, ValidationError
@@ -28,15 +23,8 @@ from app.vep.models.display_spec_model import (
     DisplayTableBlock,
 )
 from app.vep.models.merged_spec_model import MergedSpec
-from app.vep.utils.spec_loader import (
-    SPEC_SIDECAR_FILE,
-    load_merged_spec,
-    write_spec_sidecar,
-)
-from app.vep.utils.vcf_results import (
-    _load_pinned_merged_spec,
-    _resolve_display_payload,
-)
+from app.vep.utils.spec_loader import load_merged_spec, write_spec_sidecar
+from app.vep.utils.vcf_results import _load_pinned_merged_spec
 
 SPEC = load_merged_spec("human_grch38")
 
@@ -100,6 +88,8 @@ def _doc(display, plugins=None):
             ]
         },
         "display": display,
+        "help": {"options": []},
+        "filters": {"fields": []},
     }
 
 
@@ -701,66 +691,11 @@ def test_display_section_serialises_with_the_authored_key_names():
     assert hgvs["blocks"][0]["blocks"][0]["rows"][0]["from"] == "hgvs.transcript"
 
 
-# --- the legacy fallback ----------------------------------------------------
-
-
-def _legacy_document() -> dict:
-    """The bundled spec as it was written before this change: same document with
-    the `display` key genuinely absent."""
-    payload = json.loads(
-        (SPEC.model_dump_json(exclude={"spec_version": True}))
-    )
-    payload.pop("display")
-    assert "display" not in payload
-    return payload
-
-
-def test_a_spec_without_a_display_key_still_loads():
-    spec = MergedSpec.model_validate(_legacy_document())
-    assert spec.display is None
-    assert spec.display_payload() is None
-
-
-def test_legacy_pinned_sidecar_loads_and_falls_back_to_the_current_display(tmp_path):
-    (tmp_path / SPEC_SIDECAR_FILE).write_text(json.dumps(_legacy_document()))
-    pinned = _load_pinned_merged_spec(_vcf_path(tmp_path))
-    assert pinned is not None and pinned.display is None
-
-    payload = _resolve_display_payload(pinned)
-    assert payload is not None
-    assert {o.option_id for o in payload.options} == SPEC_DRIVEN_OPTIONS
-    # Scopes still describe the *pinned* parsers -- only the layout is current.
-    assert payload.plugin_scopes == pinned.plugin_scopes()
-    # And the layout is *whole*: the rating scales its options refer to travel
-    # with them, or these jobs would render ClinVar's review status unrated.
-    assert "clinvar_submission" in payload.rating_scales
-
-
 def test_a_current_pinned_sidecar_uses_its_own_display(tmp_path):
     write_spec_sidecar(tmp_path, SPEC)
     pinned = _load_pinned_merged_spec(_vcf_path(tmp_path))
-    payload = _resolve_display_payload(pinned)
-    assert payload is not None
+    payload = pinned.display_payload()
     assert {o.option_id for o in payload.options} == SPEC_DRIVEN_OPTIONS
-
-
-def test_no_pinned_spec_means_no_display_payload():
-    assert _resolve_display_payload(None) is None
-
-
-def test_unknown_assembly_falls_back_to_the_base_display():
-    """A job pinned before the display section existed, on a genome with no spec
-    of its own, now renders the base options rather than nothing — the same
-    fallback the submit path uses."""
-    legacy = MergedSpec.model_validate(
-        {**_legacy_document(), "genome": {"assembly": "Nothing_v1"}}
-    )
-    payload = _resolve_display_payload(legacy)
-    assert payload is not None
-    base = load_merged_spec("base")
-    assert {o.option_id for o in payload.options} == {
-        o.option_id for o in base.display.options
-    }
 
 
 # --- linked table columns (IntAct) ------------------------------------------

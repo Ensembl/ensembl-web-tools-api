@@ -74,10 +74,3 @@ def test_a_spec_flagging_nothing_is_left_alone():
     spec = SimpleNamespace(help=HelpSpec(options=[OptionHelp(option_id="plain", description="x")]))
     before = dump_display_panels(_panels())
     assert dump_display_panels(_drop_form_only_help(_panels(), spec)) == before
-
-
-def test_no_panels_or_no_spec_is_not_an_error():
-    """Jobs pinned before either existed still render."""
-    assert _drop_form_only_help(None, SPEC) is None
-    before = dump_display_panels(_panels())
-    assert dump_display_panels(_drop_form_only_help(_panels(), None)) == before

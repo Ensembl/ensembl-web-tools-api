@@ -11,7 +11,6 @@ The header fixtures below (ALL_COLS / INDEX_MAP / row_list / EMPTY) are shared
 with test_spec_interpreter.
 """
 
-from app.vep.models import vcf_results_model as model
 from app.vep.utils.csq import get_prediction_index_map
 from app.vep.utils.spec_loader import load_merged_spec
 from app.vep.utils.vcf_results import (
@@ -317,25 +316,3 @@ def test_transcript_flags_mane_gencode_primary_canonical():
     assert plain_cons.is_canonical is False
     assert plain_cons.is_mane_select is False
     assert plain_cons.is_gencode_primary is False
-
-
-def test_no_spec_means_no_annotations():
-    transcript = row_str(
-        Allele="T",
-        Consequence="missense_variant",
-        Feature="ENST00000269305.9",
-        Feature_type="Transcript",
-        BIOTYPE="protein_coding",
-        CANONICAL="YES",
-        Gene="ENSG00000141510",
-        STRAND="1",
-        LOEUF="0.15",
-        SIFT="deleterious(0.01)",
-    )
-
-    result = _get_alt_allele_details("C", "T", [transcript], INDEX_MAP, None)
-    assert result.annotations == []
-    consequence = result.predicted_molecular_consequences[0]
-    assert consequence.annotations == []
-    # the typed tail does not depend on the spec
-    assert consequence.sift.prediction == "deleterious"

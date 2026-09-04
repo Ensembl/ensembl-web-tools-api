@@ -420,20 +420,7 @@ on a **row** is a `<plugin>.<field>` ref (it is checked by `field_refs()`); on a
 cell or item it is an *element* field. `template: "{value}"` means the value read
 from `link_from` **is** the URL.
 
-### Step 4 — mirror into the baseline
-
-`app/tests/human_grch38.baseline.json` is a hand-maintained byte-copy of the
-pre-split monolith, compared against the assembled spec by
-`test_spec_loader.py::test_assembled_grch38_matches_the_pre_split_baseline`. Make
-the **identical edit** there. It mirrors the config entries too, not just
-parsing+display — including its own copy of `parsed_as`.
-
-It is not a programmatic dump; all four obvious serialisations differ in size.
-But a JSON round-trip *is* byte-identical with
-`json.dumps(doc, indent=2, ensure_ascii=False) + "\n"` (`ensure_ascii=False`
-matters — SpliceAI's ΔS/ΔP labels), which makes scripted edits safe within a file.
-
-### Step 5 — verify
+### Step 4 — verify
 
 ```bash
 PYTHONPATH=app .venv/bin/python -m pytest app/tests -q
@@ -1231,46 +1218,34 @@ Every one of these has cost real time.
 1. **`parsed_as: []` silently drops the display option.** The library is selected
    by the plugins the config enables, so an option that reads a plugin nothing
    enables is filtered out with no error. Symptom: 32 options where you expected
-   33. Fix it in the genome document **and** in the baseline's own copy.
+   33. Fix it in the genome document.
 
-2. **The baseline gate must be hand-mirrored.** `human_grch38.baseline.json` is
-   not a dump. Any intentional spec change fails
-   `test_assembled_grch38_matches_the_pre_split_baseline` until you make the
-   identical edit there — including the config half.
+2. **The display layout is pinned per job.** A submission keeps the rendering it
+   was created with. Reloading a job proves nothing about a later display
+   change; make a new submission, or rewrite all of its current-schema sidecars.
+   Say this when handing over a display change or it will be reported as "not
+   fixed".
 
-3. **The display layout is pinned per job.** An existing submission keeps the old
-   rendering, correctly. Reloading an old job proves nothing about a display
-   change; make a new submission, or rewrite the sidecar. Say this when handing
-   over a display change or it will be reported as "not fixed".
+3. **The pinned sidecar is written by `model_dump_json()` — by field name, not by
+   alias, and compact.** An aliased model needs `populate_by_name=True` or the
+   complete spec fails to load. If you are editing a sidecar by hand the JSON is
+   `"label":"X"` with **no space after the colon**, unlike the spec files.
 
-4. **The pinned sidecar is written by `model_dump_json()` — by field name, not by
-   alias, and compact.** Two consequences: an aliased model needs
-   `populate_by_name=True` or the *whole spec* fails to load and every plugin
-   silently produces nothing; and if you are editing a sidecar by hand the JSON
-   is `"label":"X"` with **no space after the colon**, unlike the spec files.
+4. **A plugin's `cols` gaining a middle field silently kills the whole panel.**
+   Positional parses are exactly as fragile as they sound; update the current
+   parser and submit a new job when a source's layout changes.
 
-5. **Deleting or renaming a parsing-spec field kills every existing job.** The
-   models are `extra="forbid"`, `_load_pinned_spec` swallows the validation error
-   and returns `None`, and the job renders with *no annotations at all* and no
-   message. When a field goes: keep accepting the old spelling (an alias for a
-   rename, a declared-but-unread field for a deletion), add its shape to
-   `test_sidecar_compatibility.py`, and do **not** relax `extra="forbid"`.
+5. **A misparse is silent.** A wrong `size`, a wrong separator or a wrong field
+   order produces plausible numbers under the wrong names. Differential-test
+   against a real workflow output carrying the columns — not just fixtures. This
+   is the validation that consistently pays off.
 
-6. **A plugin's `cols` gaining a middle field silently kills the whole panel.**
-   Positional parses are exactly as fragile as they sound; prefer reading both
-   shapes when a source's layout changes, since results live seven days.
-
-7. **A misparse is silent.** A wrong `size`, a wrong separator or a wrong field
-    order produces plausible numbers under the wrong names. Differential-test
-    against a real workflow output carrying the columns — not just fixtures. This is
-    the validation that consistently pays off.
-
-8. **Run the control.** When you believe something is fixed, break it
+6. **Run the control.** When you believe something is fixed, break it
     deliberately and confirm the measurement moves. A test that cannot fail
     proves nothing; a spec-driven path that silently falls back to a bespoke
     renderer looks identical to one that works.
 
-13. ★★ **Narrowing against a per-row column silently defeats the parse cache.**
+7. ★★ **Narrowing against a per-row column silently defeats the parse cache.**
     `apply_plugin_spec` caches on `(plugin, values of csq_fields)`, because a
     plugin's output is identical on every CSQ row of a variant — true while it
     depends only on its own columns, and false the moment a `drop_when` compares
@@ -1286,14 +1261,14 @@ Every one of these has cost real time.
     a control mandatory: without the cache widening the neighbour keeps the wrong
     data, and without `column_pattern` *everything* drops. Both look plausible.
 
-14. **A default you do not state is not the default you meant.** An option left
+8. **A default you do not state is not the default you meant.** An option left
     at its default is never written into the submitted parameters, so the
     submission fills it from the spec (`_resolve_options`). Both halves now read
     the *same* declaration — the `form` block's `default` — which is what closed
     a bug where All of Us's "Maximum subpopulation" default was set on the form
     and had no effect. Do not reintroduce a second place to say it.
 
-15. **An option id is the only seam.** The `id` on the config entry is the form
+9. **An option id is the only seam.** The `id` on the config entry is the form
     control, the key in the submission's `options` map, and the thing `parsed_as`
     hangs off. There is no separate registry keeping those in step any more —
     which is the point, but it means a typo in one place is simply a different
@@ -1315,11 +1290,10 @@ Ordered; the joins fail loudly at load if a step is skipped.
 3. Author the `parsing` plugin in `annotation_library.json` — scope,
    `csq_fields`, targets. Only if it emits columns to read.
 4. Author the `display` option in `annotation_library.json`.
-5. Mirror steps 2–4 into `app/tests/human_grch38.baseline.json`.
-6. Run backend pytest and the client's `tsc`, vitest, prettier, and eslint under
+5. Run backend pytest and the client's `tsc`, vitest, prettier, and eslint under
   **ensembl-client's** config.
-7. Run a test workflow and inspect the generated per-job sidecars.
-8. Differential-test against a real VCF, and run a control.
+6. Run a test workflow and inspect the generated per-job sidecars.
+7. Differential-test against a real VCF, and run a control.
 
 There is no longer a step for `form_panels.py` or for `ConfigIniParams`. If you
 find yourself editing either to add an option, something is wrong with the entry.

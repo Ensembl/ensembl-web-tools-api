@@ -5,15 +5,10 @@ job rendered against whatever the config said at viewing time. The panels are no
 computed at submission and pinned as a third sidecar (beside the merged spec and
 the expected CSQ columns), then handed back on the results response.
 
-Two things have to hold:
-  * the pin is faithful -- the sidecar round-trips get_visible_panels() exactly,
-    and the panels pinned for a submission are the same ones /form_config would
-    return for that assembly;
-  * the load side is defensive -- a job submitted before this existed has no
-    sidecar, gets None, and keeps rendering against the live panels.
+The pin must be faithful: the sidecar round-trips get_visible_panels() exactly,
+and the panels pinned for a submission are the same ones /form_config returns
+for that assembly.
 """
-
-import json
 
 import pytest
 from pydantic import FilePath
@@ -29,8 +24,6 @@ from app.vep.utils.spec_loader import (
     load_display_panels_sidecar,
     write_display_panels_sidecar,
 )
-from app.vep.utils.vcf_results import _load_pinned_display_panels
-
 HUMAN = "9606"
 MOUSE = "10090"
 
@@ -227,48 +220,3 @@ def test_the_panels_no_longer_depend_on_species_taxonomy_id():
 
 def test_species_taxonomy_id_is_not_a_submission_field():
     assert "species_taxonomy_id" not in ConfigIniParams.model_fields
-
-
-# --- the load side never breaks an older job -----------------------------
-
-
-def test_no_sidecar_returns_none(tmp_path):
-    """A job submitted before this existed has no sidecar; results must still
-    parse, with the frontend falling back to the live panels."""
-    assert load_display_panels_sidecar(_vcf_path(tmp_path)) is None
-    assert _load_pinned_display_panels(_vcf_path(tmp_path)) is None
-
-
-def test_unreadable_sidecar_is_ignored_rather_than_raising(tmp_path):
-    (tmp_path / DISPLAY_PANELS_SIDECAR_FILE).write_text("{not json")
-    assert _load_pinned_display_panels(_vcf_path(tmp_path)) is None
-
-
-def test_empty_sidecar_falls_back_rather_than_pinning_nothing(tmp_path):
-    """An empty list can only come from a corrupted sidecar — get_visible_panels
-    always returns at least the always-visible panels. Treating it as a valid pin
-    would render the job with no panels at all instead of falling back to live."""
-    (tmp_path / DISPLAY_PANELS_SIDECAR_FILE).write_text("[]")
-    assert _load_pinned_display_panels(_vcf_path(tmp_path)) is None
-
-
-def test_sidecar_with_unexpected_keys_is_still_loaded(tmp_path):
-    """The panel structure is still evolving; a sidecar written by a newer
-    backend must not fail to load on an older one."""
-    (tmp_path / DISPLAY_PANELS_SIDECAR_FILE).write_text(
-        json.dumps(
-            [
-                {
-                    "id": "future_panel",
-                    "label": "Future",
-                    "options": [
-                        {"id": "opt", "label": "Opt", "type": "boolean",
-                         "default": False, "something_new": {"a": 1}}
-                    ],
-                }
-            ]
-        )
-    )
-    panels = _load_pinned_display_panels(_vcf_path(tmp_path))
-    assert panels is not None
-    assert panels[0].options[0].model_dump()["something_new"] == {"a": 1}

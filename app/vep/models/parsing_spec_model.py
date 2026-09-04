@@ -1,27 +1,17 @@
-"""Static, strongly-typed model of the CSQ parsing spec.
+"""Validated models for the CSQ parsing section of a merged spec.
 
-The spec describes how to turn one plugin's CSQ columns into structured output,
-replacing a hand-written `_parse_*` function. It is *data* — the `parsing`
-section of the merged JSON under `vep/specs/`, later served by the annotation
-API — so it is validated hard on arrival: this model is the contract with that
-data.
-
-Deliberately strict (`extra="forbid"`): a spec with an unknown key is a spec we
-do not understand, and failing loudly at load time is much cheaper than silently
-producing empty annotations at parse time.
+The section maps plugin CSQ columns to structured annotations. Unknown keys are
+rejected so an unsupported spec cannot silently change result parsing.
 """
 
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# "raw" is not a coercion: it captures the element's own source text, so a value
-# survives verbatim even where the named fields misread it. ProtVar uses this as
-# a hedge — its column layout is only known best-effort.
+# `raw` preserves the source element without consuming a positional field.
 ValueType = Literal["string", "float", "int", "raw"]
 
-# Transforms understood by the interpreter. Kept deliberately small; this set was
-# derived by enumerating the existing `_parse_*` functions rather than invented.
+# Transforms implemented by the interpreter.
 Transform = Literal[
     "scalar", "list", "first", "zip", "regex", "pattern_map", "chunk", "positional",
     "key_value", "records", "stack",
@@ -29,17 +19,7 @@ Transform = Literal[
 
 
 class DropEntries(BaseModel):
-    """Drop the entries of a packed field that match a pattern.
-
-    A field whose value is several entries joined by a separator (IntAct packs
-    its interaction participants as `uniprotkb:P42336_and_ensembl:ENSP...`).
-    Where `replace` rewrites fixed text, this removes whole entries by what they
-    look like, and is the only field-level operation that needs a regex — an
-    identifier is never the same twice, so a literal cannot name it.
-
-    If every entry goes, so does the field: an empty packed string is no value,
-    and the column drops as any absent field does.
-    """
+    """Remove regex-matching entries from a separator-delimited field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -47,65 +27,35 @@ class DropEntries(BaseModel):
     sep: str
     # A Python regular expression, matched against each entry (`re.search`).
     matching: str
-    # Why these entries are dropped, in prose. Carried by the model rather than
-    # left to a comment because the spec is JSON and cannot hold one, and a rule
-    # that silently removes data is exactly the kind that needs to say why — and
-    # to say whether it is meant to be permanent.
+    # Rationale recorded in the JSON spec for a data-removing rule.
     why: str | None = None
 
 
 class FieldSpec(BaseModel):
-    """One output field of a composite value (e.g. one column of a `zip`, a named
-    group of a `regex`, or a slot of a `positional`/`chunk`).
-
-    A `raw`-typed field consumes no positional slot — it reports the source text
-    of the element it sits in.
-    """
+    """One output field of a composite transform."""
 
     model_config = ConfigDict(extra="forbid")
 
     field: str
     type: ValueType = "string"
-    # String tidying, applied in order after coercion. VEP escapes spaces as
-    # underscores in free text (GO term names, phenotype labels), so undoing
-    # that is a general need rather than a GO quirk.
+    # String replacements applied after coercion.
     replace: dict[str, str] | None = None
     strip: bool = False
-    # Extra tokens meaning "no value" for this field, on top of '' and 'NA'.
-    # ClinVar writes '.' where a condition has no ontology ids, and a VCF-derived
-    # source generally uses '.' for an absent value — but '.' is a real value
-    # elsewhere, so this is declared per field rather than made global.
+    # Field-specific null tokens, in addition to empty strings and `NA`.
     null_values: list[str] | None = None
     # See DropEntries. Applied last, after the tidying above.
     drop_entries: DropEntries | None = None
 
 
 class Match(BaseModel):
-    """One equality on a field of a produced element.
-
-    The right-hand side is either a literal (`equals`) or the value of a CSQ
-    column (`equals_column`). It is the same predicate either way, so it is
-    compared the same way either way -- which it had not been: this was two
-    models with two comparators, and they disagreed. `only_if` compared the raw
-    values with `!=` while a join's `where` stringified first, so `equals: "1"`
-    against an int-typed field worked in one and was silently inert in the
-    other. See `_same` in spec_interpreter for the comparator they now share.
-    """
+    """Equality between a produced field and a literal or CSQ-column value."""
 
     model_config = ConfigDict(extra="forbid")
 
     field: str
     equals: str | None = None
     equals_column: str | None = None
-    # Applied to the *column's* value before comparing, taking the comparable
-    # part from a `key` group -- the same device `RowScope.item_pattern` and a
-    # join's `right_key_pattern` use, and needed for the same reason.
-    #
-    # VEP writes a versioned gene id in `Gene` (`ENSG00000121879.8`) while a
-    # plugin's own payload carries the bare accession (`ENSG00000121879`). Those
-    # are the same gene and must compare equal; without this they never do, and
-    # the failure is silent in the worst direction -- `_same` returns False, so
-    # an `unless_matches` rule would drop every element rather than none.
+    # Regex with a `key` group to extract from `equals_column` before comparing.
     column_pattern: str | None = None
 
     @model_validator(mode="after")
@@ -131,24 +81,9 @@ class Match(BaseModel):
 
 
 class DropWhen(BaseModel):
-    """When to discard a produced element. Exactly one mode.
+    """Rule for discarding an element: all-null, a null field, or a mismatch.
 
-    all_null       every field of the element came out null (MaveDB: a position
-                   where neither score nor urn is real).
-    null           the named field came out null (OpenTargets: a row with no
-                   disease is not an association, whatever else it carries).
-    unless_matches the named field does not equal the given CSQ column. VEP
-                   repeats a whole plugin value on every alt allele's CSQ row, so
-                   a value that is really per-allele has to be narrowed to the
-                   row's own allele: a phenotype association is kept only where
-                   its risk allele is this allele. An element whose field is null
-                   never matches, so this also drops associations carrying no
-                   risk allele at all.
-
-    `only_if` narrows any mode to elements matching a condition on one of their
-    own fields, for a requirement that holds for some kinds of element but not
-    others — the allele rule applies to a "Variation" association, while a "Gene"
-    one legitimately carries no allele and must survive.
+    `only_if` limits the rule to matching elements.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -171,114 +106,11 @@ class DropWhen(BaseModel):
 
 
 class PostOp(BaseModel):
-    """An operation over the whole produced list, applied in order.
+    """A list operation applied after a target is parsed.
 
-    dedup   drop elements identical to an earlier one (the OpenTargets plugin
-            currently emits duplicate rows).
-    sort    order by `by`. `nulls` places elements whose key is null, and is
-            independent of `desc` — "strongest first, unscored last" needs
-            desc + nulls: last.
-    exclude drop elements whose `by` field is one of `values` — placeholder terms
-            a source emits in place of real data ("ClinVar:_phenotype_not
-            _specified" is not a phenotype). Compared case-insensitively against
-            the parsed value, so the spec need not mirror a source's casing.
-
-    lookup  add a field derived from another via a shipped reference table —
-            GO's aspect, which the plugin's output does not carry (it emits an
-            id and a name only). `by` is the field to look up, `into` the field
-            to write, `table` the table's name in `vep/data/`. An id the table
-            does not know writes null rather than failing: GO releases and the
-            annotation files move independently, so an unknown term is a normal
-            state, not a broken spec.
-
-    split_field  the inverse of `concat`: cut a field at the first `sep` and
-            write one side of it to `into`, keeping the original intact. A
-            source that packs two identifiers into one column needs both —
-            MaveDB's accession is `urn:mavedb:00000045-a-1#2010`, the score set
-            and the variant within it, and the link wants the score set in its
-            path and the whole accession in its query. `by` is the field to cut,
-            `keep` which side ("before" by default). A value with no `sep` in it
-            is all "before" and no "after", so the missing half writes null and
-            whatever depends on it drops.
-
-    concat  join two or more fields into a new one — OpenTargets publishes a
-            p-value as a mantissa and an exponent in separate columns, and
-            `3.32` + `e` + `-28` is the number a reader wants. `fields` names
-            the parts in order, `sep` goes between them, `into` is the field to
-            write. Any part being null makes the result null rather than a
-            malformed string: a row with no p-value must show nothing, not
-            "e" on its own.
-
-    curie_link  turn a CURIE list into one link. A source that names a thing in
-            several ontologies at once (ClinVar's CLNDISDB —
-            `MeSH:D030342,MedGen:C0950123`) has no single id; `prefer` picks
-            which authority to trust, in order, falling back to whatever is
-            there. `templates` maps the source prefix to its URL, `{id}` being
-            the bare accession. `by` is the CURIE-list field, `into` the URL
-            field to write, `label_into` (optional) the chosen CURIE itself.
-            A list with nothing matching any template writes null, so a
-            condition ClinVar gives no usable id for renders as plain text
-            rather than a dead link.
-
-    mapped_link  build a link whose URL shape depends on which source an element
-            came from. `by` names the field that decides (for phenotypes, the
-            `source`), `templates` maps each of its values to a URL, and `into`
-            is the URL field to write. Unlike `curie_link` the key is a plain
-            field value rather than a prefix inside a CURIE, and the template is
-            filled from the element's *own* fields — `{id}` and `{external_id}`
-            are both available, which is the point: the Phenotypes plugin gives
-            every association both, and which one addresses the record differs
-            by source. G2P and the GWAS catalogue are keyed by `id` (an Ensembl
-            gene id, an rs id), while OMIM and Orphanet are keyed by
-            `external_id`, their own accession, with `id` holding the gene the
-            association hangs off.
-
-            A source absent from `templates`, or one whose template names a
-            field this element left empty, writes null — so an association from
-            a source with no known URL renders as plain text rather than a dead
-            link, exactly as `curie_link` does.
-
-    collapse  merge elements differing *only* in the named fields, gathering
-            those fields into a nested list. ClinVar files one submission
-            against several conditions at once, so a variant's table can carry
-            five rows that are one classification by one submitter under five
-            disease names — identical in every column but the condition, and
-            read as five findings when they are one. `fields` names what may
-            differ, `into` the field the gathered sets land in. First-seen
-            order, and a group of one collapses too, so the display reads one
-            shape rather than two.
-
-    derive_if_empty  build a list from a packed field, but only where the list
-            is still empty. ClinVar's conditions table takes its names from
-            CLNDN, and a handful of RCV records name a condition CLNDN does not
-            carry at all — the record itself has it, as
-            `MedGen:C0338106:Colon_adenocarcinoma`, so the cell need not be
-            blank. `by` is the packed field, `sep` what separates its entries,
-            `pattern` a regex whose named groups become each element's fields,
-            and `into` the list to fill. Entries the pattern does not match are
-            skipped.
-
-    default  fill a field where the source left it empty. ClinVar accepts a
-            submission with no classification at all ("no classification
-            provided"), and grouping by classification would otherwise have
-            nothing to file it under and drop it — so it becomes an explicit
-            "none" that the reader can see, hung off its own condition and RCV
-            like any other. `by` is the field, `value` what to put there.
-
-    only_if_differs  keep a nested element's field only where the row does not
-            already show that value, writing it to `into` (null otherwise, so
-            the display drops it). ClinVar's submitters file against their own
-            wording — "Renal tubular dysgenesis of genetic origin" where the
-            aggregate says "Renal tubular dysgenesis" — and that is worth
-            showing exactly when it is not what the reader can already see.
-            `in` is the dotted path to the nested elements, `field` what to
-            compare, `against` the dotted path to the values the row shows.
-            Elements are copied, never mutated: a join attaches the same object
-            to every row it matched.
-
-    `exclude` is a post-op rather than a `drop_when` mode because `drop_when`
-    takes exactly one mode and the phenotype targets already spend theirs on the
-    per-allele rule.
+    Operations deduplicate, sort, exclude, derive fields, build links, collapse
+    rows, and conditionally retain nested values. The field validators below
+    define the inputs required by each operation.
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)

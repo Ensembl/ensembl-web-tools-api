@@ -1,20 +1,7 @@
-"""Static, strongly-typed model of the *config-generation* half of the merged
-annotation spec.
+"""Validated models for the config section of a merged annotation spec.
 
-Sibling to `parsing_spec_model.py`. Where the parsing spec says how to read a
-plugin's CSQ columns, this says how a *selected option* becomes a line in the VEP
-`config.ini` — replacing the hardcoded `PLUGIN_CONFIG_LINES` /
-`PLUGIN_CONFIG_LINES_BY_ASSEMBLY` maps and the `create_config_ini_file` body in
-`pipeline_model.py`. It is *data* (the `config` section of the merged JSON under
-`specs/`, later served by the annotation API), so it is validated hard on arrival
-(`extra="forbid"`).
-
-The emitters are a **small closed set** — `{flag, plugin, custom}` — derived by
-enumerating what `create_config_ini_file` actually emits, not invented, exactly
-as the parsing transforms were. The always-on base config (`force_overwrite`,
-`numbers`, `symbol`, … and the assembly-gated `mane`/`assembly`) is deliberately
-NOT here: it is a VEP-invocation invariant that stays in the backend, next to the
-per-genome `gff`/`fasta` resolution. See app/vep/docs/design/spec-and-extension-guide.md.
+The section maps selected options to `config.ini` lines. Invocation invariants
+and genome GFF/FASTA resolution remain in backend code.
 """
 
 from typing import Annotated, Literal, Union
@@ -28,19 +15,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # --------------------------------------------------------------------------- #
 
 class ByAssembly(BaseModel):
-    """A value chosen by the submission's assembly, e.g. an assembly-specific
-    data file. Keys are assembly prefixes (`GRCh38`/`GRCh37`); the interpreter
-    falls back to `GRCh38` when the assembly isn't listed, matching the ini
-    builder's `by_assembly.get(assembly, by_assembly["GRCh38"])`.
-    """
+    """A value chosen by assembly prefix, with an optional absent-value policy."""
 
     model_config = ConfigDict(extra="forbid")
 
     by_assembly: dict[str, str]
-    # When the submission's assembly isn't a key: fall back to `GRCh38` (mirrors
-    # the ini builder's `by_assembly.get(assembly, by_assembly["GRCh38"])`)
-    # unless this is set — then the whole param is dropped. For a param that
-    # exists on some assemblies only (SpliceAI's `snv_ensembl`, GRCh38 only).
+    # Omit the parameter instead of using the GRCh38 fallback.
     omit_if_absent: bool = False
 
 
@@ -78,18 +58,10 @@ class VariadicFlag(BaseModel):
 
 
 class VariadicFlags(BaseModel):
-    """IntAct-style: append `,<keyword>=1` for each selected sub-option, or a
-    single `,<all_shortcut>=1` when *all* of them are selected. None selected
-    leaves the base line untouched.
+    """Config flags controlled by selected sub-options.
 
-    `implicit_all` is for a plugin that already does everything when told
-    nothing — mutfunc. There, naming every flag is not how you ask for all of
-    them; saying nothing is. So all-selected emits no flags at all, and a subset
-    emits just that subset.
-
-    It follows that such a plugin cannot be asked for *nothing*: an empty flag
-    list is how you ask for everything. So with `implicit_all`, no sub-option
-    selected emits no line at all, rather than a bare line meaning the opposite.
+    `implicit_all` means no flags request all values, so an empty selection emits
+    no line.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -131,15 +103,7 @@ class LiteralFields(BaseModel):
 
 
 class AncestryCode(BaseModel):
-    """One gnomAD ancestry option and its field-code component. `code` is empty
-    for "all". `sex_split=False` marks a code that takes no XX/XY suffix and is a
-    plain toggle (genomes' `grpmax`).
-
-    `label` and `default` are what the form draws. They live here so the ancestry
-    is stated once: this list already had to name every ancestry to build the
-    `fields=` clause, and the form used to name them all again — the two had
-    already drifted (`grpmax` was in one and not the other).
-    """
+    """A gnomAD ancestry option and its emitted field-code component."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -148,10 +112,7 @@ class AncestryCode(BaseModel):
     sex_split: bool = True
     label: str = ""
     default: bool = False
-    # Where the form shows it, when that is not where the `fields=` clause wants
-    # it. genomes' `grpmax` is emitted last but sits directly under "All", where
-    # the two frequencies useful without knowing the variant's population belong
-    # together. Sparse, like FormOption.order; unset means "in list order".
+    # Optional form order; omitted values retain list order.
     form_order: int | None = None
 
 
@@ -484,10 +445,10 @@ class FormOption(BaseModel):
 
 
 class ConfigEntry(BaseModel):
-    """One option's config rule. `id` matches the ConfigIniParams field / form
-    option id, so a selected option finds its emitter. `order` is the position
-    the line takes in the generated ini (the current builder's emission order is
-    load-bearing for the golden-file tests, so it is explicit here)."""
+    """One option's config rule, keyed by its form and submission id.
+
+    `order` defines the generated `config.ini` order used by golden tests.
+    """
 
     model_config = ConfigDict(extra="forbid")
 

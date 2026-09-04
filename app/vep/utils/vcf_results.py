@@ -1,5 +1,4 @@
-""" Module for loading a VCF and parsing it into a VepResultsResponse
-object as defined in APISpecification"""
+"""Load a VEP VCF and convert it to the results response model."""
 
 from collections import deque, OrderedDict
 from dataclasses import dataclass
@@ -43,12 +42,8 @@ from vep.utils.spec_interpreter import (
 )
 from vep.models.parsing_spec_model import ParsingSpec
 
-# Taken from https://github.com/Ensembl/ensembl-hypsipyle
-# main/common/file_model/variant.py#L142
-# Needs to be moved into a shared module
 def _set_allele_type(alt_one_bp: bool, ref_one_bp: bool, ref_alt_equal_bp: bool) -> tuple[str,str]:
-    """Create a allele type for a variant based on Variation
-    teams logic using ref and largest alt allele sizes"""
+    """Classify an allele using Variation's length-based rules."""
     match [alt_one_bp, ref_one_bp, ref_alt_equal_bp]:
         case [True, True, True]:
             allele_type = "SNV"
@@ -72,7 +67,7 @@ def _set_allele_type(alt_one_bp: bool, ref_one_bp: bool, ref_alt_equal_bp: bool)
     return allele_type, so_term
 
 def _get_variant_type(ref: str, alt: str) -> str:
-    """Helper function to infer variant type from allele values"""
+    """Infer a non-structural variant type from reference and alternate alleles."""
     if alt=="copy_number_variation":
         return alt
     else:
@@ -80,11 +75,7 @@ def _get_variant_type(ref: str, alt: str) -> str:
 
 
 def _alt_value(alt) -> str:
-    """Return an alt allele's sequence string.
-
-    Simple substitution alts expose `.value`; symbolic and breakend alts
-    (e.g. structural variants) do not, so fall back to their serialized VCF
-    representation."""
+    """Return an alternate allele value, serialising symbolic alleles if needed."""
     value = getattr(alt, "value", None)
     if value is not None:
         return value
@@ -92,9 +83,7 @@ def _alt_value(alt) -> str:
     return serialize() if callable(serialize) else str(alt)
 
 
-# VCF SVTYPE (or a symbolic allele's leading `<ID>` token) -> the word shown in
-# the results "variant" column. Subtype-proof: <DEL:ME:ALU> is SVTYPE=DEL. See
-# the VCF 4.2 spec, symbolic + breakend alternate alleles (§1.4.5, §5.3-5.4).
+# SVTYPE (or a symbolic ALT) to the result type label.
 _SV_TYPE_WORDS = {
     "DEL": "deletion",
     "INS": "insertion",
@@ -125,19 +114,14 @@ _BREAKEND_MATE_RE = re.compile(r"[\[\]]([^\[\]]+)[\[\]]")
 
 
 def _breakend_junction(record, serialized: str) -> str:
-    """A breakend's two loci as `<chrom:pos> ↔ <mate chrom:pos>` — this record's
-    position plus the mate parsed from the ALT (e.g. `G[17:198982[` -> the mate is
-    `17:198982`). The mate's base lives in the paired record (via MATEID), not this
-    one, so only positions are shown."""
+    """Return this breakend locus and its mate locus parsed from the ALT."""
     start = f"{record.CHROM}:{record.POS}"
     mate = _BREAKEND_MATE_RE.search(serialized)
     return f"{start} ↔ {mate.group(1)}" if mate else start
 
 
 def _sv_span(record) -> int | None:
-    """A structural variant's length in bases: `abs(SVLEN)` when present and
-    non-zero (deletion/insertion/duplication), else `END - POS` (inversion/CNV,
-    whose SVLEN is 0 or absent). None when neither is available."""
+    """Return an SV span from non-zero SVLEN, otherwise END minus POS."""
     svlen = _first_info(record.INFO.get("SVLEN"))
     if svlen not in (None, "", "."):
         try:
@@ -156,16 +140,9 @@ def _sv_span(record) -> int | None:
 
 
 def _structural_info(record) -> dict | None:
-    """Structural-variant display details for a record, or None for a simple
-    substitution/indel.
+    """Return structural-variant display data, or None for sequence alleles.
 
-    VEP writes a type word (e.g. `deletion`) into the CSQ `Allele` column, so the
-    length heuristic in `_get_variant_type` mis-reads it as an insertion and the
-    UI renders the word as a sequence. Instead classify SVs from the VCF record:
-    the type from `SVTYPE` (or the symbolic `<ID>`), the displayed allele from the
-    symbolic ALT, and a `detail` line (span in bases for sized SVs). Breakends are
-    shown as `<BND>` (like the other symbolic alleles) with their two loci as the
-    detail, and the type `breakend`.
+    SV type and display details come from the VCF record, not VEP's CSQ allele.
     """
     if not record.ALT:
         return None
@@ -258,19 +235,16 @@ def _spec_annotations(
     cache: dict | None = None,
     plans: dict | None = None,
 ) -> list[model.Annotation]:
-    """The generic annotations for one CSQ entry at the given scope, driving each
-    matching spec plugin through `apply_plugin_spec`.
+    """Build annotations for one CSQ entry and parsing scope.
 
-    `plans` is every plugin resolved against this file's CSQ header
-    (`compile_parsing_spec`). Optional: without it each plugin resolves itself
-    per row, which is correct but is the cost the plans exist to remove."""
+    Plans are resolved once from the VCF header and skip unavailable plugins.
+    """
     annotations: list[model.Annotation] = []
     for plugin in spec.plugins:
         if plugin.scope != scope:
             continue
         plan = plans.get(plugin.plugin) if plans else None
-        # A plugin whose columns the header does not carry never ran, and that
-        # is a property of the file — skip it here rather than per row.
+        # A plugin without header columns did not run for this VCF.
         if plan is not None and not plan.runnable:
             continue
         data = apply_plugin_spec(csq_values, index_map, plugin, cache, plan)
@@ -282,20 +256,10 @@ def _spec_annotations(
 
 
 def _pool_annotations(variant: model.Variant) -> None:
-    """Move this variant's annotations into one pool, referenced by index.
+    """Deduplicate equal annotations into a per-variant pool.
 
-    VEP repeats a plugin's value on every CSQ row it applies to, so the same
-    payload was serialised once per transcript consequence: on a 50-variant
-    page ClinVar alone was 421 copies of 14 distinct values, 72% of the whole
-    response. The payload therefore grew with annotations *times* transcripts,
-    which is a multiplier rather than a constant — this removes it.
-
-    Identity is the serialised payload, not the plugin: `hgvs` is genuinely
-    different per transcript (744 distinct of 864), so deduplicating by plugin
-    would lose data. Equal payloads collapse; different ones stay.
-
-    Mutates in place, after the variant is built, so nothing upstream has to
-    know about pooling.
+    Pool keys include the complete serialised payload, as one plugin can produce
+    different data for different transcript consequences.
     """
     pool: list[model.Annotation] = []
     seen: dict[str, int] = {}
@@ -330,32 +294,21 @@ def _get_alt_allele_details(
     sv: dict | None = None,
     plans: dict | None = None,
 ) -> model.AlternativeVariantAllele:
-    """Creates  AlternativeVariantAllele based on
-    target alt allele and CSQ entires.
+    """Build one alternate allele from matching CSQ entries.
 
-    `sv` (from `_structural_info`) overrides the type + displayed allele for
-    structural variants: `alt` stays VEP's CSQ `Allele` word for matching the CSQ
-    rows below, but the allele is shown as its symbolic/breakend form."""
+    Structural-variant display data overrides the rendered type and allele while
+    CSQ matching continues to use VEP's allele value.
+    """
     consequences = []
-    # Resolving the header is meant to happen once per file; a caller that did
-    # not do it still gets it once per allele rather than once per plugin per
-    # CSQ row, which is what `apply_plugin_spec`'s own fallback would cost.
+    # Resolve plans once per file; this fallback resolves them once per allele.
     if plans is None and spec is not None:
         plans = compile_parsing_spec(index_map, spec)
     allele_type = sv["type_word"] if sv else _get_variant_type(ref, alt)
-    # Allele-level annotations are identical across all of this allele's CSQ
-    # rows, so capture them once (from the first matching row). They are also
-    # the only annotations available for intergenic variants (no transcript
-    # rows).
+    # Allele-scoped annotations are identical across matching CSQ rows.
     colocated_variants: list[str] = []
     allele_annotations: list[model.Annotation] = []
     allele_level_captured = False
-    # A plugin reads only its own CSQ columns and VEP repeats those on every row
-    # of the variant, so a transcript-scoped plugin produces the same annotation
-    # for all of them. This lets it be parsed once and reused; the per-row gate
-    # (`applies_to`) still runs for each, which is what makes ClinVar attach to
-    # one gene and not its neighbour. Per allele, since that is the widest scope
-    # over which the columns are guaranteed identical.
+    # Cache plugin output per allele; row-specific `applies_to` checks still run.
     parse_cache: dict = {}
 
     for str_csq in csqs:
@@ -383,16 +336,14 @@ def _get_alt_allele_details(
                 get_csq_value(csq_values, "CANONICAL", "NO", index_map) == "YES"
             )
 
-            # It looks like for Feature_type = Transcript that we always have a STRAND value
+            # Transcript rows use `STRAND`; default to the forward strand.
             strand = (
                 model.Strand.reverse
                 if get_csq_value(csq_values, "STRAND", "1", index_map) == "-1"
                 else model.Strand.forward
             )
 
-            # MANE: depending on the VEP run, either the MANE column carries the
-            # label (MANE_Select / MANE_Plus_Clinical) or the MANE_SELECT /
-            # MANE_PLUS_CLINICAL columns carry the matched RefSeq id. Handle both.
+            # VEP may emit a MANE label or a matched RefSeq id; support both.
             mane_label = get_csq_value(csq_values, "MANE", None, index_map)
             mane_select_refseq = get_csq_value(
                 csq_values, "MANE_SELECT", None, index_map
@@ -405,8 +356,7 @@ def _get_alt_allele_details(
                 bool(mane_plus_clinical) or mane_label == "MANE_Plus_Clinical"
             )
 
-            # GENCODE primary: the GENCODE_PRIMARY column (from flag_gencode_primary,
-            # human GRCh38 only) carries "1" for the primary transcript, else empty.
+            # GENCODE_PRIMARY is `1` for a primary transcript.
             is_gencode_primary = (
                 get_csq_value(csq_values, "GENCODE_PRIMARY", None, index_map) == "1"
             )

@@ -1,18 +1,8 @@
-"""Static, strongly-typed model of the *display* spec: how one option's parsed
-annotation is laid out in the results annotation detail.
+"""Validated models for the display section of a merged spec.
 
-The parsing spec says how a plugin's CSQ columns become structured data; this
-says how that data is presented — the labels, order, headings, number formats
-and placeholders. Moving them here makes the backend the
-single owner of the option contract end to end (which options exist, how they
-are parsed, how they are shown) and lets the frontend render generically.
-
-It is authored per genome, so unlike the per-job display *panels* it lives
-inside the merged spec document as a third sibling section, under the same
-content digest, and is pinned to a job.
-
-Note: named `builder` links are annotated in frontend, as it needs job 
-context (genome, consequence) to build the URL.
+The display section maps parsed annotations to labels, layout, and formats. It
+is pinned with the job's merged spec. Frontend link builders supply URLs that
+require job or consequence context.
 """
 
 import re
@@ -20,22 +10,13 @@ from typing import Annotated, Iterator, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# The value formats the frontend's `formatValue` understands. `text` is the
-# default (stringify as-is); the rest are the existing formatter functions.
-# `humanize_join` humanises each element of a list then joins them — ClinVar's
-# significance terms, shown as one comma-separated value. `count` renders the
-# size of a list, or of a `&`-delimited string (IntAct's packed columns), and is
-# absent (drops / dashes) when the count is zero — ProtVar's Show-all pockets /
-# interfaces counts.
+# Value formats supported by the frontend renderer.
 RowFormat = Literal[
     "text", "num", "humanize", "phenotype", "join", "humanize_join", "count",
     "humanize_terms",
 ]
 
-# Which view a block belongs to: the default annotation view or "Show all". A
-# block without `view` renders in both (the common case). ProtVar uses it to
-# show detailed pocket / interface rows by default but sub-option counts in Show
-# all.
+# A block without `view` is shown in both the default and Show all views.
 BlockView = Literal["default", "show_all"]
 
 # `{field}` placeholders in a link template — the item fields interpolated into
@@ -44,13 +25,7 @@ _TEMPLATE_FIELD = re.compile(r"\{(\w+)\}")
 
 
 class ComposeSpec(BaseModel):
-    """A row value built from more than one field.
-
-    Only one shape exists today: `with_score`, the frontend's `withScore` —
-    "Likely benign (0.07)" from a classification plus its score. AlphaMissense
-    and EVE both need it, and both drop the row entirely when the
-    *classification* is absent, whatever the score says.
-    """
+    """A row value composed from several parsed fields."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -63,22 +38,10 @@ class ComposeSpec(BaseModel):
 
 
 class SubOption(BaseModel):
-    """The form sub-option a row's value comes from.
+    """A form sub-option referenced by a display row or block.
 
-    Lets "Show all" list a sub-option that ran but produced nothing as a dash
-    (the default view drops the empty row instead). `default` mirrors the form
-    default: a sub-option left at a default-on value isn't written to the
-    submitted parameters, so the frontend treats "absent" as its default (see
-    `subOptionRan`). The id is a form option id — the hand-synced seam with
-    `form_panels`, like the top-level `option_id`; not a `plugin.field` ref, so
-    the display↔parsing check does not touch it.
-
-    Also names the gate a block renders behind (`requires_selected`), which is
-    the same question asked of the whole block rather than of one row: was this
-    id in the submitted parameters. The ClinVar master needs it because outputs
-    may carry columns the user did not
-    pick, so gating on the data alone would leak an unselected variant kind into
-    the view.
+    The frontend uses its default when an omitted submission parameter represents
+    a default-on option.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -88,31 +51,17 @@ class SubOption(BaseModel):
 
 
 class HelpLink(BaseModel):
-    """A citation shown inside a row's help popup.
-
-    A fixed reference for the help text — the paper a recommended threshold
-    comes from — not a per-row link built from the annotation (that is
-    `LinkSpec`). `label` is the anchor's text; without one the frontend uses its
-    own wording.
-    """
+    """A fixed citation in row help, distinct from a data-derived link."""
 
     model_config = ConfigDict(extra="forbid")
 
-    # `href`, not `url`, to match the form side's OptionHelpLink: the two help
-    # systems should converge rather than grow a second name for one thing.
+    # Matches the form-side OptionHelpLink field name.
     href: str
     label: str | None = None
 
 
 class WhenSpec(BaseModel):
-    """A condition gating whether a block renders, tested against one field.
-
-    `present` -> render only when the field has content; `empty` -> only when it
-    is absent (null / '' / empty list). ClinVar uses it to flip between a bare
-    "Clinical significance" row (no conflicting breakdown) and a headed block
-    (breakdown present). The field is a `<plugin>.<field>` reference like a row's
-    `from`, resolved against the parsing spec at load like the rest.
-    """
+    """A block-rendering condition on a `<plugin>.<field>` reference."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -132,19 +81,9 @@ class WhenSpec(BaseModel):
 
 
 class LinkSpec(BaseModel):
-    """How to turn a value into a link.
+    """A URL template or frontend link builder for a display value.
 
-    `external` -> a plain anchor (`target=_blank`). `template` is a full URL with
-    `{field}` placeholders filled from the item's fields (e.g. a GO term or
-    MaveDB URN); `builder` names a frontend link builder for URLs that aren't a
-    simple template (ProtVar's algorithmic URL). `app_popup` -> an in-app
-    "View in" popup, which is always a named `builder` (it needs the job's genome
-    and the consequence, not just the annotation field) — e.g. the protein id.
-
-    On a `CellSpec` the link wraps that cell's value; on a `DisplayRow` or a
-    `DisplayItemSpec` it is a trailing link on the row's value (ProtVar's icon).
-    A `template` only makes sense where item fields exist to fill it (cells);
-    row/item-level links use a `builder`.
+    Templates use item fields; builders handle URLs requiring frontend context.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -178,54 +117,31 @@ class DisplayRow(BaseModel):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    # React list key. Optional: absent means "use the row's position", which is
-    # stable for these fixed lists.
+    # Optional React key; fixed lists otherwise use their position.
     key: str | None = None
-    # Optional only for a row that stacks a list: the somatic classifications
-    # sit directly above the table they describe, where a repeated
-    # "Classification" would say less than their position already does.
+    # Optional label for a row that stacks a list.
     label: str | None = None
     # `from` is a Python keyword, hence the alias (as in TargetSpec).
     source: str | None = Field(default=None, alias="from")
     compose: ComposeSpec | None = None
     format: RowFormat | None = None
-    # What to show when the value is absent. Unset drops the row entirely; set
-    # keeps it and shows this (SpliceAI's deltas always read as a set of eight).
+    # Placeholder for an absent value; omitted values drop the row.
     placeholder: str | None = None
-    # Help text for a (?) button beside the label. The text is data; the button
-    # is a frontend primitive.
+    # Help text rendered by the frontend beside the label.
     help: str | None = None
-    # A source to cite inside that help popup — popEVE's threshold is the
-    # authors' recommendation, so the help says where to read it. Deliberately
-    # not a `LinkSpec`: those build a URL per row from the annotation's own
-    # values, whereas this is one fixed reference belonging to the help text.
+    # Fixed citation for the help text, not a data-derived `LinkSpec`.
     help_link: HelpLink | None = None
-    # The sub-option this row's value comes from. Only affects "Show all": a
-    # selected-but-empty sub-option shows a dash there; the default view still
-    # drops it. Rows without one behave exactly as before.
+    # Sub-option for Show all; selected empty values render as a dash.
     sub_option: SubOption | None = None
-    # A trailing link on the value (a named `builder` — ProtVar's link icon on
-    # each row). Builder links contribute no field refs.
+    # Trailing link on the value. Builder links have no field references.
     link: LinkSpec | None = None
-    # Build that link from a *sibling* field rather than from the value's own
-    # text — the same thing a table column or a list item's cell can already do,
-    # and needed for the same reason: the reader wants to see one thing and
-    # follow another. Geno2MP reports a count of HPO profiles plus the URL of
-    # the variant's page, and no template can derive the second from the first.
+    # Sibling field used as the link URL.
     link_from: str | None = None
-    # One value packing several, each rendered and linked in its own right — the
-    # same thing a list item's cell can do, and needed for the same reason: a
-    # ClinVar custom joins the records that matched one variant with `&`, and
-    # each is its own record with its own page.
+    # Separator for independently rendered and linked values.
     split: str | None = None
-    # A row whose `from` is a *list*: one rendered line per element, stacked as
-    # the row's value under a single label. The same element shape a list block
-    # repeats, borrowed so a stacked value needs no vocabulary of its own —
-    # ClinVar's classification is one line per classification type.
+    # Render each source-list element as a stacked value.
     item: "DisplayItemSpec | None" = None
-    # Keep only some of the stacked list, so one list can be shown in two
-    # places — ClinVar's germline classification belongs above the germline
-    # conditions, the somatic ones above theirs. Same filter a table takes.
+    # Filter for a stacked list.
     where: "RowFilter | None" = None
 
     @model_validator(mode="after")
@@ -263,22 +179,9 @@ class DisplayRow(BaseModel):
 
 
 class ValuePiece(BaseModel):
-    """One rendered value, wherever it appears.
+    """A rendered value within a repeated item or list-valued table cell.
 
-    A cell of a repeated item and a line of a list-valued table cell are the
-    same idea, and they had drifted: `labels` and `template` existed on one,
-    `count_from` and `split` on the other, and a rating was named by a field
-    here and stated outright there — differences that came from the order the
-    two grew, not from anything about the values themselves. Two reviewers
-    found that independently from opposite ends.
-
-    So a capability belongs to *a value* and both subtypes have it. What is
-    genuinely particular stays on the subtype: a cell's `label` prefix, an
-    item's `count_from` and `expand`.
-
-    `from` is a field *of the element* (not `plugin.field`) — e.g. `score` on a
-    MaveDB assay. Omit it for a scalar list whose elements are the value
-    themselves (phenotype strings).
+    `from` names an element field, not a `<plugin>.<field>` reference.
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -287,20 +190,11 @@ class ValuePiece(BaseModel):
     source: str | None = Field(default=None, alias="from")
     format: RowFormat | None = None
     link: LinkSpec | None = None
-    # Build the link from a *sibling* field of the element rather than from the
-    # value's own text. A condition's URL is resolved in the parse (see the
-    # `curie_link` post-op) and lands beside the name, so the name is what the
-    # reader sees and the resolved URL is what it points at.
+    # Sibling element field used as the link URL.
     link_from: str | None = None
-    # One value packing several, each rendered and linked in its own right — a
-    # ClinVar submission cites its publications as one '+'-joined list of PMIDs,
-    # and each is its own paper. IntAct joins interaction participants the same
-    # way, with `_and_`.
+    # Separator for independently rendered and linked values.
     split: str | None = None
-    # Only link a value that carries this prefix, and strip it before filling
-    # the template: IntAct writes `uniprotkb:P37840`, and UniProt's URL wants
-    # the bare accession. A value without the prefix is not an accession at all,
-    # so it renders as plain text rather than becoming a broken link.
+    # Required prefix removed before interpolating a link template.
     link_prefix: str | None = None
     # A star rating in front of the value, on the scale named here...
     stars: str | None = None

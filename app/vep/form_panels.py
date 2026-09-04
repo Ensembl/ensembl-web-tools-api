@@ -15,14 +15,8 @@ from functools import lru_cache
 
 from vep.utils.spec_loader import load_merged_spec, resolve_merged_spec
 
-# Every panel the form can show, in the order it shows them.
-#
-# Panels only; their options are declared by the config entries themselves (see
-# `_place_spec_options`) apart from the allele frequencies, which are generated
-# from the ancestry tables below. A panel with nothing in it for this genome is
-# dropped, so this list does not need to say which species see which panel —
-# that follows from which entries exist, exactly as it does for the parse
-# plugins and the display options.
+# Panels and their display order. Options come from config-entry form blocks;
+# empty panels are omitted for the selected genome.
 _PANELS: list[dict] = [
     {"id": "variant_representations", "label": "Variant representations"},
     {"id": "variant_impact_predictions", "label": "Variant impact predictions"},
@@ -34,26 +28,12 @@ _PANELS: list[dict] = [
      "label": "Phenotype & disease associations"},
 ]
 
-# Kept for compatibility while the final coded-panel migration is completed.
-# Panels are currently initialised empty, so the placement branch has no coded
-# entries to space, but leaving this undefined makes future pre-population a
-# runtime NameError.
+# Spacing for legacy coded panel entries; current panels start empty.
 _CODED_OPTION_STEP = 100
 
 
-# --------------------------------------------------------------------------- #
-# Allele frequencies — the sub-option trees, built from the config entry's own  #
-# code tables.                                                                  #
-#                                                                              #
-# Each AF entry already had to name every ancestry/population to build its      #
-# `fields=` clause. Those entries now carry the label and the default too, so   #
-# the form is generated from the same list rather than a second copy of it —    #
-# the two had already drifted (`grpmax` was in one and not the other).          #
-#                                                                              #
-# What stays here is the *shape*: which toggles nest under which group, the     #
-# overlap-cutoff select, and the fact that a sex-split ancestry has three       #
-# children. That is layout, not data.                                          #
-# --------------------------------------------------------------------------- #
+# Allele-frequency sub-option layout. The config fields builder owns the codes,
+# labels, and defaults; this module owns grouping and nesting.
 
 
 def _toggle(option_id: str, label: str, default: bool = False) -> dict:
@@ -61,8 +41,7 @@ def _toggle(option_id: str, label: str, default: bool = False) -> dict:
 
 
 def _af_fields(spec, option_id: str):
-    """The `fields=` builder of one AF entry, or None if this genome has no such
-    option (gnomAD CNV is GRCh38-only, All of Us likewise)."""
+    """Return an AF entry's fields builder, if the genome exposes the option."""
     entry = next((e for e in spec.config.entries if e.id == option_id), None)
     return entry.config.fields if entry is not None else None
 
@@ -79,14 +58,9 @@ def _ancestry_options(fields) -> list[dict]:
                 _toggle(f"{ancestry.option}_{sex.suffix}", sex.label, sex.default)
                 for sex in sexes
             ]
-            # A sex-split ancestry emits one field per *selected sex*, so with
-            # none of them ticked it contributes nothing at all (see
-            # build_fields). Left to itself the form would show the ancestry
-            # checked while submitting no column for it; this tells the form to
-            # switch it off with its last sex.
+            # Prevent an enabled ancestry from submitting no selected sex fields.
             option["requires_any_sub_option"] = True
-        # `form_order` moves an ancestry to where the form wants it, which is not
-        # always where the emitted clause wants it (see AncestryCode).
+        # Form order may differ from the emitted field order.
         placed.append(
             (ancestry.form_order if ancestry.form_order is not None else index * 100,
              option)
@@ -181,10 +155,7 @@ def _gnomad_v2_sub_options(fields) -> list[dict]:
                     for subpop in ancestry.subpops
                 ],
             })
-        # As in `_ancestry_options`: nothing selected beneath it means no field.
-        # ★ For v2 that means neither a sex *nor* a sub-population — a subpop
-        # emits `<base>_<anc>_<subpop>` on its own, keeping the ancestry alive
-        # with every sex unticked, so the form must count both.
+        # v2 sub-populations remain active without a selected sex.
         option["requires_any_sub_option"] = True
         ancestry_options.append(option)
     return [
@@ -448,9 +419,7 @@ def _place_spec_options(panels: list[dict], assembly_name: str | None) -> None:
         panel["options"] = [option for _order, option in placed]
 
     if by_panel:
-        # An entry naming a panel this genome does not show would otherwise
-        # drop its control silently — the failure mode that keeps costing
-        # afternoons elsewhere in this spec.
+        # Reject invalid placement instead of silently omitting the option.
         raise ValueError(
             "form options declare panels that are not shown for "
             f"{assembly_name!r}: {sorted(by_panel)}"

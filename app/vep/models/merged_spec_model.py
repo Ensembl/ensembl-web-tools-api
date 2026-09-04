@@ -1,19 +1,7 @@
-"""The merged annotation-spec document: config + parsing for one genome.
+"""Validated merged annotation spec for one genome.
 
-One document, one content digest, pinned per job (spec_loader.py). It joins the
-two halves the annotation API will serve — the option→`config.ini` rules
-(`config_spec_model.py`) and the CSQ parsing rules (`parsing_spec_model.py`) —
-under a single `spec_version`, so a job's options and the parsing of its results
-are provably the same ruleset (design §8).
-
-The two halves live as sibling sections rather than one per-plugin entry: the
-config-set and parse-set only partly overlap and do not align 1:1 (`eve` config
-feeds both the `eve` and `popeve` parsers; `hgvs`+`hgvsg` feed one `hgvs` parser;
-10 config options have no parser at all). The explicit config→parse relation is
-carried on each config entry's `parsed_as`, and this model's `model_validator`
-is the load-time **consistency check** (design §6.1) that guards it.
-
-See app/vep/docs/design/spec-and-extension-guide.md.
+The config, parsing, display, help, and filter sections share a content digest
+and are pinned with each job. Model validation checks cross-section references.
 """
 
 import logging
@@ -45,12 +33,7 @@ from vep.utils.config_interpreter import build_fields
 
 
 def _is_simple_plugin(emitter: PluginEmitter) -> bool:
-    """A plugin whose CSQ columns all appear in the header whenever it runs — no
-    sub-option gates one away. That means no variadic `flags` (IntAct) and no
-    `from_option` params (ProtVar/mutfunc/DosageSensitivity sub-flags), so all of
-    its `csq_fields` are safe to *require*. Sub-flagged plugins are excluded from
-    the expected set: turning a sub-flag off legitimately drops its column, and
-    requiring it anyway would false-positive."""
+    """Whether every declared CSQ column is present whenever the plugin runs."""
     return emitter.flags is None and not any(
         isinstance(value, FromOption) for value in emitter.params.values()
     )
@@ -182,9 +165,7 @@ class MergedSpec(BaseModel):
     genome: dict | None = None
     config: ConfigSpec
     parsing: ParsingSpec
-    # These sections are part of the current merged-spec contract. A job pins
-    # the complete document, so results never combine an old pin with pieces of
-    # the live specification.
+    # Required sections are loaded from the job's complete pinned document.
     display: DisplaySpec
     help: HelpSpec
     filters: FilterSpec
@@ -193,13 +174,7 @@ class MergedSpec(BaseModel):
         return self.config.entries
 
     def plugin_scopes(self) -> dict[str, str]:
-        """plugin id -> "allele" | "transcript", derived from `parsing`.
-
-        The display spec's rows name a plugin but deliberately do not say which
-        entity it hangs off; that is a property of the parser and is stated
-        exactly once, here. Authoring it a second time in `display` would create
-        precisely the hand-synced seam the merged document exists to remove.
-        """
+        """Map plugin ids to their allele or transcript parsing scope."""
         return {plugin.plugin: plugin.scope for plugin in self.parsing.plugins}
 
     def display_payload(self) -> DisplayPayload:

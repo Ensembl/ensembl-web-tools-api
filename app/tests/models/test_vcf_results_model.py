@@ -42,7 +42,7 @@ class TestVCFResultModel(unittest.TestCase):
         )
         self.assertIsNone(consequence.gene_symbol)
 
-        # Valid instance without explicitly setting gene_symbol (default=None)
+        # `gene_symbol` is optional.
         consequence_no_symbol = PredictedTranscriptConsequence(
             feature_type=FeatureType.transcript,
             stable_id="ENST00000367770.8",
@@ -69,8 +69,7 @@ class TestVCFResultModel(unittest.TestCase):
         self.assertEqual(alternative_allele.colocated_variants, ["rs123"])
         self.assertEqual(alternative_allele.annotations[0].plugin, "spdi")
 
-        # Valid instance without the optional annotation fields (both default
-        # to empty lists)
+        # Optional annotation lists default to empty.
         alternative_allele_bare = AlternativeVariantAllele(
             allele_sequence="A",
             allele_type="insertion",
@@ -99,7 +98,7 @@ class TestVCFResultModel(unittest.TestCase):
         )
         self.assertIsNone(variant.name)
 
-        # Valid instance without explicitly setting name (default=None)
+        # `name` is optional.
         variant_no_name = Variant(
             allele_type="SNP",
             location=Location(region_name="1", start=10000, end=10001),
@@ -124,7 +123,7 @@ class TestVCFResultModel(unittest.TestCase):
         )
         self.assertEqual(metadata.pagination.page, 1)
 
-        # Invalid instance without pagination - should raise ValidationError
+        # Results metadata requires pagination and display metadata.
         with self.assertRaises(ValidationError):
             Metadata()
         with self.assertRaises(ValidationError):
@@ -163,6 +162,6 @@ class TestVCFResultModel(unittest.TestCase):
         self.assertEqual(response.metadata.pagination.page, 1)
         self.assertEqual(len(response.variants), 1)
 
-        # Invalid instance without metadata - should raise ValidationError
+        # A response requires metadata.
         with self.assertRaises(ValidationError):
             VepResultsResponse(variants=[variant])

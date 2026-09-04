@@ -82,14 +82,7 @@ def _column(csq_values: list[str], name: str, index_map: dict[str, int]) -> str 
 
 
 def _same(value, expected) -> bool:
-    """The one equality every predicate in a parsing spec is built from.
-
-    Compared as text, so `equals: "1"` finds an int 1 -- a spec states its
-    right-hand side in JSON and cannot say which Python type the transform will
-    have coerced the field to. Absent on either side never matches: a field that
-    is not there is not equal to anything, including a column the output does
-    not carry.
-    """
+    """Compare populated values as text, as spec literals have no Python type."""
     if value is None or expected is None or expected == "":
         return False
     return str(value) == str(expected)
@@ -105,10 +98,7 @@ def _matches(row: dict, match, csq_values=None, index_map=None) -> bool:
         )
         if expected is not None and match.column_pattern:
             found = re.search(match.column_pattern, str(expected))
-            # No match means the column does not hold the thing being compared,
-            # which is not the same as holding something different -- but both
-            # end in "not equal", and returning None keeps `_same`'s rule that
-            # an absent side never matches.
+            # A missing capture is treated as an absent comparison value.
             expected = found.group("key") if found else None
     else:
         expected = match.equals
@@ -118,8 +108,7 @@ def _matches(row: dict, match, csq_values=None, index_map=None) -> bool:
 def _should_drop(row: dict, drop_when, csq_values=None, index_map=None) -> bool:
     if drop_when is None:
         return False
-    # A conditional rule only applies to elements it names (the allele rule is
-    # for a "Variation" phenotype, not a "Gene" one).
+    # Restrict the discard rule to elements matching its optional condition.
     condition = drop_when.only_if
     if condition is not None and not _matches(row, condition, csq_values, index_map):
         return False
@@ -135,18 +124,9 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 @lru_cache(maxsize=None)
 def _lookup_table(name: str) -> dict[str, str]:
-    """A shipped reference table, as value -> label. Two on-disk shapes, because
-    which is smaller depends on how many distinct labels there are.
+    """Load a shipped lookup table as a string-keyed value-to-label mapping.
 
-    *Grouped* (`{label: [members]}`) suits a handful of labels over many members
-    — GO's 38k ids across three aspects — and is inverted once here. Members are
-    compared as strings so a table may store them as numbers: GO ids lose their
-    `GO:` prefix and become ints on disk, which is most of the saving.
-
-    *Flat* (`{"terms": {member: label}}`) suits near-unique labels, where
-    grouping would store 62k single-member lists and cost more than it saves —
-    EFO's ontology term names. Sibling keys (`version`, `retired`) are metadata
-    about the table, not entries in it.
+    Tables may be grouped by label or stored under a flat `terms` mapping.
     """
     path = DATA_DIR / f"{name}.json"
     document = json.loads(path.read_text())
@@ -158,13 +138,7 @@ def _lookup_table(name: str) -> dict[str, str]:
 
 
 def _lookup_key(value) -> str | None:
-    """The table key for a parsed value.
-
-    GO ids arrive as `GO:0000122` and the aspect table stores `122` — the prefix
-    is on every id there and carries nothing. An accession with no colon
-    (`EFO_0006336`, from OpenTargets) is already the key: its prefix *is*
-    meaningful, since one table spans several ontologies.
-    """
+    """Normalise a parsed identifier for a shipped lookup table."""
     if not isinstance(value, str):
         return None
     head, sep, tail = value.partition(":")
@@ -176,14 +150,7 @@ def _lookup_key(value) -> str | None:
 
 
 def _fill_template(template: str, row: dict) -> str | None:
-    """Fill a URL template's `{field}` placeholders from the element's own fields.
-
-    Returns None if any placeholder names a field this element left empty, which
-    is the whole reason this is not a plain `str.format`: a phenotype row from a
-    linkable source can still be missing the id that addresses it, and
-    "https://omim.org/entry/" is a worse outcome than no link at all. Same rule
-    `concat` follows for a missing part.
-    """
+    """Fill a URL template, returning None when a referenced field is empty."""
     filled = template
     for name in re.findall(r"\{(\w+)\}", template):
         value = row.get(name)
@@ -194,24 +161,10 @@ def _fill_template(template: str, row: dict) -> str | None:
 
 
 def _resolve_curie(value, prefer, templates, sep):
-    """One URL from a CURIE list, choosing which authority to trust.
-
-    A source that names a thing in several ontologies at once has no single id.
-    `prefer` is the order to try; anything with a known template is taken as a
-    last resort, so a list of only unpreferred sources still links. Returns
-    (url, curie), both None when nothing is usable.
-    """
+    """Return the preferred usable URL and CURIE from a separator-delimited list."""
     if not value:
         return None, None
-    # Decode *first*, which is the exception to the split-before-decode rule the
-    # rest of this module follows — and the reason is in the source: ClinVar
-    # escapes the comma that separates one CURIE from the next, so the separator
-    # only exists after decoding. Splitting the raw value finds one CURIE where
-    # there are several, and the wrong authority wins the `prefer` order.
-    #
-    # The cost is that this post-op's own output is decoded a second time by the
-    # final pass. Harmless for the numeric accessions ClinVar publishes; wrong
-    # for any label carrying a literal '%'.
+    # ClinVar encodes this list's separator, so decode before splitting.
     curies = [part.strip() for part in unquote(str(value)).split(sep) if part.strip()]
     by_prefix: dict[str, str] = {}
     for curie in curies:

@@ -61,8 +61,7 @@ def test_only_the_escapes_vcf_reserves_are_resolved():
 
 
 def test_an_escaped_percent_does_not_cascade():
-    """The ordering trap in the sequential form: resolving `%25` -> `%` first
-    turns `%253A` into `%3A` and then into a colon. One pass, one replacement."""
+    """Decode each reserved escape once: `%253A` remains `%3A`."""
     assert unescape("%253A") == "%3A"
     assert unescape("100%25") == "100%"
 

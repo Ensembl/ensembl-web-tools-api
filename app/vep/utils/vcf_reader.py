@@ -1,29 +1,9 @@
-"""Reading VCF records for the results path.
+"""Minimal VCF reader used by the results path.
 
-This replaces vcfpy, which was ~47% of a page request: 81ms of ~172ms, split
-between a header parse that walked 282 `##` lines a character at a time and an
-INFO unescape that made eight full-string passes over every value.
-
-It is deliberately small, because the results path asks for very little. Per
-record: CHROM, POS, ID, REF, ALT, and four INFO keys — CSQ, SVTYPE, SVLEN and
-END. No samples, FORMAT, genotypes, FILTER, QUAL or tabix. A general VCF
-library was being carried for a fraction of one.
-
-Text in, records out. That is also what the rest of the results path already
-does — filtering, the row slice, the page-index seek and the CSQ header all read
-raw lines — so this removes a second representation rather than adding one.
-
-★ The VCF's own percent-escapes are resolved here, but only *after* the INFO
-fields and CSQ entries have been split — which is the ordering vcfpy got wrong.
-It decoded first, turning `%2C` into a real comma 29,541 times over a 50-record
-file before any splitting had run; nothing downstream happens to split on a
-comma, so it never bit, but it is the wrong way round. Splitting on the raw text
-means an encoded separator inside a value cannot be mistaken for a real one.
-
-Only the eight escapes the VCF spec reserves are resolved. The enriched ClinVar
-VCF's own encodings (`%2B`, `%26`) are left exactly as they are, for the parsing
-spec to split on and `_decode_leaves` to resolve at the end — see
-`clinvar-vcf-info-field-format`.
+It reads record coordinates and the CSQ, SVTYPE, SVLEN, and END INFO fields.
+Split INFO and CSQ values before decoding VCF-reserved percent escapes so encoded
+separators remain data. Parsing-spec encodings such as `%2B` and `%26` are left
+for the spec interpreter.
 """
 
 import re

@@ -1,8 +1,7 @@
 # The VEP JSON specifications, and how to extend them
 
-**How to add new annotation data, new options, and new output to the deployed
-VEP tool** — what is data and what is code, the full grammar available in each
-spec section, and worked examples from the simplest plugin to the hardest.
+How to add annotation data, options, and output to VEP. It describes the spec
+grammar, code boundaries, and representative recipes.
 
 Every table and count below is read from the models and assembled spec rather
 than remembered; file references are given so you can re-derive them when they
@@ -107,10 +106,8 @@ app/vep/specs/
 5. Compute the content digest from the *validated model's* canonical dump and
    stamp it onto `spec_version`.
 
-**Consequence worth internalising:** step 3 is why an option can vanish silently.
-If your config entry has `parsed_as: []`, no plugin is enabled by it, and any
-display option that reads that plugin is filtered out of the assembled spec —
-no error, just one fewer option. That has bitten twice.
+If a config entry has `parsed_as: []`, it enables no plugin. Any display option
+that references that plugin is excluded from the assembled spec.
 
 A species with no spec of its own falls back to `base.json`, optionally plus GO /
 Phenotypes / CADD entries built from `species_annotations.json`'s templates
@@ -154,8 +151,7 @@ SpliceAI · Dosage sensitivity, Gene Ontology, LOEUF, NMD, UTRAnnotator ·
 Phenotypes, Geno2MP, ClinVar structural variants (+ `clinvar_short`, which has no
 control of its own) · IntAct · gnomAD Exomes v2.1.1, Genomes v2.1, SV v2.1.
 
-★ GRCh37 gets the **v2** gnomAD trio, not v4 — that is the whole point of the v2
-work, and it is the claim most often written down wrong.
+GRCh37 uses the gnomAD v2 trio, not v4.
 
 **Tier 5 — GRCh38 adds 11 more:** NIH All of Us, gnomAD CNV v4.1 · EVE & popEVE,
 GERP conservation score · MaveDB, mutfunc, ProtVar · OpenTargets · pLI,
@@ -163,14 +159,11 @@ RiboSeqORFs · GENCODE promoter. (Human's own GO, Phenotypes and CADD come from
 its spec documents, not the species table — its GO file carries an assembly
 suffix the table's filename rule does not produce.)
 
-**The asymmetry worth noticing:** tiers 1–3 are a table, tiers 4–5 are
-hand-written documents. That is why adding a species is a one-row change while
-adding a new *kind* of data to human is not.
+Tiers 1–3 are table-driven; tiers 4–5 use genome documents. Adding a species is
+a table row, while adding a human data type requires a spec change.
 
-★ **Resolve the assembly name from the metadata API**
-(`/api/metadata/genome/{accession}/explain`), never from classic Ensembl REST —
-the two disagree for several species, and a submission carries the metadata API's
-name. A wrong name fails silently: the species drops to tier 0 with no error.
+Resolve assembly names through `/api/metadata/genome/{accession}/explain`. The
+submission uses that API's name; a different name can fall back to tier 0.
 
 ```python
 # from app/, PYTHONPATH=. and the py3.11 venv
@@ -393,10 +386,9 @@ option between panels needs no frontend change at all.
 }
 ```
 
-`csq_fields` is load-bearing three times over: it is the "did this plugin run"
-test (none of its columns in the header ⇒ skip the plugin entirely), it feeds
-`expected_csq_columns` (the runtime missing-field check), and it feeds the
-frontend's availability gates. Getting it wrong is silent.
+`csq_fields` controls three behaviours: plugin availability, the runtime
+missing-field check through `expected_csq_columns`, and frontend availability
+gates. Verify it against a representative VCF header.
 
 ### Step 3 — the display option (`annotation_library.json`)
 
@@ -432,9 +424,7 @@ PYTHONPATH=app .venv/bin/python -m pytest app/tests -q
 
 ## 5. Recipe B — a complex plugin
 
-"Complex" in practice means one of five things. Each has a construct for it, and
-the point of this section is to name which construct solves which problem, so you
-reach for the right one instead of inventing a frontend case.
+Complex sources usually match one of the following spec constructs.
 
 ### 5.1 The source packs several columns that belong to one table
 
@@ -468,13 +458,9 @@ checked at load time.
 | one object, fields assigned by index | `positional` (+ `wrap: "list"` for a one-element list) |
 | named groups out of free text | `regex` (+ `each` to apply per item) |
 
-The `record_sep` case is worth understanding because it is the general lesson.
-ProtVar's pocket data used to be one flat `&` run cut every `size`; that is
-correct only while every record is exactly that long, and one short record
-silently shifts every later record's fields along. `record_sep` chunks each
-record on its own, so a malformed one damages only itself. **Both shapes are read
-deliberately** — results are retained seven days, so a job submitted before the
-data changed is still being parsed after it.
+Use `record_sep` when the source provides record boundaries. Fixed-size chunks
+misalign later records after a malformed record. Both shapes remain supported for
+jobs retained from before a source-format change.
 
 VEP rewrites both `,` and `|` to `&`. A source carrying structure *below* that
 level must use a delimiter VEP leaves alone: the enriched ClinVar VCF uses `~`
@@ -609,12 +595,9 @@ From that alone the backend derives, per source:
   ]}
 ```
 
-★ `csq_fields` names **one** column, not the per-population set. It cannot name
-them: which populations exist depends on what the user selected, and
-`expected_csq_columns` would then require columns a narrower selection
-legitimately never produces. The `pattern_map` discovers the rest from the
-header at parse time. The same sentinel discipline governs SpliceAI's filter gate
-— see [§7.3](#73-a-new-results-filter).
+`csq_fields` names one sentinel column, not the per-population set. Selected
+populations vary by job, so `pattern_map` discovers their columns from the
+header. The same rule applies to the SpliceAI filter gate.
 
 That drives `af_columns()` and `af_source_descriptor()`, which produce the
 response's `available_af_sources` — `{key, source, population, label}` per
@@ -690,10 +673,7 @@ An option can produce no annotation at all. Today exactly one does:
 **`updownstream_distance`**, which has `parsed_as: []`, no parse plugin and no
 display option — it only widens VEP's `distance` setting.
 
-★ This list used to be longer, and older notes still say so. `spdi`, `protein`
-and the `nearest_*` options **all have parse plugins now** — `protein` was the
-last of the hand-typed tail to convert. Re-derive it rather than trusting a
-written list:
+Re-derive config-only options from the assembled spec:
 
 ```python
 [e.id for e in load_merged_spec("human_grch38").config.entries if not e.parsed_as]
@@ -737,12 +717,9 @@ numeric score filter is two edits:
 - **frontend** `resultsFilterFields.ts`: an entry in `SCORE_FIELD_OPTION_GROUPS`
   (the select renders `<optgroup>`s) and `FILTER_FIELDS`.
 
-★ **The availability gate is the trap.** Whether a filter is offered is decided
-from `expected_columns`, which comes from `csq_fields`. SpliceAI declares only
-*one* of its four delta columns in `csq_fields` — gate on that sentinel column,
-and do **not** widen `csq_fields` to make the gate convenient. Widening it
-changes what `expected_csq_columns` requires at results time, and a legitimately
-absent column then fails the check.
+Filter availability comes from `expected_columns`, which comes from
+`csq_fields`. SpliceAI uses one sentinel for all four delta columns; do not add
+the other columns to `csq_fields`, as they would become required at results time.
 
 ---
 
@@ -755,7 +732,7 @@ Model: `app/vep/models/config_spec_model.py`. Interpreter:
 
 ```jsonc
 { "id": "…",            // the option id: the form control, the `options` map key, and what parsed_as hangs off
-  "order": 41,          // position in the emitted config.ini (load-bearing for golden tests)
+  "order": 41,          // position in the emitted config.ini (used by golden tests)
   "parsed_as": ["…"],   // parse plugin ids; [] for a config-only option
   "forces_on": ["…"],   // optional
   "requires": ["…"],    // optional
@@ -805,13 +782,8 @@ an empty flag list is how you ask that plugin for everything.
 `omit_if_no_fields` drops the whole line when nothing is selected. `fields_after`
 (default `short_name`) controls where the `fields=` clause lands in the arg order.
 
-★ Each builder's **codes are open data on the builder** — the ancestry and sex
-lists live inside `GnomadAncestrySexFields` and friends, carrying `label`,
-`default` and `form_order` so the same table both writes the `fields=` clause and
-grows the form's sub-option tree. That single-sourcing is what removed the AF
-tables' third duplicate copy; before it, the same ancestry list was written out
-in the builder, in the form panels and in the label decoder, and had already
-drifted.
+Field builders own ancestry and sex codes, labels, defaults, and form order. The
+same data generates `fields=` and the form sub-option tree.
 
 ### 8.5 The `form` block
 
@@ -835,7 +807,7 @@ omission to catch.
 
 | field | notes |
 |---|---|
-| `panel` | must be a panel the genome actually shows. An entry naming a panel that is not shown **raises** at assembly (`_place_spec_options`) rather than silently dropping the control — the failure mode that costs afternoons elsewhere in this spec |
+| `panel` | Must identify a panel shown by the genome; invalid placement raises during assembly. |
 | `order` | **not** the entry's `order`. That one sequences the generated `config.ini`; this one sequences the controls a reader sees, and there is no reason for the two to agree. Numbered sparsely so an option can be inserted between two others without renumbering |
 | `category` | drives *both* surfaces: the form groups controls by it, and the results panel groups annotation rows by it. Regrouping options is therefore a backend-only change |
 | `sub_options` | nested controls that are **not** entries of their own: a sub-option is an `options` key the parent's emitter reads through `from_option` (NearestExonJB's `max_range`). `FormSubOption` adds `min` / `max` for a number |
@@ -846,8 +818,7 @@ tree from their own `fields=` builder — `_af_sub_options` reads the builder's
 ancestry/sex tables, so **122 of GRCh38's 169 option nodes are generated** rather
 than written. Nothing else needs to know that happened.
 
-★ **The two `requires_any_sub_option` cases, and why they need different
-restores.** They look alike and are opposites:
+`requires_any_sub_option` has two different empty-selection semantics:
 
 - **mutfunc** cannot *express* "none". A config line naming no sub-flag already
   means *all* of them, so an empty selection would silently submit the opposite
@@ -861,11 +832,9 @@ Hence the restore is to each sub-option's **declared default**, not to all-on:
 for mutfunc those are the same thing, and for an ancestry re-ticking "All" gives
 back the suggested Combined rather than silently adding XX and XY.
 
-★ **gnomAD v2 needs the deeper count.** Its ancestries carry sexes *and* a nested
-"Sub-populations" group, and a selected sub-population emits
-`<base>_<anc>_<subpop>` on its own — so the ancestry is still alive with every
-sex unticked. The frontend's check therefore looks through a `group`, which
-carries no parameter of its own, rather than counting only direct children.
+gnomAD v2 ancestries include a nested Sub-populations group. A selected
+sub-population remains active with all sex options unticked, so the frontend
+checks nested groups rather than only direct children.
 
 ---
 
@@ -1240,12 +1209,9 @@ Every one of these has cost real time.
    against a real workflow output carrying the columns — not just fixtures. This
    is the validation that consistently pays off.
 
-6. **Run the control.** When you believe something is fixed, break it
-    deliberately and confirm the measurement moves. A test that cannot fail
-    proves nothing; a spec-driven path that silently falls back to a bespoke
-    renderer looks identical to one that works.
+6. **Run a control.** Alter the mechanism under test and confirm the test fails.
 
-7. ★★ **Narrowing against a per-row column silently defeats the parse cache.**
+7. **Include per-row comparison columns in the parse-cache key.**
     `apply_plugin_spec` caches on `(plugin, values of csq_fields)`, because a
     plugin's output is identical on every CSQ row of a variant — true while it
     depends only on its own columns, and false the moment a `drop_when` compares
@@ -1257,9 +1223,8 @@ Every one of these has cost real time.
     with it. `applies_to` needs no entry: it is evaluated **before** the cache,
     which is why ClinVar's row gate was always correct.
 
-    The two halves of that fix fail in opposite directions, which is what makes
-    a control mandatory: without the cache widening the neighbour keeps the wrong
-    data, and without `column_pattern` *everything* drops. Both look plausible.
+    Test both the cache key and `column_pattern`: each can otherwise produce
+    plausible but incorrect output.
 
 8. **A default you do not state is not the default you meant.** An option left
     at its default is never written into the submitted parameters, so the
@@ -1268,7 +1233,7 @@ Every one of these has cost real time.
     a bug where All of Us's "Maximum subpopulation" default was set on the form
     and had no effect. Do not reintroduce a second place to say it.
 
-9. **An option id is the only seam.** The `id` on the config entry is the form
+9. **Option ids join the contracts.** The `id` on the config entry is the form
     control, the key in the submission's `options` map, and the thing `parsed_as`
     hangs off. There is no separate registry keeping those in step any more —
     which is the point, but it means a typo in one place is simply a different

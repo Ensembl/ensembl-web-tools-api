@@ -1,11 +1,7 @@
-"""Tests for resolving the form's quick-select species presets.
+"""Tests for resolving quick-select species presets.
 
-The rule under test is narrow but load-bearing: a preset is the genome for its
-accession in the release that is BOTH `is_current` and `integrated`. The live
-API really does return a current `partial` release alongside the integrated
-one, with a *later* name, so "newest current release" and "the integrated one"
-are different answers — and picking the partial would quietly run jobs against
-the wrong annotation.
+A preset requires a release that is both current and integrated; current partial
+releases must not be selected.
 """
 
 import asyncio
@@ -99,8 +95,7 @@ def test_resolves_to_the_current_integrated_release(monkeypatch):
 
 
 def test_a_partial_release_genome_is_dropped(monkeypatch):
-    """The trap: the partial release is also `is_current`, and its name sorts
-    later. Taking it would run jobs against the wrong annotation."""
+    """A current partial release is not a valid preset release."""
     presets = _resolve(
         monkeypatch,
         {"GCA_000001405.29": PARTIAL_GENOME},

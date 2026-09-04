@@ -63,11 +63,8 @@ below.
                       display_panels.json    the panel/category layout as submitted
 ```
 
-**The one idea to hold on to:** the spec is *pinned per job*. Results are parsed
-and laid out with the document that existed at submission, so a job's options,
-its parsing and its layout are provably one ruleset — and a spec change is
-correctly invisible to jobs already submitted. Reloading an old job proves
-nothing about a display change; make a new submission.
+The spec is pinned per job. Results use the rules submitted with that job, not
+the live spec. Submit a new job to verify a display-spec change.
 
 Where each spec section acts:
 
@@ -97,8 +94,8 @@ the panel and category:
               "args": ["{path}/pli_transcript.txt", "transcript"] } }
 ```
 
-`get_visible_panels` reads the *assembled* spec, so this control exists for
-GRCh38 and simply is not there for GRCh37 — no branch anywhere says so.
+`get_visible_panels` reads the assembled spec, so this control is available only
+where its config entry is included.
 
 **2 · Submit.** The browser posts `{options: {pli: true, …}}`.
 `ConfigIniParams._resolve_options` completes the map from the spec (every option
@@ -119,10 +116,9 @@ entry.
 per consequence — reads that column into `pli.score`, and the display option
 renders one row under the Constraint category of Genes & transcripts.
 
-★ **The trap this example exists to record:** the plugin names its CSQ column
-after its *argument*, so the column is `pLI_transcript_value`, not `pLI`. Find
-the real name in a representative workflow output VCF's header — a wrong `csq_fields` produces no error,
-just an option that never appears.
+The plugin names its CSQ column after its argument:
+`pLI_transcript_value`, not `pLI`. Verify `csq_fields` against a representative
+VCF header.
 
 ---
 
@@ -147,10 +143,8 @@ custom file=…/gnomad.genomes.v4.1.1.sites.vcf.gz,short_name=gnomAD_genomes,
 `pattern_map` target discovers the per-population columns **from the header** at
 parse time, keyed by whatever sits between the pattern's prefix and suffix.
 
-★ `csq_fields` names **one** sentinel column, not the per-population set. It
-cannot name them: which populations exist depends on what the user selected, and
-`expected_csq_columns` would then demand columns a narrower selection
-legitimately never produces.
+`csq_fields` names one sentinel column, not every population column. Population
+columns vary with the submission and are discovered from the VCF header.
 
 **4 · Results, the display.** A `map_rows` block takes its rows from the job's
 **vocabulary** (`available_af_sources` on the response) rather than from the
@@ -300,7 +294,7 @@ target.
 `GET /api/metadata/genome/{genome_id}/example_objects` → `[{id, type}]`, then a
 `POST /api/graphql/variation` for the variant.
 
-★ The VEP backend calls `/genome/{id}/explain` for form-panel selection; the
+The VEP backend calls `/genome/{id}/explain` for form-panel selection; the
 client's shared `genomeApiSlice` still does not call it directly.
 
 **Backend configuration** (`app/core/config.py`):

@@ -1,27 +1,8 @@
-"""Server-side filtering of VEP result records.
+"""Server-side, CSQ-entry-level filtering of VEP result records.
 
-Filters are applied during a sequential scan of the results VCF. The page-index
-fast path (see vcf_results.get_results_from_path) can't be used once records are
-filtered, because a filtered record's position no longer maps to a fixed page
-offset — so a filtered request scans and applies predicates.
-
-Filters operate at the CSQ-entry (per transcript/consequence) level: a record's
-matching entries are those satisfying every condition, and the record is kept if
-at least one entry matches. Crucially, the *non-matching entries are pruned* from
-the kept record, so a filtered variant only carries the transcripts that actually
-match (e.g. filtering by a consequence hides the variant's other-consequence
-transcripts). Allele-level annotations are identical across an allele's CSQ rows,
-so they survive as long as one entry for that allele remains.
-
-Filters run as an ordered *pipeline*: for each record the entry set is narrowed
-by each filter in turn, short-circuiting the moment nothing survives. We tally
-how many records each filter removed (among those that reached it), so the
-ordering can later be tuned to run the cheapest / highest-yield filters first.
-We don't rank them yet — this just captures the numbers to inform that later.
-
-This module is deliberately self-contained: it owns the request model, the
-predicate compilation and the pipeline, so the whole feature can be removed in
-one piece.
+Filtered requests scan the VCF because page-index offsets no longer apply. A
+record is retained when at least one CSQ entry matches all filters; non-matching
+entries are removed. Filters short-circuit in order and record removal counts.
 """
 
 from __future__ import annotations
@@ -49,19 +30,8 @@ ALLELE_FREQUENCY_FIELD = "allele_frequency"
 
 # --- Variant impact scores ----------------------------------------------------
 #
-# Every numeric impact-prediction score the job can carry is one field here.
-# Each score is its own field rather than one field with a source picker,
-# because a threshold means nothing without knowing which scale it sits on:
-# CADD PHRED is roughly 0-99 and scaled for interpretation while CADD RAW is
-# unbounded around -7 to +35; AlphaMissense, REVEL, ClinPred and SpliceAI are
-# 0-1 probabilities; popEVE is a log-scale score that is normally *negative*
-# (about -5.5 to -2.5 in real data). One picker over those would let a user
-# carry a threshold from one scale to another and get a silently meaningless
-# answer.
-#
-# Only *numeric* scores belong here. AlphaMissense's `am_class` and EVE's
-# `EVE_CLASS` are categorical calls (likely_benign / likely_pathogenic / …),
-# not thresholds, so they are deliberately absent.
+# Scores use separate fields because their threshold scales differ. Categorical
+# calls are not filters.
 CADD_PHRED_FIELD = "cadd_phred"
 CADD_RAW_FIELD = "cadd_raw"
 ALPHAMISSENSE_FIELD = "alphamissense"
@@ -77,29 +47,10 @@ SPLICEAI_ANY_FIELD = "spliceai_any"
 
 
 class ScoreSpec(NamedTuple):
-    """How one impact-score field is tested and how its availability is decided.
+    """CSQ columns read by a score filter and its availability gate.
 
-    `columns` are the CSQ columns the predicate reads — usually one, but
-    `spliceai_any` reads all four SpliceAI delta scores at once.
-
-    `gate` is the single column that answers "did the plugin that produces this
-    score actually run for this job?", and it is deliberately NOT the same thing
-    as the tested columns. Availability is decided in two stages (see
-    vcf_results): the column must be in the output VCF's CSQ header, *and* it
-    must be in the job's pinned `expected_columns` — the second stage stops a
-    full-cache VCF leaking scores the submission never selected.
-
-    That second stage is why `gate` exists separately. `expected_columns` is
-    built from each parse plugin's `csq_fields`, which is a "did this plugin run
-    at all" sentinel and is deliberately under-declared: the `spliceai` plugin
-    declares only `SpliceAI_pred_DS_AG` even though it parses AL, DG and DL as
-    well. Confirmed against real artefacts — the output VCF's CSQ header carries
-    all four DS columns while `expected_columns.json` carries only the AG one.
-    So gating each SpliceAI field on its own column would hide three of the five
-    options with the data sitting right there in the file; gating them all on the
-    sentinel is the fix. Widening the spec's `csq_fields` instead is not an
-    option: that same list drives the runtime missing-expected-field check, so a
-    job where VEP omitted one column would go from working to a hard failure.
+    The gate is a plugin-run sentinel in the pinned expected-columns sidecar.
+    SpliceAI uses the AG sentinel for all four delta-score fields.
     """
 
     columns: tuple[str, ...]
@@ -128,12 +79,7 @@ SCORE_SPECS: dict[str, ScoreSpec] = {
     REVEL_FIELD: _score("REVEL"),
     CLINPRED_FIELD: _score("ClinPred"),
     EVE_FIELD: _score("EVE_SCORE"),
-    # TODO: popEVE also emits `popEVE_gap_frequency` (present in the dev VCF,
-    # values ~0.03-0.99), which describes how well covered the position is by
-    # the model's alignment rather than how damaging the variant is. Offering a
-    # GAP-frequency filter is wanted but out of scope here — it is a different
-    # kind of question from "how bad is this variant", so it needs its own
-    # label and its own place in the UI rather than a twelfth score field.
+    # TODO: add `popEVE_gap_frequency` as a separate coverage filter.
     POPEVE_FIELD: _score("popEVE_SCORE"),
     SPLICEAI_AG_FIELD: _score("SpliceAI_pred_DS_AG", gate=_SPLICEAI_GATE),
     SPLICEAI_AL_FIELD: _score("SpliceAI_pred_DS_AL", gate=_SPLICEAI_GATE),
@@ -149,9 +95,7 @@ SCORE_SPECS: dict[str, ScoreSpec] = {
 
 # Operators understood by the query builder.
 OPERATOR_IN = "in"  # "is any of"
-# Numeric comparisons: <= and >=. There is deliberately no `==`: these are
-# floats, so equality is a question the data can rarely answer, and the UI
-# offered it only for allele frequency where it was never the useful test.
+# Float filters support ranges, not equality.
 OPERATOR_LE = "le"
 OPERATOR_GE = "ge"
 
@@ -176,15 +120,7 @@ class ResultsFilter(BaseModel):
     # match any/all of the tested AF columns.
     threshold: float | None = None
     match: str | None = None
-    # Impact-score filters: whether an entry with no score is kept. Defaults to
-    # dropping it, which is the opposite of the allele-frequency filter's fixed
-    # "keep the unknowns" — deliberately, because absence means a different thing
-    # in each. A variant with no allele frequency is absent from the reference
-    # set, which is itself evidence of rarity and usually what the query is
-    # after. A variant with no impact score was merely never scored (indels and
-    # non-SNVs for CADD, non-missense for the protein predictors) and so implies
-    # nothing about how damaging it is; carrying those through would dilute a
-    # search for damaging variants with variants nothing has judged.
+    # Score filters may retain entries without a score; the default excludes them.
     include_missing: bool = False
 
 

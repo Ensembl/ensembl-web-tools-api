@@ -149,10 +149,6 @@ def base_config_lines(
 
     lines = [
         f"force_overwrite {force_overwrite}",
-        # Run the annotation across 8 forked processes. A VEP invocation
-        # invariant like the rest of this block: it changes how long a job takes,
-        # never what it reports, so it is not something a submission chooses.
-        "fork 8",
         "numbers 1",
     ]
     # MANE annotations only exist for human GRCh38 and the mouse reference

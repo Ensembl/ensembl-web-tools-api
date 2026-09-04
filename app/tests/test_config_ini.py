@@ -73,7 +73,6 @@ def test_always_on_defaults(monkeypatch, tmp_path):
     lines = build_lines(monkeypatch, tmp_path)
     for expected in [
         "force_overwrite 1",
-        "fork 8",
         "numbers 1",
         "symbol 1",
         "biotype 1",
@@ -85,6 +84,11 @@ def test_always_on_defaults(monkeypatch, tmp_path):
         f"fasta {FASTA}",
     ]:
         assert expected in lines
+
+
+def test_no_fork_line(monkeypatch, tmp_path):
+    """Forking is left to the pipeline's own VEP invocation, not the ini."""
+    assert find_line(build_lines(monkeypatch, tmp_path), "fork") is None
 
 
 @pytest.mark.parametrize(

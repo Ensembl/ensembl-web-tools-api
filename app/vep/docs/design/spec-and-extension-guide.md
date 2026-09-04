@@ -232,7 +232,7 @@ What genuinely remains code:
 | the panel list, and the species/assembly predicates | `form_panels.py` | seven panel ids and their labels; a panel with no options is simply not shown |
 | AF sub-option **generation** | `form_panels._af_sub_options` | 122 of GRCh38's 169 option nodes are ancestry x sex combinations; nobody should hand-write those, and they are grown from the same `fields=` tables that write the config line |
 | AF label **decoding** | `form_panels.af_population_label` | a function over a declared table, shared with the results metadata — not presentation data |
-| the always-on VEP invariants (`force_overwrite`, `fork`, `symbol`, `numbers`, `mane`…) | `pipeline_model.base_config_lines` | invocation invariants, not per-option |
+| the always-on VEP invariants (`force_overwrite`, `symbol`, `numbers`, `mane`…) | `pipeline_model.base_config_lines` | invocation invariants, not per-option |
 | plugin-data path resolution | `pipeline_model.py` | see [§3](#3-where-the-data-actually-lives) |
 | named link builders (3 of them) | `displaySpecRenderer.tsx` | they need job context no annotation field carries |
 | formatter functions | `annotationRows.tsx` | the 8 `format` values are names for these |

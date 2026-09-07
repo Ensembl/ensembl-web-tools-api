@@ -488,6 +488,29 @@
         }
       },
       {
+        "id": "avi",
+        "order": 67,
+        "parsed_as": [
+          "avi"
+        ],
+        "form": {
+          "panel": "variant_impact_predictions",
+          "category": "Genome wide",
+          "order": 300,
+          "label": "AVI",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "plugin",
+          "name": "AVI",
+          "params": {
+            "file": "{path}/alphagenome_variant_impact_score_snvs.tsv.gz",
+            "raw": "1"
+          }
+        }
+      },
+      {
         "id": "revel",
         "order": 42,
         "parsed_as": [

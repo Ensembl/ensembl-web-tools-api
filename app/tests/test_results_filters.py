@@ -1091,6 +1091,8 @@ SCORE_COLUMNS_HEADER = [
     "SpliceAI_pred_DS_AL",
     "SpliceAI_pred_DS_DG",
     "SpliceAI_pred_DS_DL",
+    "AVI_PHRED",
+    "AVI_RAW",
 ]
 SCORE_INDEX_MAP = {name: i for i, name in enumerate(SCORE_COLUMNS_HEADER)}
 # The pre-generalisation name, kept for the CADD tests below.
@@ -1231,6 +1233,8 @@ _SINGLE_COLUMN_SCORES = [
     (rf.SPLICEAI_AL_FIELD, "SpliceAI_pred_DS_AL"),
     (rf.SPLICEAI_DG_FIELD, "SpliceAI_pred_DS_DG"),
     (rf.SPLICEAI_DL_FIELD, "SpliceAI_pred_DS_DL"),
+    (rf.AVI_PHRED_FIELD, "AVI_PHRED"),
+    (rf.AVI_RAW_FIELD, "AVI_RAW"),
 ]
 
 
@@ -1264,6 +1268,20 @@ def test_each_score_is_a_no_op_when_its_plugin_was_not_run(field, column):
         if name not in {c for _, c in _SINGLE_COLUMN_SCORES}
     }
     assert rf.compile_filters([_score_filter(field, "ge", 0.5)], without) == []
+
+
+def test_both_avi_filters_vanish_when_avi_did_not_run():
+    """No AVI_PHRED column means the plugin never ran, so neither filter compiles
+    and the query builder offers nothing that could not match."""
+    without_avi = {
+        name: i
+        for name, i in SCORE_INDEX_MAP.items()
+        if not name.startswith("AVI_")
+    }
+    for field in (rf.AVI_PHRED_FIELD, rf.AVI_RAW_FIELD):
+        assert (
+            rf.compile_filters([_score_filter(field, "ge", 0.5)], without_avi) == []
+        ), field
 
 
 def test_popeve_handles_negative_thresholds():

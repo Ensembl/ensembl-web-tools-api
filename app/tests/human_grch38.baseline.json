@@ -5591,6 +5591,16 @@
                 "value": "cadd_raw",
                 "label": "CADD (RAW)",
                 "placeholder": "e.g. 3"
+              },
+              {
+                "value": "avi_phred",
+                "label": "AVI (PHRED)",
+                "placeholder": "e.g. 20"
+              },
+              {
+                "value": "avi_raw",
+                "label": "AVI (raw score)",
+                "placeholder": "e.g. 1"
               }
             ]
           },

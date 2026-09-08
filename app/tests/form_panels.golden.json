@@ -99,6 +99,26 @@
           }
         },
         {
+          "id": "avi",
+          "label": "AVI",
+          "type": "boolean",
+          "default": false,
+          "category": "Genome wide",
+          "help": {
+            "description": "AVI scores were developed by Google DeepMind and are available for commercial and non-commercial use. Details on the features contributing to AVI scores can be accessed via Google DeepMind's AlphaGenome Atlas, which is available for non-commercial use.",
+            "links": [
+              {
+                "href": "https://deepmind.google.com/science/alphagenome/downloads",
+                "label": "Download AVI scores"
+              },
+              {
+                "href": "https://deepmind.google.com/science/alphagenome/atlas?q=chr11:5225450:A>T&m=variant",
+                "label": "AlphaGenome Atlas (example variant)"
+              }
+            ]
+          }
+        },
+        {
           "id": "cadd",
           "label": "CADD",
           "type": "boolean",

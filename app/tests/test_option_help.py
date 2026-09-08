@@ -21,7 +21,7 @@ def _options(assembly: str = "GRCh38.p14", taxon: str = HUMAN) -> dict[str, dict
 def test_the_library_carries_help():
     spec = load_merged_spec("human_grch38")
     assert spec.help is not None
-    assert len(spec.help.options) == 34
+    assert len(spec.help.options) == 35
 
 
 def test_a_served_option_carries_its_help():
@@ -191,3 +191,20 @@ def test_gnomad_sv_is_described_as_allele_frequencies():
     assert "Allele frequencies for structural variants" in (
         _options()["gnomad_sv"]["help"]["description"]
     )
+
+
+# --- form-only help -----------------------------------------------------------
+
+
+def test_form_only_help_is_served_to_the_form():
+    """It is ordinary help there — the flag only decides where it is shown, so
+    the description and its links arrive exactly as any other option's do.
+
+    test_form_only_help.py covers the mechanism against a synthetic HelpSpec.
+    AVI is the only option in the bundled spec that actually carries the flag,
+    so this is the one check that it behaves on a real entry. Asserted by shape
+    rather than wording, which is copy and changes.
+    """
+    served = _options()["avi"]["help"]
+    assert served["description"]
+    assert [link["href"] for link in served["links"]]

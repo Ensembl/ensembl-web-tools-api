@@ -1817,6 +1817,40 @@
         ]
       },
       {
+        "plugin": "avi",
+        "scope": "allele",
+        "output": "avi",
+        "csq_fields": [
+          "AVI_LINK",
+          "AVI_PHRED",
+          "AVI_RAW"
+        ],
+        "require_any_output": [
+          "phred",
+          "raw"
+        ],
+        "targets": [
+          {
+            "field": "phred",
+            "from": "AVI_PHRED",
+            "transform": "scalar",
+            "type": "float"
+          },
+          {
+            "field": "raw",
+            "from": "AVI_RAW",
+            "transform": "scalar",
+            "type": "float"
+          },
+          {
+            "field": "link",
+            "from": "AVI_LINK",
+            "transform": "scalar",
+            "type": "string"
+          }
+        ]
+      },
+      {
         "plugin": "eve",
         "scope": "transcript",
         "output": "eve",
@@ -2321,6 +2355,38 @@
                 "label": "CADD (RAW)",
                 "from": "cadd.raw",
                 "format": "num"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "option_id": "avi",
+        "blocks": [
+          {
+            "kind": "rows",
+            "rows": [
+              {
+                "label": "AVI (PHRED)",
+                "from": "avi.phred",
+                "format": "num",
+                "help": "AVI_PHRED (0 to approximately 80) PHRED-scaled quantile. A phred of 20 means the variant is among the top 1% most deleterious substitutions genome-wide. Variants with higher scores are more likely to have a deleterious impact.",
+                "link": {
+                  "kind": "external",
+                  "template": "{value}"
+                },
+                "link_from": "avi.link"
+              },
+              {
+                "label": "AVI (raw score)",
+                "from": "avi.raw",
+                "format": "num",
+                "help": "AVI_RAW (approximately -1.3 to +4.0). Variants with higher scores are more likely to have a deleterious impact.",
+                "link": {
+                  "kind": "external",
+                  "template": "{value}"
+                },
+                "link_from": "avi.link"
               }
             ]
           }
@@ -3715,6 +3781,21 @@
             "href": "https://cadd.bihealth.org/"
           }
         ]
+      },
+      {
+        "option_id": "avi",
+        "description": "AVI scores were developed by Google DeepMind and are available for commercial and non-commercial use. Details on the features contributing to AVI scores can be accessed via Google DeepMind's AlphaGenome Atlas, which is available for non-commercial use.",
+        "links": [
+          {
+            "href": "https://deepmind.google.com/science/alphagenome/downloads",
+            "label": "Download AVI scores"
+          },
+          {
+            "href": "https://deepmind.google.com/science/alphagenome/atlas?q=chr11:5225450:A>T&m=variant",
+            "label": "AlphaGenome Atlas (example variant)"
+          }
+        ],
+        "form_only": true
       },
       {
         "option_id": "gerp",

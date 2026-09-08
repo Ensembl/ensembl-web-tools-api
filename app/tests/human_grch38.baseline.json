@@ -1563,7 +1563,8 @@
           "name": "AVI",
           "params": {
             "file": "{path}/alphagenome_variant_impact_score_snvs.tsv.gz",
-            "raw": "1"
+            "raw": "1",
+            "links": "1"
           }
         }
       }

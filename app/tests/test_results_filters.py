@@ -1,9 +1,10 @@
 """Tests for server-side results filtering (app/vep/utils/results_filters.py and
 the filtered scan path in vcf_results.get_results_from_path).
 
-Filtered requests can't use the BGZF page index, so they scan the whole file
-with gzip.open — meaning a plain gzip VCF fixture is enough here (no BGZF/page
-index needed).
+The first request for a filter set scans the whole file, so a plain gzip VCF
+fixture is enough for most of what is tested here. Seeking to a later page needs
+a BGZF file and a page-index sidecar; those tests live in test_page_index.py,
+next to the BGZF writer.
 """
 
 import gzip
@@ -14,6 +15,7 @@ from pydantic import FilePath
 
 from app.vep.utils import results_filters as rf
 from app.vep.utils import vcf_results
+from app.vep.utils.csq import csq_index_map_from_header
 from app.vep.utils.vcf_results import get_results_from_path
 from vep.models.display_panels_model import to_display_panels
 from app.vep.utils.spec_loader import (
@@ -1475,3 +1477,68 @@ def test_scan_cache_key_separates_filters_that_only_differ_by_match_mode(tmp_pat
         for match in ("any", "all")
     }
     assert len(keys) == 2
+
+
+# --- replay_matches starting part-way through the file -----------------------
+
+
+def _replay_setup(n_records: int):
+    """A CSQ index map, compiled missense filter, and `n_records` data lines
+    where every other record is missense."""
+    header = [
+        f'##INFO=<ID=CSQ,Number=.,Type=String,Description="{CSQ_DESC}">\n',
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n",
+    ]
+    index_map = csq_index_map_from_header(header)
+    compiled = rf.compile_filters([_consequence_filter("missense_variant")], index_map)
+    lines = [
+        _record(i, ["missense_variant" if i % 2 == 0 else "synonymous_variant"])
+        for i in range(n_records)
+    ]
+    return compiled, lines
+
+
+def test_replay_from_a_later_ordinal_gives_the_same_page():
+    """Handing replay_matches a stream that starts mid-file, plus the ordinal it
+    starts on, must produce exactly the page it would have built reading from
+    the top. If this fails, a seeked page shows the wrong variants.
+
+    Worked example: 40 records, every even one matches, so matches are
+    [0, 2, 4, ...]. Page 3 at 5 per page wants matches[10:15] = records 20-28.
+    Starting the stream at record 16 and saying so must give the same five.
+    """
+    compiled, lines = _replay_setup(40)
+    matches = [i for i in range(40) if i % 2 == 0]
+
+    from_top = rf.replay_matches(iter(lines), compiled, matches, start=10, count=5)
+    seeked = rf.replay_matches(
+        iter(lines[16:]), compiled, matches, start=10, count=5, first_ordinal=16
+    )
+    assert seeked == from_top
+    assert len(seeked) == 5
+
+
+def test_replay_landing_exactly_on_the_first_wanted_record_is_allowed():
+    """A checkpoint can coincide with a wanted record. first_ordinal equal to
+    the first wanted ordinal is the boundary case and must work."""
+    compiled, lines = _replay_setup(20)
+    matches = [i for i in range(20) if i % 2 == 0]
+
+    from_top = rf.replay_matches(iter(lines), compiled, matches, start=4, count=3)
+    seeked = rf.replay_matches(
+        iter(lines[8:]), compiled, matches, start=4, count=3, first_ordinal=8
+    )
+    assert matches[4] == 8  # the stream starts on the record the page wants
+    assert seeked == from_top
+
+
+def test_replay_refuses_a_stream_that_starts_past_the_page():
+    """Seeking beyond the first wanted record would silently drop it from the
+    page. Better to raise than to serve a short page that looks complete."""
+    compiled, lines = _replay_setup(20)
+    matches = [i for i in range(20) if i % 2 == 0]
+
+    with pytest.raises(ValueError, match="after the first wanted record"):
+        rf.replay_matches(
+            iter(lines[12:]), compiled, matches, start=4, count=3, first_ordinal=12
+        )

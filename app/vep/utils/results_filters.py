@@ -778,30 +778,46 @@ def replay_matches(
     *,
     start: int = 0,
     count: int | None = None,
+    first_ordinal: int = 0,
 ) -> list[str]:
     """Rebuild one page of an already-known match set, without re-filtering.
 
     A filtered page needs the match total, so the first request has to scan the
     whole file. Later pages of the *same* filter set do not: their answer is
     already determined. Given the record ordinals that matched, this walks the
-    line stream and re-runs the filters on only the handful of records the page
-    actually needs — turning a second page from a full evaluation pass into a
-    read plus `count` rebuilds.
+    line stream, re-runs the filters on only the records the page needs, and
+    stops once it has them.
 
-    Still a read of the file: the ordinals say which records, not where they are.
-    Decompression is ~15% of a scan, so this is the bulk of the saving, and it
-    stays honest about memory (nothing but the page is held).
+    `first_ordinal` is the record ordinal of the first line in `data_lines`;
+    0 means `data_lines` starts at the top of the file. A caller holding a BGZF
+    page index can instead seek to the checkpoint covering the page's first
+    match and pass the ordinal it landed on, so the walk starts beside the
+    wanted records rather than at record 0.
+
+    Worked example. Page 200 at 20 per page wants matches 3980-3999, which for a
+    filter that keeps 4 records in 10 are file records ~9950-10000. Reading from
+    the top means 10,000 lines. With a checkpoint every 1000 records the caller
+    seeks to record 9000 and passes first_ordinal=9000, so this reads ~1000.
+
+    Either way only the page is held in memory.
     """
     if count is not None and count <= 0:
         return []
     wanted = matches[start:] if count is None else matches[start : start + count]
     if not wanted:
         return []
+    if first_ordinal > wanted[0]:
+        # The caller seeked past a record it asked for; that record could never
+        # be found and the page would be silently short.
+        raise ValueError(
+            f"data_lines starts at record {first_ordinal}, "
+            f"after the first wanted record {wanted[0]}"
+        )
     max_index = csq_split_bound(compiled)
     remaining = set(wanted)
     highest = wanted[-1]
     page: dict[int, str] = {}
-    for ordinal, line in enumerate(data_lines):
+    for ordinal, line in enumerate(data_lines, start=first_ordinal):
         if ordinal not in remaining:
             if ordinal >= highest:
                 break

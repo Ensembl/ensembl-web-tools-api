@@ -22,6 +22,30 @@ def _bc_block_size(extra: bytes) -> int | None:
     return None
 
 
+def is_bgzf(path: str) -> bool:
+    """Whether `path` is BGZF rather than plain gzip.
+
+    BGZF is gzip with an extra field carrying the block size, which is what
+    makes seeking possible. A file gzipped with `gzip` instead of `bgzip` opens
+    fine with the gzip module but has no 'BC' subfield, so _BgzfReader would
+    raise on it. Callers use this to choose a reader.
+
+    False for a short, unreadable or non-gzip file, so the caller falls back to
+    the reader that does not care.
+    """
+    try:
+        with open(path, "rb") as handle:
+            header = handle.read(12)
+            if len(header) < 12 or header[:2] != b"\x1f\x8b":
+                return False
+            if not header[3] & 0x04:  # FLG.FEXTRA
+                return False
+            xlen = struct.unpack("<H", header[10:12])[0]
+            return _bc_block_size(handle.read(xlen)) is not None
+    except OSError:
+        return False
+
+
 class _BgzfReader:
     """Minimal, dependency-free BGZF reader supporting seek by virtual offset.
 

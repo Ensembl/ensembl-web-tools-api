@@ -34,6 +34,8 @@ ALLELE_FREQUENCY_FIELD = "allele_frequency"
 # calls are not filters.
 CADD_PHRED_FIELD = "cadd_phred"
 CADD_RAW_FIELD = "cadd_raw"
+AVI_PHRED_FIELD = "avi_phred"
+AVI_RAW_FIELD = "avi_raw"
 ALPHAMISSENSE_FIELD = "alphamissense"
 REVEL_FIELD = "revel"
 CLINPRED_FIELD = "clinpred"
@@ -75,6 +77,8 @@ _SPLICEAI_GATE = _SPLICEAI_COLUMNS[0]
 SCORE_SPECS: dict[str, ScoreSpec] = {
     CADD_PHRED_FIELD: _score("CADD_PHRED"),
     CADD_RAW_FIELD: _score("CADD_RAW"),
+    AVI_PHRED_FIELD: _score("AVI_PHRED"),
+    AVI_RAW_FIELD: _score("AVI_RAW"),
     ALPHAMISSENSE_FIELD: _score("am_pathogenicity"),
     REVEL_FIELD: _score("REVEL"),
     CLINPRED_FIELD: _score("ClinPred"),

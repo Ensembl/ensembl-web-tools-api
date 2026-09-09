@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Container, TYPE_CHECKING, Callable, Iterable, Iterator, NamedTuple
 
 from pydantic import BaseModel
@@ -156,6 +156,10 @@ class CompiledFilter:
     can be counted on its answer alone. It cannot say WHICH entries matched,
     which is why it is only used for records whose surviving entries are never
     needed (see `_evaluate_record`).
+
+    `diagnostics` collects anything worth telling the operator about the data
+    itself, as opposed to the query. It is filled during the scan and read after
+    it; see `_packed_value` for the one thing currently recorded.
     """
 
     field: str
@@ -163,6 +167,7 @@ class CompiledFilter:
     line_prefilter: Callable[[str], bool] | None = None
     max_csq_index: int | None = None
     match_payload: Callable[[str, int, int], bool] | None = None
+    diagnostics: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -763,6 +768,31 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int], spec=
     )
 
 
+def _packed_value(text: str) -> bool:
+    """Does this column hold several values where the spec expects one?
+
+    VEP rewrites both ',' and '|' to '&' inside any value it emits, so '&' is
+    how a list arrives. A score column is declared `scalar` in the parsing spec,
+    meaning one number; if a '&' turns up in one, either the VEP config packed
+    several fields into that column or the spec should have declared it `first`
+    or `list`.
+
+    Neither the display nor the filters guess at what was packed - both read the
+    column as a number, fail, and treat the entry as unscored. That is the
+    honest answer, but it is silent: the mutfunc plugin was once run with
+    `extended=1`, which packed six fields into each column, and every score came
+    back empty with nothing to say why. Recording one example is what makes that
+    visible.
+
+    An example rather than a count, because the payload matcher memoises its
+    verdict per distinct value: counting occurrences there would mean testing
+    every value again on a cache hit, which is real cost on the hot path for a
+    number nobody acts on. What the operator needs is that it happened, and a
+    value to recognise.
+    """
+    return "&" in text
+
+
 def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFilter | None":
     """Keep entries whose impact score passes the threshold.
 
@@ -805,6 +835,8 @@ def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFi
         else (lambda value: value >= threshold)
     )
     include_missing = f.include_missing
+    # Shared by keep_entry and the payload matcher so either path fills it.
+    diagnostics: dict = {}
 
     def keep_entry(entry: list[str]) -> bool:
         values: list[float] = []
@@ -813,7 +845,10 @@ def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFi
                 try:
                     values.append(float(entry[i]))
                 except ValueError:
-                    pass  # non-numeric -> no score in that column
+                    # Not a number, so this column carries no score. Keep one
+                    # example if it looks like several values packed into one.
+                    if _packed_value(entry[i]):
+                        diagnostics.setdefault("packed_example", entry[i])
         if not values:
             # Nothing numeric anywhere: this entry is unscored, so the user's
             # choice decides.
@@ -835,6 +870,8 @@ def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFi
             try:
                 return compare(float(value))
             except ValueError:
+                if _packed_value(value):
+                    diagnostics.setdefault("packed_example", value)
                 return False
 
         match_payload = _score_payload_matcher(indices[0], passes)
@@ -844,6 +881,7 @@ def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFi
         keep_entry=keep_entry,
         max_csq_index=max(indices),
         match_payload=match_payload,
+        diagnostics=diagnostics,
     )
 
 

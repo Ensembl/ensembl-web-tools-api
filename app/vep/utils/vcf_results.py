@@ -655,6 +655,30 @@ def clear_scan_cache() -> None:
         _scan_cache.clear()
 
 
+def _log_filter_diagnostics(compiled: list) -> None:
+    """Report anything the scan noticed about the data, as opposed to the query.
+
+    A score column holding several '&'-joined values is not a number, so every
+    entry carrying one is read as unscored and the filter matches nothing. That
+    is the right answer for a column the parsing spec declares `scalar` - but on
+    screen it is indistinguishable from a plugin that simply found nothing, and
+    that is how a mutfunc run with `extended=1` once produced entirely empty
+    scores with nothing to explain them.
+    """
+    for cf in compiled:
+        example = cf.diagnostics.get("packed_example")
+        if example:
+            logging.warning(
+                "VEP results filter %s: a score column held several "
+                "'&'-joined parts where one number was expected (e.g. %r), so "
+                "those entries were read as unscored. Check the plugin's VEP "
+                "config, or declare the column 'first' or 'list' in the "
+                "parsing spec.",
+                cf.field,
+                example,
+            )
+
+
 def _get_filtered_results(
     page_size: int,
     page: int,
@@ -776,6 +800,7 @@ def _get_filtered_results(
         ", ".join(f"{stat.field} removed {stat.removed}" for stat in outcome.stats)
         or "no active filters",
     )
+    _log_filter_diagnostics(compiled)
     return response
 
 

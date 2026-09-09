@@ -1744,3 +1744,118 @@ def test_a_page_window_agrees_whichever_path_each_record_took():
         assert fast_ordinals == slow_ordinals
         assert fast.page == slow.page
         assert [s.removed for s in fast.stats] == [s.removed for s in slow.stats]
+
+
+# --- '&'-joined values in a score column --------------------------------------
+#
+# VEP rewrites ',' and '|' to '&' inside any value it emits, so '&' is how a
+# list arrives. A score column is declared `scalar` in the parsing spec, so a
+# '&' in one means the VEP config packed several fields into it (mutfunc was
+# once run with extended=1, which did exactly that) or the spec should have said
+# `first`. Both display and filtering read it as a number, fail, and treat the
+# entry as unscored. That stays; what is new is that it is counted.
+
+
+def test_a_packed_score_counts_as_unscored():
+    """The value is not a number, so the entry has no score. With
+    include_missing=False that entry cannot match any threshold - the same
+    answer the display gives, which shows the score as absent."""
+    entries = [_cadd_entry("1.0&25.0", "3.1")]
+    assert _run_cadd(entries, _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20,
+                                           include_missing=False)) == []
+    # Not "below the threshold" either - a `le` filter must not match it.
+    assert _run_cadd(entries, _cadd_filter(rf.CADD_PHRED_FIELD, "le", 20,
+                                           include_missing=False)) == []
+    # It is genuinely unscored, so include_missing keeps it.
+    assert _run_cadd(entries, _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20,
+                                           include_missing=True))
+
+
+def test_a_packed_score_is_recorded_so_it_is_not_silent():
+    """The failure mode this guards: a misconfigured plugin makes every score
+    unscored, the filter matches nothing, and the results look like a plugin
+    that found nothing. The recorded example is what tells the operator
+    otherwise."""
+    lines = [
+        _score_record(1, [_cadd_entry("1.0&25.0", "3.1")]),
+        _score_record(2, [_cadd_entry("0.5&0.9&2.0", "3.1")]),
+        _score_record(3, [_cadd_entry("25.0", "3.1")]),
+    ]
+    compiled = rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)],
+        SCORE_INDEX_MAP,
+    )
+    outcome = rf.filter_records(iter(lines), compiled, start=0, count=None)
+    assert outcome.matched_total == 1, "only the plain 25.0 should match"
+    assert compiled[0].diagnostics["packed_example"] in ("1.0&25.0", "0.5&0.9&2.0")
+
+
+def test_ordinary_non_numeric_scores_are_not_reported_as_packed():
+    """Only '&' means "several values were packed here". A column holding a word
+    is just missing data and must not raise a false alarm."""
+    lines = [_score_record(1, [_cadd_entry("high", "3.1")])]
+    compiled = rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)],
+        SCORE_INDEX_MAP,
+    )
+    outcome = rf.filter_records(iter(lines), compiled, start=0, count=None)
+    assert outcome.matched_total == 0
+    assert "packed_example" not in compiled[0].diagnostics
+
+
+def test_the_payload_shortcut_records_packed_values_too():
+    """Records outside the requested page take the raw-payload path, so the
+    example has to be filled there as well - otherwise the warning would depend
+    on which page was asked for."""
+    lines = [_score_record(pos, [_cadd_entry("1.0&25.0", "3.1")]) for pos in range(5)]
+    compiled = rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)],
+        SCORE_INDEX_MAP,
+    )
+    # A zero-width page means every record is counted, never rebuilt, so all of
+    # them go through the shortcut.
+    outcome = rf.filter_records(iter(lines), compiled, start=0, count=0)
+    assert outcome.matched_total == 0
+    assert compiled[0].diagnostics["packed_example"] == "1.0&25.0"
+
+
+def test_the_packed_value_warning_reaches_the_log(caplog):
+    """The whole point of recording it. An operator sees a filter that matched
+    nothing and has to be told the scores were unreadable rather than absent,
+    with a value they can recognise and a column to go and fix."""
+    import logging
+
+    lines = [
+        _score_record(1, [_cadd_entry("1.0&25.0", "3.1")]),
+        _score_record(2, [_cadd_entry("30.0", "3.1")]),
+    ]
+    compiled = rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)],
+        SCORE_INDEX_MAP,
+    )
+    outcome = rf.filter_records(iter(lines), compiled, start=0, count=None)
+    assert outcome.matched_total == 1, "only the plain 30.0 matches"
+
+    with caplog.at_level(logging.WARNING):
+        vcf_results._log_filter_diagnostics(compiled)
+    warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    packed = [w for w in warnings if "unscored" in w]
+    assert packed, f"no warning about the packed value; got {warnings}"
+    assert "1.0&25.0" in packed[0], "the warning should quote the offending value"
+    assert "cadd_phred" in packed[0], "the warning should name the filter"
+
+
+def test_no_diagnostics_means_no_warning(caplog):
+    """A clean scan must stay quiet, or the warning becomes noise people learn
+    to ignore."""
+    import logging
+
+    lines = [_score_record(1, [_cadd_entry("30.0", "3.1")])]
+    compiled = rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)],
+        SCORE_INDEX_MAP,
+    )
+    rf.filter_records(iter(lines), compiled, start=0, count=None)
+    with caplog.at_level(logging.WARNING):
+        vcf_results._log_filter_diagnostics(compiled)
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]

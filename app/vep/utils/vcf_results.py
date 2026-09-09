@@ -264,10 +264,20 @@ def _pool_annotations(variant: model.Variant) -> None:
     pool: list[model.Annotation] = []
     seen: dict[str, int] = {}
 
+    # The same parsed `data` object comes back from apply_plugin_spec's cache
+    # for every entry whose columns match, so serialising it again produces a
+    # string we already have. Keyed on identity, which is exact: one object
+    # always serialises to one string.
+    serialised: dict[int, str] = {}
+
     def refs(annotations: list[model.Annotation]) -> list[int]:
         out = []
         for annotation in annotations:
-            key = annotation.model_dump_json()
+            data_id = id(annotation.data)
+            key = serialised.get(data_id)
+            if key is None:
+                key = annotation.model_dump_json()
+                serialised[data_id] = key
             index = seen.get(key)
             if index is None:
                 index = len(pool)

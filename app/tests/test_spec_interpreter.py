@@ -2698,3 +2698,44 @@ def test_a_plan_resolves_pattern_map_columns_from_the_header():
     assert compile_plugin(
         index_map_for("gnomAD_exomes_AF"), spec
     ).pattern_columns[target.field] == ()
+
+
+# --- the input gate remembers its answer --------------------------------------
+
+
+def test_the_input_gate_result_is_cached():
+    """A plugin stopped by `require_any_input` caches the None, like every other
+    outcome.
+
+    It used to return before reaching the cache, so the next CSQ entry with the
+    same columns rebuilt the key, missed, re-read the same empty columns and
+    returned None again. VEP repeats a plugin's columns on every entry of a
+    variant, so on a 100-record page that was about a third of all plugin
+    applications repeating work whose answer was already known.
+    """
+    spec = SPEC.plugin("clinvar_sv")
+    assert spec.require_any_input, "this test needs a plugin with an input gate"
+
+    cache: dict = {}
+    plan = compile_plugin(INDEX_MAP, spec)
+    assert apply_plugin_spec(EMPTY, INDEX_MAP, spec, cache, plan) is None
+    assert cache, "the gate's answer was not cached"
+    assert list(cache.values()) == [None]
+
+    # The second call must come back from the cache rather than re-deciding.
+    key = next(iter(cache))
+    cache[key] = {"sentinel": True}
+    assert apply_plugin_spec(EMPTY, INDEX_MAP, spec, cache, plan) == {"sentinel": True}
+
+
+def test_a_plugin_with_data_is_unaffected_by_the_gate_caching():
+    """The gate only fires when the declared input columns are all empty; a row
+    with data must still be parsed normally."""
+    row = row_list(ClinVar_SV_CLNSIG="Pathogenic", ClinVar_SV_ORIGIN="germline")
+    cache: dict = {}
+    spec = SPEC.plugin("clinvar_sv")
+    plan = compile_plugin(INDEX_MAP, spec)
+    assert apply_plugin_spec(row, INDEX_MAP, spec, cache, plan) == {
+        "significance": ["Pathogenic"],
+        "origin": ["germline"],
+    }

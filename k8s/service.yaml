@@ -10,6 +10,7 @@ spec:
     app: ensembl-tools-api-<DEPLOYMENT_ENV>
   type: ClusterIP
   ports:
-    - port: 8013
+    - name: tools-api
+      port: 8013
       protocol: TCP
       targetPort: 8013

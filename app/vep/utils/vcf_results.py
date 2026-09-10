@@ -16,7 +16,7 @@ from pydantic import FilePath
 from vep.models import vcf_results_model as model
 from vep.form_panels import af_max_subpopulation_label
 from vep.utils import results_filters
-from vep.utils.bgzf import _BgzfReader
+from vep.utils.bgzf import _BgzfReader, is_bgzf
 from vep.utils.csq import (
     csq_index_map_from_header,
     get_csq_value,
@@ -264,10 +264,20 @@ def _pool_annotations(variant: model.Variant) -> None:
     pool: list[model.Annotation] = []
     seen: dict[str, int] = {}
 
+    # The same parsed `data` object comes back from apply_plugin_spec's cache
+    # for every entry whose columns match, so serialising it again produces a
+    # string we already have. Keyed on identity, which is exact: one object
+    # always serialises to one string.
+    serialised: dict[int, str] = {}
+
     def refs(annotations: list[model.Annotation]) -> list[int]:
         out = []
         for annotation in annotations:
-            key = annotation.model_dump_json()
+            data_id = id(annotation.data)
+            key = serialised.get(data_id)
+            if key is None:
+                key = annotation.model_dump_json()
+                serialised[data_id] = key
             index = seen.get(key)
             if index is None:
                 index = len(pool)
@@ -474,6 +484,96 @@ def _read_indexed_page(
     return b"".join(header_lines).decode(), b"".join(rows).decode()
 
 
+class _RecordSource:
+    """The results VCF as a stream of text lines, seekable when it is BGZF.
+
+    Two readers behind one interface. A BGZF file gets `_BgzfReader`, which can
+    jump to a virtual offset and is about twice as fast: reading a million
+    records measured 16.3 s decoded to str against 34 s for gzip.open in text
+    mode. Anything else — a VCF written by plain `gzip` rather than `bgzip` —
+    gets the gzip module, which cannot seek but gives identical answers by
+    reading from the top.
+
+    `seekable` says which one you got. Callers must check it before calling
+    `seek`.
+    """
+
+    def __init__(self, vcf_path: FilePath):
+        path = str(vcf_path)
+        self.seekable = is_bgzf(path)
+        self._reader = _BgzfReader(path) if self.seekable else gzip.open(path, "rt")
+
+    def lines(self) -> Iterator[str]:
+        """Every line from the current position to the end, as text. Calling
+        this again resumes where the last one stopped."""
+        if not self.seekable:
+            return self._reader
+        return self._decoded()
+
+    def _decoded(self) -> Iterator[str]:
+        while True:
+            line = self._reader.readline()
+            if not line:
+                return
+            yield line.decode()
+
+    def seek(self, voffset: int) -> None:
+        self._reader.seek(voffset)
+
+    def close(self) -> None:
+        self._reader.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
+
+def _record_lines(source: _RecordSource, first_data_line: str | None) -> Iterable[str]:
+    """The record stream from `source`'s current position.
+
+    Finding where the header ends means reading the first data line, so that
+    line has already left the source. Pass it back in as `first_data_line` and
+    it is put in front of the stream; pass None after a seek, which moved the
+    source somewhere else entirely.
+    """
+    lines = source.lines()
+    if first_data_line is None:
+        return lines
+    return itertools.chain((first_data_line,), lines)
+
+
+def _checkpoint_covering(index: dict, ordinal: int) -> tuple[int, int] | None:
+    """The last checkpoint at or before `ordinal`, as (virtual offset, ordinal).
+
+    None when the index carries no usable checkpoints, in which case the caller
+    reads from the top of the file instead. The returned ordinal is always <=
+    the one asked for, so reading forward from there cannot skip it.
+    """
+    stride = index.get("stride") or 0
+    checkpoints = index.get("checkpoints") or []
+    if stride <= 0 or not checkpoints:
+        return None
+    i = min(ordinal // stride, len(checkpoints) - 1)
+    return checkpoints[i], i * stride
+
+
+def _seekable_index(vcf_path: FilePath, scanned_total: int) -> dict | None:
+    """The page-index sidecar, but only if it still describes this file.
+
+    A filtered scan counts the records it saw, so `scanned_total` is ground
+    truth for the file that produced the cached match ordinals. If the sidecar
+    disagrees it was built from a different version of the VCF, and seeking on
+    it would land on the wrong record and serve the wrong rows. Reading from the
+    top is slower but always right, so a mismatch returns None.
+    """
+    index = _load_page_index(vcf_path)
+    if index is None or index.get("total_records") != scanned_total:
+        return None
+    return index
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -565,6 +665,30 @@ def clear_scan_cache() -> None:
         _scan_cache.clear()
 
 
+def _log_filter_diagnostics(compiled: list) -> None:
+    """Report anything the scan noticed about the data, as opposed to the query.
+
+    A score column holding several '&'-joined values is not a number, so every
+    entry carrying one is read as unscored and the filter matches nothing. That
+    is the right answer for a column the parsing spec declares `scalar` - but on
+    screen it is indistinguishable from a plugin that simply found nothing, and
+    that is how a mutfunc run with `extended=1` once produced entirely empty
+    scores with nothing to explain them.
+    """
+    for cf in compiled:
+        example = cf.diagnostics.get("packed_example")
+        if example:
+            logging.warning(
+                "VEP results filter %s: a score column held several "
+                "'&'-joined parts where one number was expected (e.g. %r), so "
+                "those entries were read as unscored. Check the plugin's VEP "
+                "config, or declare the column 'first' or 'list' in the "
+                "parsing spec.",
+                cf.field,
+                example,
+            )
+
+
 def _get_filtered_results(
     page_size: int,
     page: int,
@@ -574,29 +698,34 @@ def _get_filtered_results(
     display_panels: list[DisplayPanel],
     display: DisplayPayload,
 ) -> model.VepResultsResponse:
-    """Stream the results VCF applying the filter pipeline, retaining only the
-    requested page of survivors. The page-index fast path can't be used once
-    records are filtered (positions shift), so this is a full sequential pass —
-    but the file is read as a lazy line stream and only the page slice is held, so
-    memory is bounded by `page_size` rather than the (multi-GB) file. Attaches
-    per-filter removed counts to the response metadata and logs them.
+    """Apply the filter pipeline to the results VCF and keep only the requested
+    page of survivors. Attaches per-filter removed counts to the response
+    metadata and logs them.
 
-    Note: pagination needs the total match count, so every page still scans the
-    whole file. A filtered-index cache keyed by the filter set would remove the
-    rescan for later pages (see pagination-design.md); memory is no longer the
-    constraint it was."""
+    The first request for a given filter set has to read the whole file, because
+    pagination needs the total match count and a filter can match anywhere. That
+    scan records the ordinal of every matching record in the scan cache, so
+    later pages of the same filter set skip straight to the records they need.
+
+    Those later pages seek. The page-index sidecar holds a BGZF virtual offset
+    every `stride` records, so a page deep in the results starts from the
+    checkpoint beside it rather than from record 0. Without the sidecar the walk
+    still starts at the top, which is correct but reads the whole file again.
+
+    Only the page slice is held either way, so memory is bounded by `page_size`
+    rather than by the (multi-GB) file."""
     page = max(page, 1)
     page_size = max(page_size, 0)
     start = (page - 1) * page_size
     cache_key = _scan_cache_key(vcf_path, filters)
 
     header_lines: list[str] = []
-    with gzip.open(vcf_path, "rt") as handle:
+    with _RecordSource(vcf_path) as source:
         # The header is every '#' line, and all of them precede the data records;
         # stop at (and keep) the first data line, then stream the rest lazily so
         # the whole file is never materialised.
         first_data_line: str | None = None
-        for line in handle:
+        for line in source.lines():
             if line.startswith("#"):
                 header_lines.append(line)
             else:
@@ -606,17 +735,30 @@ def _get_filtered_results(
         index_map = csq_index_map_from_header(header_lines)
         compiled = results_filters.compile_filters(filters, index_map, spec)
 
-        data_lines = (
-            handle
-            if first_data_line is None
-            else itertools.chain((first_data_line,), handle)
-        )
         cached = _scan_cache_get(cache_key)
         if cached is not None:
             # The answer is already known; only this page's records need
             # rebuilding, and no filter is evaluated for the rest.
+            first_ordinal = 0
+            if page_size > 0 and start < len(cached.matches) and source.seekable:
+                index = _seekable_index(vcf_path, cached.scanned_total)
+                spot = (
+                    _checkpoint_covering(index, cached.matches[start])
+                    if index is not None
+                    else None
+                )
+                if spot is not None:
+                    source.seek(spot[0])
+                    first_ordinal = spot[1]
+                    # The seek moved off the line the header read consumed.
+                    first_data_line = None
             page_lines = results_filters.replay_matches(
-                data_lines, compiled, cached.matches, start=start, count=page_size
+                _record_lines(source, first_data_line),
+                compiled,
+                cached.matches,
+                start=start,
+                count=page_size,
+                first_ordinal=first_ordinal,
             )
             outcome = results_filters.FilterOutcome(
                 page=page_lines,
@@ -627,7 +769,7 @@ def _get_filtered_results(
         else:
             matches: list[int] = []
             outcome = results_filters.filter_records(
-                data_lines,
+                _record_lines(source, first_data_line),
                 compiled,
                 start=start,
                 count=page_size,
@@ -668,6 +810,7 @@ def _get_filtered_results(
         ", ".join(f"{stat.field} removed {stat.removed}" for stat in outcome.stats)
         or "no active filters",
     )
+    _log_filter_diagnostics(compiled)
     return response
 
 

@@ -16,6 +16,7 @@ limitations under the License.
 """
 
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 
@@ -70,3 +71,15 @@ def get_application() -> FastAPI:
 
 app = get_application()
 app.mount("/api/tools/blast", blast_app)
+
+Instrumentator(excluded_handlers=["/metrics"]).instrument(
+    app,
+    latency_lowr_buckets=(
+        0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+        1, 1.25, 1.5, 1.75, 2, 2.5,
+        5, 10, 30,
+    ),
+).expose(
+    app,
+    include_in_schema=False,
+)

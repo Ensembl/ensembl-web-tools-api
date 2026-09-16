@@ -1361,6 +1361,25 @@
         }
       },
       {
+        "id": "regulatory",
+        "order": 68,
+        "parsed_as": [
+          "motif"
+        ],
+        "form": {
+          "panel": "regulatory",
+          "order": 1,
+          "label": "Regulatory features",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "setting",
+          "keyword": "regulatory_gff",
+          "value": "file={path}/Homo_sapiens.GRCh38.regulatory_features.v116.gff3.gz,motifs={path}/Homo_sapiens.GRCh38.motif_features.v116.gff3.gz"
+        }
+      },
+      {
         "id": "protein",
         "order": 13,
         "parsed_as": [

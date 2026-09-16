@@ -32,7 +32,7 @@ SPEC = load_merged_spec("human_grch38")
 SPEC_DRIVEN_OPTIONS = {
     "hgvs", "spdi", "alphamissense", "revel", "clinpred", "cadd", "avi", "spliceai",
     "loeuf", "pli", "dosage_sensitivity", "utrannotator", "nmd", "riboseqorfs",
-        "tss_distance", "eve", "gerp",
+        "tss_distance", "eve", "gerp", "regulatory",
     # `list`-block options (repeat + truncate, migrated off frontend overrides)
     "phenotypes", "go", "mavedb", "nearest_gene", "nearest_exon_jb",
     # sub-option rows (Show-all enumeration)

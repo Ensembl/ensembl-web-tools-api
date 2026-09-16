@@ -77,6 +77,7 @@ def test_bundled_spec_validates():
         "clinvar_sv",
         "protvar",
         "protein",
+        "motif",
         "opentargets",
         "go",
         "spliceai",

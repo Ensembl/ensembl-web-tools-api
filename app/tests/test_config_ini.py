@@ -227,6 +227,8 @@ def test_per_assembly_plugin_files(monkeypatch, tmp_path, option, markers):
         ("GRCh37.p13", "phenotypes", "grch37/Phenotypes_data_files"),
         ("ARS-UCD1.2", "go", "other_species/GO_data_files"),
         ("GRCh38.p14", "gnomad_exomes", "grch38/gnomAD_exomes"),
+        ("GRCh37.p13", "regulatory", "grch37/regulatory"),
+        ("GRCm39", "regulatory", "other_species/regulatory"),
     ],
 )
 def test_plugin_data_path_selects_assembly_and_dataset_directories(
@@ -1114,3 +1116,74 @@ def test_gerp_plugin_takes_its_file_positionally(monkeypatch, tmp_path):
 def test_gerp_off_emits_no_line(monkeypatch, tmp_path):
     lines = build_lines(monkeypatch, tmp_path, gerp=False)
     assert not [line for line in lines if "Conservation" in line]
+
+
+# --- regulatory features -------------------------------------------------------
+
+
+def test_regulatory_features_name_the_grch38_gffs(monkeypatch, tmp_path):
+    """The web pipeline has no VEP cache, so regulatory features come from the
+    regulation team's GFFs. The option writes VEP's regulatory_gff line, with
+    the features and motifs files from the assembly's regulatory directory."""
+    lines = build_lines(monkeypatch, tmp_path, regulatory=True)
+    base = plugin_data_path("GRCh38.p14")("regulatory")
+    assert (
+        f"regulatory_gff file={base}/Homo_sapiens.GRCh38.regulatory_features.v116.gff3.gz,"
+        f"motifs={base}/Homo_sapiens.GRCh38.motif_features.v116.gff3.gz"
+    ) in lines
+
+
+def test_regulatory_features_are_off_unless_chosen(monkeypatch, tmp_path):
+    lines = build_lines(monkeypatch, tmp_path)
+    assert not any(line.startswith("regulatory_gff") for line in lines)
+
+
+def test_regulatory_features_name_the_grch37_gffs(monkeypatch, tmp_path):
+    lines = build_lines_37(monkeypatch, tmp_path, regulatory=True)
+    base = plugin_data_path("GRCh37.p13")("regulatory")
+    assert (
+        f"regulatory_gff file={base}/Homo_sapiens.GRCh37.regulatory_features.v116.gff3.gz,"
+        f"motifs={base}/Homo_sapiens.GRCh37.motif_features.v116.gff3.gz"
+    ) in lines
+
+
+@pytest.mark.parametrize(
+    "assembly,expected",
+    [
+        # Mouse has motifs as well as regulatory features.
+        (
+            "GRCm39",
+            "file={base}/Mus_musculus.GRCm39.regulatory_features.v116.gff3.gz,"
+            "motifs={base}/Mus_musculus.GRCm39.motif_features.v116.gff3.gz",
+        ),
+        # The rest have regulatory features only, so no motifs clause.
+        ("ARS-UCD2.0", "file={base}/Bos_taurus.ARS-UCD2.0.regulatory_features.v116.gff3.gz"),
+        ("Cypcar_WagV4.0", "file={base}/Cyprinus_carpio_carpio.Cypcar_WagV4.0.regulatory_features.v116.gff3.gz"),
+        ("ASM1334776v1", "file={base}/Scophthalmus_maximus.ASM1334776v1.regulatory_features.v116.gff3.gz"),
+        ("dlabrax2021", "file={base}/Dicentrarchus_labrax.dlabrax2021.regulatory_features.v116.gff3.gz"),
+        ("bGalGal1.mat.broiler.GRCg7b", "file={base}/Gallus_gallus.GRCg7b.regulatory_features.v116.gff3.gz"),
+        ("USDA_OmykA_1.1", "file={base}/Oncorhynchus_mykiss.USDA_OmykA_1.1.regulatory_features.v116.gff3.gz"),
+        ("Ssal_v3.1", "file={base}/Salmo_salar.Ssal_v3.1.regulatory_features.v116.gff3.gz"),
+        ("Sscrofa11.1", "file={base}/Sus_scrofa.Sscrofa11.1.regulatory_features.v116.gff3.gz"),
+    ],
+)
+def test_species_regulatory_features_name_their_own_gffs(
+    monkeypatch, tmp_path, assembly, expected
+):
+    """Other species take the option from the species table, which names each
+    species' own files. They sit under the shared other_species data tree."""
+    from app.vep.utils.spec_loader import resolve_merged_spec
+
+    monkeypatch.setattr(
+        "app.vep.models.pipeline_model.get_vep_support_location",
+        lambda genome_id: {"gff_location": GFF, "faa_location": FASTA},
+    )
+    params = ConfigIniParams(
+        genome_id="genome-under-test",
+        assembly_name=assembly,
+        options={"regulatory": True},
+    )
+    params.create_config_ini_file(str(tmp_path), resolve_merged_spec(assembly).config)
+    lines = (tmp_path / "config.ini").read_text().splitlines()
+    base = plugin_data_path(assembly)("regulatory")
+    assert "regulatory_gff " + expected.format(base=base) in lines

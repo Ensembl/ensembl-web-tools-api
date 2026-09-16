@@ -67,6 +67,25 @@
           "snv": "{path}/{file}"
         }
       }
+    },
+    "regulatory": {
+      "id": "regulatory",
+      "order": 42,
+      "parsed_as": [
+        "motif"
+      ],
+      "form": {
+        "panel": "regulatory",
+        "order": 0,
+        "label": "Regulatory features",
+        "type": "boolean",
+        "default": false
+      },
+      "config": {
+        "emit": "setting",
+        "keyword": "regulatory_gff",
+        "value": "{file}"
+      }
     }
   },
   "species": [
@@ -108,8 +127,12 @@
       "species_taxonomy_id": "9913",
       "datasets": [
         "go",
-        "phenotypes"
-      ]
+        "phenotypes",
+        "regulatory"
+      ],
+      "files": {
+        "regulatory": "file={path}/Bos_taurus.ARS-UCD2.0.regulatory_features.v116.gff3.gz"
+      }
     },
     {
       "assembly": "mCalJac1.pat.X",
@@ -195,6 +218,17 @@
       ]
     },
     {
+      "assembly": "Cypcar_WagV4.0",
+      "production_name": "cyprinus_carpio_carpio",
+      "species_taxonomy_id": "630221",
+      "datasets": [
+        "regulatory"
+      ],
+      "files": {
+        "regulatory": "file={path}/Cyprinus_carpio_carpio.Cypcar_WagV4.0.regulatory_features.v116.gff3.gz"
+      }
+    },
+    {
       "assembly": "GRCz11",
       "production_name": "danio_rerio",
       "species_taxonomy_id": "7955",
@@ -208,8 +242,12 @@
       "production_name": "dicentrarchus_labrax",
       "species_taxonomy_id": "13489",
       "datasets": [
-        "go"
-      ]
+        "go",
+        "regulatory"
+      ],
+      "files": {
+        "regulatory": "file={path}/Dicentrarchus_labrax.dlabrax2021.regulatory_features.v116.gff3.gz"
+      }
     },
     {
       "assembly": "BDGP6.46",
@@ -260,8 +298,12 @@
       "species_taxonomy_id": "9031",
       "datasets": [
         "go",
-        "phenotypes"
-      ]
+        "phenotypes",
+        "regulatory"
+      ],
+      "files": {
+        "regulatory": "file={path}/Gallus_gallus.GRCg7b.regulatory_features.v116.gff3.gz"
+      }
     },
     {
       "assembly": "GRCg6a",
@@ -334,8 +376,12 @@
       "species_taxonomy_id": "10090",
       "datasets": [
         "go",
-        "phenotypes"
-      ]
+        "phenotypes",
+        "regulatory"
+      ],
+      "files": {
+        "regulatory": "file={path}/Mus_musculus.GRCm39.regulatory_features.v116.gff3.gz,motifs={path}/Mus_musculus.GRCm39.motif_features.v116.gff3.gz"
+      }
     },
     {
       "assembly": "NNQGG.v01",
@@ -358,8 +404,12 @@
       "production_name": "oncorhynchus_mykiss",
       "species_taxonomy_id": "8022",
       "datasets": [
-        "go"
-      ]
+        "go",
+        "regulatory"
+      ],
+      "files": {
+        "regulatory": "file={path}/Oncorhynchus_mykiss.USDA_OmykA_1.1.regulatory_features.v116.gff3.gz"
+      }
     },
     {
       "assembly": "O_niloticus_UMD_NMBU",
@@ -457,8 +507,12 @@
       "production_name": "salmo_salar",
       "species_taxonomy_id": "8030",
       "datasets": [
-        "go"
-      ]
+        "go",
+        "regulatory"
+      ],
+      "files": {
+        "regulatory": "file={path}/Salmo_salar.Ssal_v3.1.regulatory_features.v116.gff3.gz"
+      }
     },
     {
       "assembly": "SLUC_FBN_1",
@@ -467,6 +521,17 @@
       "datasets": [
         "go"
       ]
+    },
+    {
+      "assembly": "ASM1334776v1",
+      "production_name": "scophthalmus_maximus",
+      "species_taxonomy_id": "52904",
+      "datasets": [
+        "regulatory"
+      ],
+      "files": {
+        "regulatory": "file={path}/Scophthalmus_maximus.ASM1334776v1.regulatory_features.v116.gff3.gz"
+      }
     },
     {
       "assembly": "Sdu_1.0",
@@ -483,10 +548,12 @@
       "datasets": [
         "go",
         "phenotypes",
-        "cadd"
+        "cadd",
+        "regulatory"
       ],
       "files": {
-        "cadd": "ALL_pCADD-PHRED-scores.tsv.gz"
+        "cadd": "ALL_pCADD-PHRED-scores.tsv.gz",
+        "regulatory": "file={path}/Sus_scrofa.Sscrofa11.1.regulatory_features.v116.gff3.gz"
       }
     },
     {

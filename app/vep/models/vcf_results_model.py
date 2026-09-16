@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -32,7 +32,7 @@ class Annotation(BaseModel):
     not run / no data"."""
 
     plugin: str  # spec plugin id, e.g. "mavedb", "gnomad_exomes"
-    scope: str  # "allele" | "transcript"
+    scope: str  # "allele" | "transcript" | "regulatory"
     data: dict[str, Any]
 
 
@@ -116,6 +116,24 @@ class PredictedTranscriptConsequence(BaseModel):
     # the same payload repeats across every transcript it applies to (ClinVar
     # was 421 copies of 14 distinct values on a 50-variant page), so what goes
     # on the wire is `annotation_refs` into the variant's pool.
+    annotations: list[Annotation] = Field(default_factory=list, exclude=True)
+    annotation_refs: list[int] = []
+
+
+class PredictedRegulatoryConsequence(BaseModel):
+    """A consequence on a regulatory feature.
+
+    VEP's RegulatoryFeature rows (ENSR ids, with a biotype such as enhancer or
+    promoter) and MotifFeature rows (ENSM ids) share this one kind. A motif has
+    no biotype, so `biotype` is null on motif rows.
+    """
+
+    feature_type: Literal["regulatory"] = "regulatory"
+    stable_id: str = Field(..., description="regulatory feature or motif id")
+    biotype: str | None = None
+    consequences: list[str]
+    # Spec-driven annotations for this feature (scope "regulatory"). Sent as
+    # `annotation_refs` into the variant's pool, as a transcript's are.
     annotations: list[Annotation] = Field(default_factory=list, exclude=True)
     annotation_refs: list[int] = []
 
@@ -218,7 +236,9 @@ class AlternativeVariantAllele(BaseModel):
     annotations: list[Annotation] = Field(default_factory=list, exclude=True)
     annotation_refs: list[int] = []
     predicted_molecular_consequences: list[
-        PredictedTranscriptConsequence | PredictedIntergenicConsequence
+        PredictedTranscriptConsequence
+        | PredictedRegulatoryConsequence
+        | PredictedIntergenicConsequence
     ]
 
 

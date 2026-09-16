@@ -294,6 +294,10 @@ def _pool_annotations(variant: model.Variant) -> None:
     variant.annotation_pool = pool
 
 
+# VEP's regulatory feature types. Both become one regulatory consequence kind.
+REGULATORY_FEATURE_TYPES = frozenset({"RegulatoryFeature", "MotifFeature"})
+
+
 def _get_alt_allele_details(
     ref: str,
     alt: str,
@@ -422,6 +426,17 @@ def _get_alt_allele_details(
                     ),
                 )
             )
+        elif csq_values[index_map["Feature_type"]] in REGULATORY_FEATURE_TYPES:
+            consequences.append(
+                model.PredictedRegulatoryConsequence(
+                    stable_id=get_csq_value(csq_values, "Feature", "", index_map),
+                    biotype=get_csq_value(csq_values, "BIOTYPE", None, index_map),
+                    consequences=cons,
+                    annotations=_spec_annotations(
+                        csq_values, index_map, spec, "regulatory", parse_cache, plans
+                    ),
+                )
+            )
         elif "intergenic_variant" in cons:
             consequences.append(
                 model.PredictedIntergenicConsequence(
@@ -430,11 +445,9 @@ def _get_alt_allele_details(
                 )
             )
         elif unhandled_feature_types is not None:
-            # A CSQ row for a feature type the response has no model for —
-            # RegulatoryFeature and MotifFeature, which VEP emits when
-            # regulatory annotation is on. Dropping it loses the row entirely,
-            # so record what was dropped for the caller to report; it is a gap
-            # in the model rather than bad input.
+            # A CSQ row for a feature type the response has no model for.
+            # Dropping it loses the row, so record what was dropped for the
+            # caller to report. It's a gap in the model rather than bad input.
             unhandled_feature_types[
                 csq_values[index_map["Feature_type"]] or "(none)"
             ] += 1

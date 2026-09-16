@@ -4,8 +4,8 @@ Since the go-flat cutover the plugin annotations are produced by the spec
 interpreter, not by a bank of hand-written parsers; only the unspecced tail
 (uniprot / protein_matches / sift / polyphen) is still parsed by hand here. A
 modern CSQ header (with the plugin columns) builds the index_map, and the
-end-to-end tests check an allele built from a transcript row and from an
-intergenic row.
+end-to-end tests check an allele built from a transcript row, an intergenic
+row and regulatory rows.
 
 The header fixtures below (ALL_COLS / INDEX_MAP / row_list / EMPTY) are shared
 with test_spec_interpreter.
@@ -322,46 +322,40 @@ def test_transcript_flags_mane_gencode_primary_canonical():
 
 
 def test_an_unmodelled_feature_type_is_counted_rather_than_lost():
-    """VEP emits RegulatoryFeature and MotifFeature rows once regulatory
-    annotation is on, and the response has no model for either. They are dropped
-    — but the caller is told what was dropped, so the loss is reportable instead
-    of silent."""
+    """A CSQ row whose feature type has no consequence model is dropped, but the
+    caller is told what was dropped, so the loss can be reported. `FutureFeature`
+    stands in for any feature type VEP might add later."""
     from collections import Counter
 
     dropped: Counter = Counter()
     allele = _get_alt_allele_details(
         "G",
         "A",
-        [
-            row_str(Allele="A", Feature_type="RegulatoryFeature",
-                    Feature="ENSR1_958", BIOTYPE="promoter",
-                    Consequence="regulatory_region_variant"),
-            row_str(Allele="A", Feature_type="MotifFeature",
-                    Feature="ENSM00000000314",
-                    Consequence="TF_binding_site_variant"),
-        ],
+        [row_str(Allele="A", Feature_type="FutureFeature", Feature="X1",
+                 Consequence="future_variant")],
         INDEX_MAP,
         SPEC,
         unhandled_feature_types=dropped,
     )
     assert allele.predicted_molecular_consequences == []
-    assert dropped == Counter({"RegulatoryFeature": 1, "MotifFeature": 1})
+    assert dropped == Counter({"FutureFeature": 1})
 
 
 def test_the_counter_is_optional():
-    """Callers that do not care still parse."""
+    """Callers that don't pass a counter still parse."""
     allele = _get_alt_allele_details(
         "G", "A",
-        [row_str(Allele="A", Feature_type="RegulatoryFeature",
-                 Consequence="regulatory_region_variant")],
+        [row_str(Allele="A", Feature_type="FutureFeature",
+                 Consequence="future_variant")],
         INDEX_MAP,
         SPEC,
     )
     assert allele.predicted_molecular_consequences == []
 
 
-def test_transcript_and_intergenic_rows_are_not_counted():
-    """Only rows with no model at all — the two that have one are unaffected."""
+def test_modelled_rows_are_not_counted():
+    """Transcript, regulatory, motif and intergenic rows all have a model, so
+    none of them is counted as dropped."""
     from collections import Counter
 
     dropped: Counter = Counter()
@@ -371,6 +365,12 @@ def test_transcript_and_intergenic_rows_are_not_counted():
             row_str(Allele="A", Feature_type="Transcript", Feature="ENST1",
                     BIOTYPE="protein_coding", Consequence="missense_variant",
                     STRAND="1"),
+            row_str(Allele="A", Feature_type="RegulatoryFeature",
+                    Feature="ENSR1_D37Q", BIOTYPE="enhancer",
+                    Consequence="regulatory_region_variant"),
+            row_str(Allele="A", Feature_type="MotifFeature",
+                    Feature="ENSM00000018397",
+                    Consequence="TF_binding_site_variant"),
             row_str(Allele="A", Feature_type="", Consequence="intergenic_variant"),
         ],
         INDEX_MAP,
@@ -378,3 +378,114 @@ def test_transcript_and_intergenic_rows_are_not_counted():
         unhandled_feature_types=dropped,
     )
     assert dropped == Counter()
+
+
+# --- regulatory rows ------------------------------------------------------------
+
+
+def test_a_regulatory_feature_row_becomes_a_regulatory_consequence():
+    """A RegulatoryFeature row keeps its id, biotype and consequence terms. If
+    this breaks, enhancer and promoter rows vanish from the results."""
+    allele = _get_alt_allele_details(
+        "C", "T",
+        [row_str(Allele="T", Feature_type="RegulatoryFeature",
+                 Feature="ENSR1_D37Q", BIOTYPE="enhancer",
+                 Consequence="regulatory_region_variant")],
+        INDEX_MAP,
+        SPEC,
+    )
+    [consequence] = allele.predicted_molecular_consequences
+    assert consequence.feature_type == "regulatory"
+    assert consequence.stable_id == "ENSR1_D37Q"
+    assert consequence.biotype == "enhancer"
+    assert consequence.consequences == ["regulatory_region_variant"]
+
+
+def test_a_motif_row_is_a_regulatory_consequence_without_a_biotype():
+    """VEP leaves BIOTYPE empty on MotifFeature rows. A motif shares the
+    regulatory kind, with a null biotype rather than an empty string."""
+    allele = _get_alt_allele_details(
+        "G", "C",
+        [row_str(Allele="C", Feature_type="MotifFeature",
+                 Feature="ENSM00000018397",
+                 Consequence="TF_binding_site_variant")],
+        INDEX_MAP,
+        SPEC,
+    )
+    [consequence] = allele.predicted_molecular_consequences
+    assert consequence.feature_type == "regulatory"
+    assert consequence.stable_id == "ENSM00000018397"
+    assert consequence.biotype is None
+    assert consequence.consequences == ["TF_binding_site_variant"]
+
+
+def test_an_allele_keeps_its_transcript_and_regulatory_rows():
+    """A variant near a gene can have transcript and regulatory rows at once.
+    chr1:201396107 C>G, for example, has 15 transcripts, an enhancer and a motif.
+    Every row survives in CSQ order, and the allele-level annotations are still
+    read once for the allele."""
+    allele = _get_alt_allele_details(
+        "C", "G",
+        [
+            row_str(Allele="G", Feature_type="Transcript",
+                    Feature="ENST00000367313.5", BIOTYPE="protein_coding",
+                    Consequence="intron_variant", STRAND="1", CADD_PHRED="5.579"),
+            row_str(Allele="G", Feature_type="RegulatoryFeature",
+                    Feature="ENSR1_94XXBC", BIOTYPE="enhancer",
+                    Consequence="regulatory_region_variant", CADD_PHRED="5.579"),
+            row_str(Allele="G", Feature_type="MotifFeature",
+                    Feature="ENSM00000071889",
+                    Consequence="TF_binding_site_variant", CADD_PHRED="5.579"),
+        ],
+        INDEX_MAP,
+        SPEC,
+    )
+    rows = [
+        (type(c).__name__, c.stable_id)
+        for c in allele.predicted_molecular_consequences
+    ]
+    assert rows == [
+        ("PredictedTranscriptConsequence", "ENST00000367313.5"),
+        ("PredictedRegulatoryConsequence", "ENSR1_94XXBC"),
+        ("PredictedRegulatoryConsequence", "ENSM00000071889"),
+    ]
+    assert {a.plugin: a.data for a in allele.annotations}["cadd"]["phred"] == 5.579
+
+
+def test_a_regulatory_scoped_plugin_attaches_to_the_regulatory_row_only():
+    """A plugin with scope "regulatory" is read from each regulatory row and
+    stored on that consequence, never on the allele or a transcript.
+
+    The probe here is the loeuf plugin re-declared as regulatory-scoped. Both rows
+    carry a LOEUF value, so each plugin's value shows which row it landed on:
+    0.5 belongs to the transcript and 0.7 to the enhancer."""
+    loeuf = next(p for p in SPEC.plugins if p.plugin == "loeuf")
+    probe = type(loeuf).model_validate(
+        {**loeuf.model_dump(), "plugin": "regulatory_probe",
+         "output": "regulatory_probe", "scope": "regulatory"}
+    )
+    spec = SPEC.model_copy(update={"plugins": [*SPEC.plugins, probe]})
+    allele = _get_alt_allele_details(
+        "C", "G",
+        [
+            row_str(Allele="G", Feature_type="Transcript", Feature="ENST1",
+                    BIOTYPE="protein_coding", Consequence="intron_variant",
+                    STRAND="1", LOEUF="0.5"),
+            row_str(Allele="G", Feature_type="RegulatoryFeature",
+                    Feature="ENSR1_94XXBC", BIOTYPE="enhancer",
+                    Consequence="regulatory_region_variant", LOEUF="0.7"),
+        ],
+        INDEX_MAP,
+        spec,
+    )
+    transcript, regulatory = allele.predicted_molecular_consequences
+    on_transcript = {a.plugin: a for a in transcript.annotations}
+    on_regulatory = {a.plugin: a for a in regulatory.annotations}
+
+    assert on_regulatory["regulatory_probe"].scope == "regulatory"
+    assert on_regulatory["regulatory_probe"].data == {"score": 0.7}
+    assert "loeuf" not in on_regulatory
+    assert on_transcript["loeuf"].data == {"score": 0.5}
+    assert "regulatory_probe" not in on_transcript
+    assert "regulatory_probe" not in {a.plugin for a in allele.annotations}
+

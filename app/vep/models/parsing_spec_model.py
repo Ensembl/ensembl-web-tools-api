@@ -692,7 +692,7 @@ class PluginSpec(BaseModel):
     plugin: str
     # The results show this name for the plugin's source.
     label: str | None = None
-    scope: Literal["allele", "transcript"]
+    scope: Literal["allele", "transcript", "regulatory"]
     # Where the result attaches on the response model, e.g. "mavedb".
     output: str
     csq_fields: list[str]

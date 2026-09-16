@@ -489,3 +489,46 @@ def test_a_regulatory_scoped_plugin_attaches_to_the_regulatory_row_only():
     assert "regulatory_probe" not in on_transcript
     assert "regulatory_probe" not in {a.plugin for a in allele.annotations}
 
+
+def test_a_motif_rows_details_attach_to_that_row():
+    """A MotifFeature row's five motif columns parse into a `motif` annotation
+    on that row. For chr1:30231804 G>C the motif is ENSPFM0015, bound by FOS,
+    ATF7 and JUN, and the variant sits at position 11. HIGH_INF_POS and
+    MOTIF_SCORE_CHANGE are filled here too, although VEP leaves them empty until
+    it has the motif's weight matrix. An enhancer row next to it has no motif,
+    so it gets no motif annotation."""
+    motif_cols = [
+        "MOTIF_NAME", "MOTIF_POS", "HIGH_INF_POS", "MOTIF_SCORE_CHANGE",
+        "TRANSCRIPTION_FACTORS",
+    ]
+    cols = ALL_COLS + motif_cols
+    index_map = get_prediction_index_map(
+        "Consequence annotations from Ensembl VEP. Format: " + "|".join(cols)
+    )
+
+    def row(**values):
+        return "|".join(str(values.get(col, "")) for col in cols)
+
+    allele = _get_alt_allele_details(
+        "G", "C",
+        [
+            row(Allele="C", Feature_type="MotifFeature", Feature="ENSM00000018397",
+                Consequence="TF_binding_site_variant", MOTIF_NAME="ENSPFM0015",
+                MOTIF_POS="11", HIGH_INF_POS="N", MOTIF_SCORE_CHANGE="-0.021",
+                TRANSCRIPTION_FACTORS="FOS&ATF7&JUN"),
+            row(Allele="C", Feature_type="RegulatoryFeature", Feature="ENSR1_D37Q",
+                BIOTYPE="enhancer", Consequence="regulatory_region_variant"),
+        ],
+        index_map,
+        SPEC,
+    )
+    motif_row, enhancer_row = allele.predicted_molecular_consequences
+    motif = {a.plugin: a for a in motif_row.annotations}["motif"]
+    assert motif.scope == "regulatory"
+    assert motif.data["name"] == "ENSPFM0015"
+    assert motif.data["transcription_factors"] == ["FOS", "ATF7", "JUN"]
+    assert motif.data["position"] == 11
+    assert motif.data["high_information_position"] == "N"
+    assert motif.data["score_change"] == -0.021
+    assert "motif" not in {a.plugin for a in enhancer_row.annotations}
+    assert "motif" not in {a.plugin for a in allele.annotations}

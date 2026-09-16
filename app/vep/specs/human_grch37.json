@@ -919,6 +919,25 @@
           "emit": "flag",
           "keyword": "protein"
         }
+      },
+      {
+        "id": "regulatory",
+        "order": 62,
+        "parsed_as": [
+          "motif"
+        ],
+        "form": {
+          "panel": "regulatory",
+          "order": 0,
+          "label": "Regulatory features",
+          "type": "boolean",
+          "default": false
+        },
+        "config": {
+          "emit": "setting",
+          "keyword": "regulatory_gff",
+          "value": "file={path}/Homo_sapiens.GRCh37.regulatory_features.v116.gff3.gz,motifs={path}/Homo_sapiens.GRCh37.motif_features.v116.gff3.gz"
+        }
       }
     ]
   },

@@ -144,12 +144,14 @@ def test_human_grch37_has_37_38_options_but_not_38_only():
 
 
 def test_mouse_gets_the_base_panels_plus_its_own_data_options():
-    """Mouse carries GO and Phenotypes data files, so it is offered those two on
-    top of the always-visible panels — and none of the human-only options."""
+    """Mouse carries GO, Phenotypes and regulatory data files, so it is offered
+    those on top of the always-visible panels — and none of the human-only
+    options."""
     panels = get_visible_panels(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
     assert panel_ids(panels) == ALWAYS_VISIBLE_PANEL_IDS | {
         "phenotype_and_disease_associations",
         "protein_and_functional",
+        "regulatory",
     }
 
     genes_opts = option_ids(
@@ -183,7 +185,7 @@ def test_a_go_only_species_is_not_offered_phenotypes():
 
 
 # Every dataset a species row can name; the option id is the dataset name.
-DATASET_OPTION_IDS = {"go", "phenotypes", "cadd"}
+DATASET_OPTION_IDS = {"go", "phenotypes", "cadd", "regulatory"}
 
 
 def test_form_options_match_the_spec_a_submission_would_get():
@@ -524,17 +526,27 @@ def test_clinvar_absent_for_non_human():
     assert "clinvar" not in option_ids(panels)
 
 
-def test_regulatory_panel_is_grch38_only():
-    g38 = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14")
-    assert "regulatory" in panel_ids(g38)
-    assert "gencode_promoters" in option_ids(g38)
-    # Not for human GRCh37 (no spec) nor other species.
-    assert "regulatory" not in panel_ids(
+def test_the_regulatory_panel_follows_regulatory_data():
+    """Regulatory features are offered wherever the regulation team publishes
+    GFFs: human GRCh38 and GRCh37, mouse, and several other species. GENCODE
+    promoters stay GRCh38-only, and a genome with no regulatory data gets no
+    Regulatory panel at all."""
+    g38 = option_ids(
+        get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14")
+    )
+    assert {"regulatory", "gencode_promoters"} <= g38
+
+    g37 = option_ids(
         get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh37")
     )
-    assert "regulatory" not in panel_ids(
-        get_visible_panels(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
-    )
+    assert "regulatory" in g37 and "gencode_promoters" not in g37
+
+    mouse = get_visible_panels(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
+    assert "regulatory" in option_ids(mouse)
+
+    # Zebrafish's species table row has GO and Phenotypes but no regulatory data.
+    zebrafish = get_visible_panels(species_taxonomy_id="7955", assembly_name="GRCz11")
+    assert "regulatory" not in panel_ids(zebrafish)
 
 
 def test_gnomad_sv_option_is_grch38_allele_frequency():

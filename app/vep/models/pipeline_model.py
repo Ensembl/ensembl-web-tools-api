@@ -90,6 +90,7 @@ _PLUGIN_DATA_SUBDIRS = {
     "gnomad_sv": "gnomAD_SV",
     "gnomad_exomes": "gnomAD_exomes",
     "gnomad_genomes": "gnomAD_genomes",
+    "regulatory": "regulatory",
 }
 
 

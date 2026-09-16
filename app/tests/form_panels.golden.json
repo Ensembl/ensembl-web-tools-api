@@ -1373,6 +1373,15 @@
               }
             ]
           }
+        },
+        {
+          "id": "regulatory",
+          "label": "Regulatory features",
+          "type": "boolean",
+          "default": false,
+          "help": {
+            "description": "Reports consequences on regulatory features, such as promoters and enhancers, and on transcription factor binding motifs where Ensembl has them. A motif shows the transcription factors that bind it and where the variant falls within it."
+          }
         }
       ]
     },
@@ -2528,6 +2537,22 @@
       ]
     },
     {
+      "id": "regulatory",
+      "label": "Regulatory",
+      "full_width": false,
+      "options": [
+        {
+          "id": "regulatory",
+          "label": "Regulatory features",
+          "type": "boolean",
+          "default": false,
+          "help": {
+            "description": "Reports consequences on regulatory features, such as promoters and enhancers, and on transcription factor binding motifs where Ensembl has them. A motif shows the transcription factors that bind it and where the variant falls within it."
+          }
+        }
+      ]
+    },
+    {
       "id": "phenotype_and_disease_associations",
       "label": "Phenotype & disease associations",
       "full_width": true,
@@ -2697,6 +2722,22 @@
                 "href": "https://geneontology.org/"
               }
             ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "regulatory",
+      "label": "Regulatory",
+      "full_width": false,
+      "options": [
+        {
+          "id": "regulatory",
+          "label": "Regulatory features",
+          "type": "boolean",
+          "default": false,
+          "help": {
+            "description": "Reports consequences on regulatory features, such as promoters and enhancers, and on transcription factor binding motifs where Ensembl has them. A motif shows the transcription factors that bind it and where the variant falls within it."
           }
         }
       ]

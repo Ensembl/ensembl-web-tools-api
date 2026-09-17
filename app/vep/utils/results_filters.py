@@ -150,16 +150,11 @@ class CompiledFilter:
     135 subfields and a filter typically reads one. None means "reads unknown
     columns" and forces a full split — correctness first.
 
-    `match_payload`, when set, answers "does at least one entry of this record
-    satisfy this filter?" from the raw CSQ payload, without splitting anything.
-    Unlike `line_prefilter` it is exact, not a necessary condition, so a record
-    can be counted on its answer alone. It cannot say WHICH entries matched,
-    which is why it is only used for records whose surviving entries are never
-    needed (see `_evaluate_record`).
+    `match_payload`, when set, says exactly whether any entry of the record
+    passes, read from the raw CSQ payload. It cannot say which entries passed.
 
-    `diagnostics` collects anything worth telling the operator about the data
-    itself, as opposed to the query. It is filled during the scan and read after
-    it; see `_packed_value` for the one thing currently recorded.
+    `diagnostics` collects facts about the data found during the scan (see
+    `_packed_value`).
     """
 
     field: str
@@ -225,32 +220,21 @@ def _split_line(line: str) -> tuple[list[str], bool]:
 # ---------------------------------------------------------------------------
 # Reading one CSQ column without splitting the entry
 #
-# Splitting an entry to read column N allocates N+1 strings and throws away all
-# but one. CADD_PHRED is column 72 of 107 and there are 160M entries in a
-# multi-million-variant file, so that is billions of discarded strings. These
-# patterns walk the pipes inside the regex engine and hand back only the wanted
-# column; an entry whose column is blank produces no match object at all, which
-# matters because the score columns are mostly blank (REVEL is empty on 96.7%
-# of entries).
+# These patterns skip columns inside the regex engine and capture only the
+# wanted one. A blank column produces no match, and most score columns are blank.
 #
-# The skip is `[^|]*+\|` rather than `[^|,]*+\|`. A one-character negated class
-# compiles to NOT_LITERAL, which the engine scans with memchr; a two-character
-# one is tested per character, and on this data that difference is most of the
-# win. The cost is that the skip can run past the ',' ending a short entry and
-# capture a column belonging to the next one. Every match is therefore checked
-# for a ',' between the anchor and the captured value, and a record that shows
-# one is rescanned with the pattern that cannot cross an entry boundary. Real
-# VEP output gives every entry the same column count, so the rescan should never
-# run; it is there so ragged input is answered exactly rather than plausibly.
+# The skip is `[^|]*+\|`. The engine scans a one-character negated class with
+# memchr, so it is much faster than `[^|,]*+\|`. It can run past the ',' ending
+# a short entry, so every match is checked for a ',' before its value and a
+# record that shows one is rescanned with the safe pattern. Real VEP entries all
+# have the same column count, so only ragged input reaches the rescan.
 # ---------------------------------------------------------------------------
 
 _FAST_COLUMN_PATTERNS: dict[int, tuple[re.Pattern, re.Pattern]] = {}
 _SAFE_COLUMN_PATTERNS: dict[int, tuple[re.Pattern, re.Pattern]] = {}
 
-# Raw column value -> verdict. Within a record a score is usually the same
-# string on every entry, and a whole file holds only thousands of distinct
-# values, so this replaces nearly every float() with a dict hit. The cap only
-# stops a pathological column growing without bound.
+# Caps each matcher's value -> verdict cache. A file holds few distinct score
+# strings, so the cache skips nearly every float().
 _VERDICT_CACHE_LIMIT = 200_000
 
 
@@ -259,8 +243,7 @@ def _column_patterns(
 ) -> tuple[re.Pattern, re.Pattern]:
     """(first-entry, later-entry) patterns for one column, compiled once.
 
-    The skip is written out in full rather than as `{n}`, because an unrolled
-    sequence avoids the engine's counted-repeat bookkeeping.
+    The skip is repeated in full because a counted repeat `{n}` is slower.
     """
     patterns = cache.get(csq_index)
     if patterns is None:
@@ -273,9 +256,7 @@ def _column_patterns(
 def _csq_payload_bounds(line: str) -> tuple[int, int] | None:
     """The (start, end) offsets of the CSQ payload within `line`, or None.
 
-    Walks to the INFO column and locates the CSQ field without copying either.
-    CSQ is one ';'-separated INFO field, so "CSQ=" counts only at the start of
-    INFO or straight after a ';' — a key such as XCSQ= is not it.
+    "CSQ=" counts only at the start of INFO or after a ';', so XCSQ= is skipped.
     """
     position = 0
     for _ in range(7):
@@ -300,12 +281,7 @@ def _csq_payload_bounds(line: str) -> tuple[int, int] | None:
 def _score_payload_matcher(
     csq_index: int, passes: Callable[[str], bool]
 ) -> Callable[[str, int, int], bool]:
-    """Build a `match_payload` for a score filter reading one CSQ column.
-
-    Returns a callable answering "does any entry in line[start:end] have a value
-    at `csq_index` that `passes`?" — reading the column straight out of the line
-    with no entry split and no payload copy.
-    """
+    """Build a `match_payload` that reads one CSQ column straight out of the line."""
     fast_first, fast_rest = _column_patterns(csq_index, _FAST_COLUMN_PATTERNS, "[^|]*+\\|")
     verdicts: dict[str, bool] = {}
 
@@ -318,11 +294,7 @@ def _score_payload_matcher(
         return known
 
     def rescan(line: str, start: int, end: int) -> bool:
-        """The same question answered with the pattern that cannot misalign.
-
-        Only reached for a record holding an entry with fewer than csq_index+1
-        columns, which real VEP output does not produce.
-        """
+        """Answer again with the pattern that cannot cross into the next entry."""
         safe_first, safe_rest = _column_patterns(
             csq_index, _SAFE_COLUMN_PATTERNS, "[^|,]*+\\|"
         )
@@ -771,24 +743,14 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int], spec=
 def _packed_value(text: str) -> bool:
     """Does this column hold several values where the spec expects one?
 
-    VEP rewrites both ',' and '|' to '&' inside any value it emits, so '&' is
-    how a list arrives. A score column is declared `scalar` in the parsing spec,
-    meaning one number; if a '&' turns up in one, either the VEP config packed
-    several fields into that column or the spec should have declared it `first`
-    or `list`.
+    VEP rewrites ',' and '|' inside a value to '&', so '&' marks a list. In a
+    `scalar` score column it means the VEP config packed several fields into the
+    column (mutfunc with `extended=1` does this), or the spec should declare the
+    column `first` or `list`.
 
-    Neither the display nor the filters guess at what was packed - both read the
-    column as a number, fail, and treat the entry as unscored. That is the
-    honest answer, but it is silent: the mutfunc plugin was once run with
-    `extended=1`, which packed six fields into each column, and every score came
-    back empty with nothing to say why. Recording one example is what makes that
-    visible.
-
-    An example rather than a count, because the payload matcher memoises its
-    verdict per distinct value: counting occurrences there would mean testing
-    every value again on a cache hit, which is real cost on the hot path for a
-    number nobody acts on. What the operator needs is that it happened, and a
-    value to recognise.
+    The display and the filters read such an entry as unscored and give no
+    reason. One recorded example shows the operator why. The payload matcher
+    caches verdicts per value, so a count would cost a retest on every hit.
     """
     return "&" in text
 
@@ -845,8 +807,7 @@ def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFi
                 try:
                     values.append(float(entry[i]))
                 except ValueError:
-                    # Not a number, so this column carries no score. Keep one
-                    # example if it looks like several values packed into one.
+                    # Non-numeric means unscored. Keep one packed example.
                     if _packed_value(entry[i]):
                         diagnostics.setdefault("packed_example", entry[i])
         if not values:
@@ -855,12 +816,9 @@ def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFi
             return include_missing
         return any(map(compare, values))
 
-    # A one-column score that excludes unscored entries can also be answered
-    # straight off the raw payload, which is much cheaper — see
-    # `_score_payload_matcher`. The other shapes keep to `keep_entry` alone:
-    # with `include_missing` an entry that parses to nothing still matches, and
-    # `spliceai_any` reads four columns, neither of which the single-column
-    # pattern expresses.
+    # The payload matcher handles only a one-column score that excludes unscored
+    # entries. With `include_missing` an empty entry still matches, and
+    # `spliceai_any` reads four columns.
     match_payload = None
     if len(indices) == 1 and not include_missing:
 
@@ -926,10 +884,8 @@ def compile_filters(
 # surviving entries, and whether the line had a trailing newline.
 _Survivor = tuple[list[str], int, list[list[str]], bool]
 
-# Returned when a record is known to match but its surviving entries were never
-# worked out, because the caller said it would not need them. Truthy, and never
-# passed to `_rebuild_line` — `filter_records` only asks for survivors on the
-# records it is going to rebuild.
+# Returned for a match whose surviving entries the caller did not ask for. It is
+# truthy, and `filter_records` never passes it to `_rebuild_line`.
 MATCHED_WITHOUT_SURVIVORS = ("matched",)
 
 
@@ -948,16 +904,12 @@ def _evaluate_record(
     Each filter's cheap `line_prefilter` runs first, on the raw unsplit line, so a
     record that can't match is rejected before the expensive CSQ split.
 
-    `need_survivors=False` says the caller only wants to know whether the record
-    matched, which is true of every record outside the requested page — the vast
-    majority. A single filter that can answer from the raw payload then does so
-    and returns MATCHED_WITHOUT_SURVIVORS, skipping the CSQ split entirely.
+    With `need_survivors=False`, as for records outside the page, a lone filter
+    with `match_payload` answers from the raw payload and returns
+    MATCHED_WITHOUT_SURVIVORS without splitting the CSQ.
 
-    That shortcut is limited to ONE filter on purpose. Filters AND within a
-    single entry: a record matches when one entry satisfies all of them. Asking
-    each filter separately whether any entry satisfies it would keep a record
-    whose entry A passes one filter and entry B passes the other, which is a
-    different and wrong question."""
+    The shortcut needs exactly one filter. Several filters must all pass on the
+    same entry, and separate payload checks could pass on different entries."""
     # Necessary-condition rejection on the raw line, before any splitting.
     for i, cf in enumerate(compiled):
         if cf.line_prefilter is not None and not cf.line_prefilter(line):
@@ -1010,20 +962,11 @@ def replay_matches(
     whole file. Later pages of the *same* filter set do not: their answer is
     already determined. Given the record ordinals that matched, this walks the
     line stream, re-runs the filters on only the records the page needs, and
-    stops once it has them.
+    stops once it has them. Only the page is held in memory.
 
-    `first_ordinal` is the record ordinal of the first line in `data_lines`;
-    0 means `data_lines` starts at the top of the file. A caller holding a BGZF
-    page index can instead seek to the checkpoint covering the page's first
-    match and pass the ordinal it landed on, so the walk starts beside the
-    wanted records rather than at record 0.
-
-    Worked example. Page 200 at 20 per page wants matches 3980-3999, which for a
-    filter that keeps 4 records in 10 are file records ~9950-10000. Reading from
-    the top means 10,000 lines. With a checkpoint every 1000 records the caller
-    seeks to record 9000 and passes first_ordinal=9000, so this reads ~1000.
-
-    Either way only the page is held in memory.
+    `first_ordinal` is the ordinal of the first line in `data_lines`. A caller
+    with a BGZF page index can seek to the checkpoint covering the page's first
+    match and pass that checkpoint's ordinal, so the walk skips earlier records.
     """
     if count is not None and count <= 0:
         return []
@@ -1031,8 +974,7 @@ def replay_matches(
     if not wanted:
         return []
     if first_ordinal > wanted[0]:
-        # The caller seeked past a record it asked for; that record could never
-        # be found and the page would be silently short.
+        # A seek past a wanted record would return a silently short page.
         raise ValueError(
             f"data_lines starts at record {first_ordinal}, "
             f"after the first wanted record {wanted[0]}"
@@ -1091,8 +1033,7 @@ def filter_records(
     stop = None if count is None else start + count
     for line in data_lines:
         scanned += 1
-        # If this record matches it becomes match number `matched`, so whether
-        # its entries will be rebuilt is known before evaluating it.
+        # A match here would be match number `matched`.
         in_page = matched >= start and (stop is None or matched < stop)
         survivor = _evaluate_record(
             line, compiled, removed, max_index, need_survivors=in_page

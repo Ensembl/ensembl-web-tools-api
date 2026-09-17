@@ -264,10 +264,8 @@ def _pool_annotations(variant: model.Variant) -> None:
     pool: list[model.Annotation] = []
     seen: dict[str, int] = {}
 
-    # The same parsed `data` object comes back from apply_plugin_spec's cache
-    # for every entry whose columns match, so serialising it again produces a
-    # string we already have. Keyed on identity, which is exact: one object
-    # always serialises to one string.
+    # apply_plugin_spec's cache reuses one `data` object for entries with
+    # matching columns, so its JSON is cached by object identity.
     serialised: dict[int, str] = {}
 
     def refs(annotations: list[model.Annotation]) -> list[int]:
@@ -485,17 +483,10 @@ def _read_indexed_page(
 
 
 class _RecordSource:
-    """The results VCF as a stream of text lines, seekable when it is BGZF.
+    """The results VCF as text lines, seekable when it is BGZF.
 
-    Two readers behind one interface. A BGZF file gets `_BgzfReader`, which can
-    jump to a virtual offset and is about twice as fast: reading a million
-    records measured 16.3 s decoded to str against 34 s for gzip.open in text
-    mode. Anything else — a VCF written by plain `gzip` rather than `bgzip` —
-    gets the gzip module, which cannot seek but gives identical answers by
-    reading from the top.
-
-    `seekable` says which one you got. Callers must check it before calling
-    `seek`.
+    A BGZF file gets the faster `_BgzfReader`. A plain gzip file gets the gzip
+    module, which cannot seek, so check `seekable` before calling `seek`.
     """
 
     def __init__(self, vcf_path: FilePath):
@@ -504,8 +495,7 @@ class _RecordSource:
         self._reader = _BgzfReader(path) if self.seekable else gzip.open(path, "rt")
 
     def lines(self) -> Iterator[str]:
-        """Every line from the current position to the end, as text. Calling
-        this again resumes where the last one stopped."""
+        """Text lines from the current position, which earlier calls advance."""
         if not self.seekable:
             return self._reader
         return self._decoded()
@@ -531,12 +521,10 @@ class _RecordSource:
 
 
 def _record_lines(source: _RecordSource, first_data_line: str | None) -> Iterable[str]:
-    """The record stream from `source`'s current position.
+    """Records from `source`'s current position, led by `first_data_line`.
 
-    Finding where the header ends means reading the first data line, so that
-    line has already left the source. Pass it back in as `first_data_line` and
-    it is put in front of the stream; pass None after a seek, which moved the
-    source somewhere else entirely.
+    The header read consumes the first data line, so pass it back here. Pass
+    None after a seek.
     """
     lines = source.lines()
     if first_data_line is None:
@@ -545,12 +533,8 @@ def _record_lines(source: _RecordSource, first_data_line: str | None) -> Iterabl
 
 
 def _checkpoint_covering(index: dict, ordinal: int) -> tuple[int, int] | None:
-    """The last checkpoint at or before `ordinal`, as (virtual offset, ordinal).
-
-    None when the index carries no usable checkpoints, in which case the caller
-    reads from the top of the file instead. The returned ordinal is always <=
-    the one asked for, so reading forward from there cannot skip it.
-    """
+    """The last checkpoint at or before `ordinal`, as (virtual offset, ordinal),
+    or None when the index has no usable checkpoints."""
     stride = index.get("stride") or 0
     checkpoints = index.get("checkpoints") or []
     if stride <= 0 or not checkpoints:
@@ -560,14 +544,9 @@ def _checkpoint_covering(index: dict, ordinal: int) -> tuple[int, int] | None:
 
 
 def _seekable_index(vcf_path: FilePath, scanned_total: int) -> dict | None:
-    """The page-index sidecar, but only if it still describes this file.
-
-    A filtered scan counts the records it saw, so `scanned_total` is ground
-    truth for the file that produced the cached match ordinals. If the sidecar
-    disagrees it was built from a different version of the VCF, and seeking on
-    it would land on the wrong record and serve the wrong rows. Reading from the
-    top is slower but always right, so a mismatch returns None.
-    """
+    """The page-index sidecar, or None if its record count differs from
+    `scanned_total`. A mismatched sidecar came from another version of the VCF,
+    and seeking on it would serve the wrong rows."""
     index = _load_page_index(vcf_path)
     if index is None or index.get("total_records") != scanned_total:
         return None
@@ -666,14 +645,11 @@ def clear_scan_cache() -> None:
 
 
 def _log_filter_diagnostics(compiled: list) -> None:
-    """Report anything the scan noticed about the data, as opposed to the query.
+    """Log data problems the scan noticed.
 
-    A score column holding several '&'-joined values is not a number, so every
-    entry carrying one is read as unscored and the filter matches nothing. That
-    is the right answer for a column the parsing spec declares `scalar` - but on
-    screen it is indistinguishable from a plugin that simply found nothing, and
-    that is how a mutfunc run with `extended=1` once produced entirely empty
-    scores with nothing to explain them.
+    A `scalar` score column holding '&'-joined values reads as unscored, so its
+    filter matches nothing. On screen that looks like a plugin that found
+    nothing, so the log says why.
     """
     for cf in compiled:
         example = cf.diagnostics.get("packed_example")
@@ -702,18 +678,10 @@ def _get_filtered_results(
     page of survivors. Attaches per-filter removed counts to the response
     metadata and logs them.
 
-    The first request for a given filter set has to read the whole file, because
-    pagination needs the total match count and a filter can match anywhere. That
-    scan records the ordinal of every matching record in the scan cache, so
-    later pages of the same filter set skip straight to the records they need.
-
-    Those later pages seek. The page-index sidecar holds a BGZF virtual offset
-    every `stride` records, so a page deep in the results starts from the
-    checkpoint beside it rather than from record 0. Without the sidecar the walk
-    still starts at the top, which is correct but reads the whole file again.
-
-    Only the page slice is held either way, so memory is bounded by `page_size`
-    rather than by the (multi-GB) file."""
+    The first request for a filter set scans the whole file, because pagination
+    needs the total match count. The scan caches every match's ordinal. A later
+    page seeks to the page-index checkpoint before its first match, or reads
+    from the top when it cannot seek. Only the page slice is held in memory."""
     page = max(page, 1)
     page_size = max(page_size, 0)
     start = (page - 1) * page_size

@@ -25,13 +25,8 @@ def _bc_block_size(extra: bytes) -> int | None:
 def is_bgzf(path: str) -> bool:
     """Whether `path` is BGZF rather than plain gzip.
 
-    BGZF is gzip with an extra field carrying the block size, which is what
-    makes seeking possible. A file gzipped with `gzip` instead of `bgzip` opens
-    fine with the gzip module but has no 'BC' subfield, so _BgzfReader would
-    raise on it. Callers use this to choose a reader.
-
-    False for a short, unreadable or non-gzip file, so the caller falls back to
-    the reader that does not care.
+    Plain `gzip` output lacks the 'BC' subfield, so _BgzfReader would raise on
+    it. A short, unreadable or non-gzip file returns False.
     """
     try:
         with open(path, "rb") as handle:

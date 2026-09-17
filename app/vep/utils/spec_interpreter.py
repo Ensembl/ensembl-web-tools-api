@@ -981,8 +981,7 @@ def apply_plugin_spec(
     # deliberately outside this: it is what legitimately differs per row.
     key = None
     if cache is not None:
-        # A list comprehension rather than a generator: tuple() can size the
-        # result up front, and this runs once per plugin per CSQ entry.
+        # tuple() is faster on a list than a generator, and this path is hot.
         key = (spec.plugin, tuple([csq_values[i] for i in plan.key_indices]))
         if key in cache:
             return cache[key]
@@ -990,11 +989,7 @@ def apply_plugin_spec(
     # Raw presence, deliberately: a literal 'NA' counts as present here, which
     # is what the hand-written parsers do.
     #
-    # Cached like any other answer. The gate reads columns the cache key already
-    # covers, so two rows with the same key are gated the same way; returning
-    # without caching meant every later row rebuilt the key, missed, and
-    # re-checked the same empty columns. On a 100-record page that was a third
-    # of all plugin applications doing it again and again.
+    # Caching this None assumes the gate reads only columns in the cache key.
     if spec.require_any_input and not any(
         csq_values[i] for i in plan.input_indices
     ):

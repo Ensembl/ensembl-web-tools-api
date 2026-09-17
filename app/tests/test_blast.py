@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import asyncio
 import json
 import os
 import pytest
@@ -9,6 +10,39 @@ from core.config import API_PREFIX
 # Fixtures live beside this file. Resolving them against the working directory
 # instead only worked when pytest was invoked from app/.
 TESTS_DIR = os.path.dirname(__file__)
+
+
+class FakeResponse:
+    def __init__(self, body, status=200):
+        self.body = body
+        self.status = status
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        pass
+
+    async def text(self):
+        return self.body
+
+
+class FakeClientSession:
+    def __init__(self, response):
+        self.response = response
+        self.closed = False
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        self.closed = True
+
+    def post(self, url, data):
+        return self.response
+
+    def get(self, url):
+        return self.response
 
 
 # Test config endpoint
@@ -36,6 +70,33 @@ def test_get_db_path(blast_payload):
     assert filename == f"ensembl/{genome_id_prefix}/{genome_id}/softmasked"
     filename = blast.get_db_path(genome_id, "pep")
     assert filename == f"ensembl/{genome_id_prefix}/{genome_id}/pep"
+
+
+def test_run_blast_closes_client_session(monkeypatch):
+    session = FakeClientSession(FakeResponse("ncbiblast_ensembl-12345"))
+    monkeypatch.setattr(blast, "ClientSession", lambda **kwargs: session)
+
+    result = asyncio.run(
+        blast.run_blast(
+            {"id": 1, "value": "ACTG"},
+            {"program": "blastn"},
+            "a48b4fc1-ff60-4f1f-9c15-0e328afbdc85",
+            "dna",
+        )
+    )
+
+    assert result["job_id"] == "ncbiblast_ensembl-12345"
+    assert session.closed
+
+
+def test_blast_proxy_closes_client_session(monkeypatch):
+    session = FakeClientSession(FakeResponse("RUNNING"))
+    monkeypatch.setattr(blast, "ClientSession", lambda **kwargs: session)
+
+    result = asyncio.run(blast.blast_proxy("status", "ncbiblast_ensembl-12345"))
+
+    assert result == {"status": "RUNNING"}
+    assert session.closed
 
 
 # Test single BLAST job submission with a valid payload

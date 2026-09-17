@@ -123,24 +123,24 @@ async def run_blast(
     blast_payload["sequence"] = query["value"]
     blast_payload["database"] = get_db_path(genome_id, db_type)
     url = f"{blast_url}/run"
-    app.client_session = ClientSession(trust_env=TRUST_ENV)
-    async with app.client_session.post(url, data=blast_payload) as resp:
-        response = await resp.text()
-        if resp.status == 200:
-            return {
-                "sequence_id": query["id"],
-                "genome_id": genome_id,
-                "job_id": response,
-            }
-        else:
-            # Strip xhtml tags from the response message
-            response = re.sub("<.*?>|\n+", "", response)
-            return {
-                "sequence_id": query["id"],
-                "genome_id": genome_id,
-                "error": response,
-                "status": resp.status,
-            }
+    async with ClientSession(trust_env=TRUST_ENV) as client_session:
+        async with client_session.post(url, data=blast_payload) as resp:
+            response = await resp.text()
+            if resp.status == 200:
+                return {
+                    "sequence_id": query["id"],
+                    "genome_id": genome_id,
+                    "job_id": response,
+                }
+            else:
+                # Strip xhtml tags from the response message
+                response = re.sub("<.*?>|\n+", "", response)
+                return {
+                    "sequence_id": query["id"],
+                    "genome_id": genome_id,
+                    "error": response,
+                    "status": resp.status,
+                }
 
 
 # Endpoint for submitting BLAST jobs to jDispatcher
@@ -188,27 +188,27 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 @app.get("/jobs/{action}/{params:path}")
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
     url = f"{blast_url}/{action}/{params}"
-    app.client_session = ClientSession(trust_env=TRUST_ENV)
-    async with app.client_session.get(url) as resp:
-        if response:
-            response.status_code = resp.status  # forward the status code from JD
-        content = await resp.text()
-        if params.endswith("json"):
-            try:
-                content = json.loads(content)
-            except ValueError:
-                pass
-        if resp.status == 200:
-            return {action: content}
-        else:
-            if content:
-                # Clean JD error message for JSON
-                content = re.sub("<.*?>", "", content)
-                content = content.strip()
-                content = re.sub("\n+", ". ", content)
-                # Fix JD response status code (400->404)
-                if "not found" in content:
-                    response.status_code = 404
+    async with ClientSession(trust_env=TRUST_ENV) as client_session:
+        async with client_session.get(url) as resp:
+            if response:
+                response.status_code = resp.status  # forward the status code from JD
+            content = await resp.text()
+            if params.endswith("json"):
+                try:
+                    content = json.loads(content)
+                except ValueError:
+                    pass
+            if resp.status == 200:
+                return {action: content}
             else:
-                content = f"Invalid JD endpoint: /{action}/{params}"
-            return {"error": content}
+                if content:
+                    # Clean JD error message for JSON
+                    content = re.sub("<.*?>", "", content)
+                    content = content.strip()
+                    content = re.sub("\n+", ". ", content)
+                    # Fix JD response status code (400->404)
+                    if "not found" in content:
+                        response.status_code = 404
+                else:
+                    content = f"Invalid JD endpoint: /{action}/{params}"
+                return {"error": content}

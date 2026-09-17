@@ -26,7 +26,6 @@ class FakeResponse:
     async def text(self):
         return self.body
 
-
 class FakeClientSession:
     def __init__(self, response):
         self.response = response
@@ -36,6 +35,9 @@ class FakeClientSession:
         return self
 
     async def __aexit__(self, exc_type, exc, traceback):
+        self.closed = True
+
+    async def close(self):
         self.closed = True
 
     def post(self, url, data):
@@ -97,6 +99,25 @@ def test_blast_proxy_closes_client_session(monkeypatch):
 
     assert result == {"status": "RUNNING"}
     assert session.closed
+
+
+def test_jdispatcher_requests_have_explicit_timeouts(monkeypatch):
+    session = FakeClientSession(FakeResponse("RUNNING"))
+    session_kwargs = {}
+
+    def fake_client_session(**kwargs):
+        session_kwargs.update(kwargs)
+        return session
+
+    monkeypatch.setattr(blast, "ClientSession", fake_client_session)
+
+    asyncio.run(blast.blast_proxy("status", "ncbiblast_ensembl-12345"))
+
+    timeout = session_kwargs["timeout"]
+    assert timeout is blast.JDISPATCHER_TIMEOUT
+    assert timeout.total is not None
+    assert timeout.connect is not None
+    assert timeout.sock_read is not None
 
 
 # Test single BLAST job submission with a valid payload

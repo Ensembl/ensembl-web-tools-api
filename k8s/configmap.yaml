@@ -1,6 +1,9 @@
 apiVersion: v1
 data:
   BLAST_URL: https://www.ebi.ac.uk/Tools/services/rest/ncbiblast_ensembl
+  BLAST_TIMEOUT_CONNECT: "10"
+  BLAST_TIMEOUT_READ: "60"
+  BLAST_TIMEOUT_TOTAL: "300"
 kind: ConfigMap
 metadata:
   name: ensembl-tools-api-configmap

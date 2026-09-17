@@ -1,35 +1,34 @@
-from contextlib import asynccontextmanager
-from urllib import response
-from fastapi import FastAPI, Response, APIRouter
+import asyncio
+from enum import Enum
+import json
+import os
+import re
+import secrets
+from uuid import UUID
+
+from aiohttp import ClientSession, ClientTimeout, client_exceptions
+from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from aiohttp import ClientSession, client_exceptions
-from enum import Enum
-from uuid import UUID
-import asyncio
-import secrets
-import json
-import re
-import os
 
-from core.config import BLAST_CONFIG, TRUST_ENV
-
-
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     # Startup: setup data cache and requests session
-#     app.client_session = ClientSession()
-#     with open("/data/blast_config.json") as f:
-#         app.blast_config = json.load(f)
-#     yield
-#     # Shutdown: close requests session
-#     await app.client_session.close()
+from core.config import (
+    BLAST_CONFIG,
+    BLAST_TIMEOUT_CONNECT,
+    BLAST_TIMEOUT_READ,
+    BLAST_TIMEOUT_TOTAL,
+    TRUST_ENV,
+)
 
 
 app = FastAPI()
 
+JDISPATCHER_TIMEOUT = ClientTimeout(
+    total=BLAST_TIMEOUT_TOTAL,
+    connect=BLAST_TIMEOUT_CONNECT,
+    sock_read=BLAST_TIMEOUT_READ,
+)
 
 
 # Override response for input payload validation error
@@ -54,6 +53,13 @@ async def invalid_path_handler(request, exception):
 async def upstream_connection_handler(request, exception):
     return JSONResponse(
         content={"error": "Cannot connect to jDispatcher"}, status_code=500
+    )
+
+
+@app.exception_handler(asyncio.TimeoutError)
+async def upstream_timeout_handler(request, exception):
+    return JSONResponse(
+        content={"error": "jDispatcher request timed out"}, status_code=504
     )
 
 
@@ -123,7 +129,9 @@ async def run_blast(
     blast_payload["sequence"] = query["value"]
     blast_payload["database"] = get_db_path(genome_id, db_type)
     url = f"{blast_url}/run"
-    async with ClientSession(trust_env=TRUST_ENV) as client_session:
+    async with ClientSession(
+        trust_env=TRUST_ENV, timeout=JDISPATCHER_TIMEOUT
+    ) as client_session:
         async with client_session.post(url, data=blast_payload) as resp:
             response = await resp.text()
             if resp.status == 200:
@@ -188,7 +196,9 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 @app.get("/jobs/{action}/{params:path}")
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
     url = f"{blast_url}/{action}/{params}"
-    async with ClientSession(trust_env=TRUST_ENV) as client_session:
+    async with ClientSession(
+        trust_env=TRUST_ENV, timeout=JDISPATCHER_TIMEOUT
+    ) as client_session:
         async with client_session.get(url) as resp:
             if response:
                 response.status_code = resp.status  # forward the status code from JD
@@ -207,7 +217,7 @@ async def blast_proxy(action: str, params: str, response: Response = None) -> di
                     content = content.strip()
                     content = re.sub("\n+", ". ", content)
                     # Fix JD response status code (400->404)
-                    if "not found" in content:
+                    if "not found" in content and response:
                         response.status_code = 404
                 else:
                     content = f"Invalid JD endpoint: /{action}/{params}"

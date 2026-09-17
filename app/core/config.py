@@ -33,6 +33,11 @@ API_PREFIX = "/api/tools"
 config = Config(".env")
 DEBUG: bool = config("DEBUG", cast=bool, default=False)
 TRUST_ENV: bool = config("TRUST_ENV", cast=bool, default=True)
+BLAST_TIMEOUT_TOTAL: float = config("BLAST_TIMEOUT_TOTAL", cast=float, default=120.0)
+BLAST_TIMEOUT_CONNECT: float = config(
+    "BLAST_TIMEOUT_CONNECT", cast=float, default=10.0
+)
+BLAST_TIMEOUT_READ: float = config("BLAST_TIMEOUT_READ", cast=float, default=30.0)
 PROJECT_NAME: str = config("PROJECT_NAME", default="Ensembl Web Tools API")
 ALLOWED_HOSTS: list[str] = config(
     "ALLOWED_HOSTS",

@@ -1,6 +1,4 @@
-from contextlib import asynccontextmanager
-from urllib import response
-from fastapi import FastAPI, Response, APIRouter
+from fastapi import FastAPI, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -15,17 +13,6 @@ import re
 import os
 
 from core.config import BLAST_CONFIG, TRUST_ENV
-
-
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     # Startup: setup data cache and requests session
-#     app.client_session = ClientSession()
-#     with open("/data/blast_config.json") as f:
-#         app.blast_config = json.load(f)
-#     yield
-#     # Shutdown: close requests session
-#     await app.client_session.close()
 
 
 app = FastAPI()
@@ -123,8 +110,11 @@ async def run_blast(
     blast_payload["sequence"] = query["value"]
     blast_payload["database"] = get_db_path(genome_id, db_type)
     url = f"{blast_url}/run"
-    app.client_session = ClientSession(trust_env=TRUST_ENV)
-    async with app.client_session.post(url, data=blast_payload) as resp:
+    # Closing the response alone does not close its session/connection pool.
+    async with (
+        ClientSession(trust_env=TRUST_ENV) as session,
+        session.post(url, data=blast_payload) as resp,
+    ):
         response = await resp.text()
         if resp.status == 200:
             return {
@@ -188,9 +178,11 @@ async def blast_job_statuses(payload: JobIDs) -> dict:
 @app.get("/jobs/{action}/{params:path}")
 async def blast_proxy(action: str, params: str, response: Response = None) -> dict:
     url = f"{blast_url}/{action}/{params}"
-    app.client_session = ClientSession(trust_env=TRUST_ENV)
-    async with app.client_session.get(url) as resp:
-        if response:
+    async with (
+        ClientSession(trust_env=TRUST_ENV) as session,
+        session.get(url) as resp,
+    ):
+        if response is not None:
             response.status_code = resp.status  # forward the status code from JD
         content = await resp.text()
         if params.endswith("json"):
@@ -207,7 +199,7 @@ async def blast_proxy(action: str, params: str, response: Response = None) -> di
                 content = content.strip()
                 content = re.sub("\n+", ". ", content)
                 # Fix JD response status code (400->404)
-                if "not found" in content:
+                if "not found" in content and response is not None:
                     response.status_code = 404
             else:
                 content = f"Invalid JD endpoint: /{action}/{params}"

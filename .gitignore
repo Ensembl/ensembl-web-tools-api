@@ -24,3 +24,4 @@ tmp*/
 # docs, and re-rendering them on every tweak would bloat history.
 app/vep/docs/design/*.jpg
 app/vep/docs/design/*.png
+appenv

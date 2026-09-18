@@ -32,8 +32,6 @@ class TestVCFResultModel(unittest.TestCase):
         self.assertEqual(consequence.consequences, ["intergenic_variant"])
 
     def test_predicted_regulatory_consequence(self):
-        # A motif has no biotype. On the wire the kind reads "regulatory", and
-        # only the pool refs are sent, never the annotations themselves.
         consequence = PredictedRegulatoryConsequence(
             stable_id="ENSM00000018397",
             consequences=["TF_binding_site_variant"],
@@ -51,9 +49,7 @@ class TestVCFResultModel(unittest.TestCase):
         )
 
     def test_a_regulatory_consequence_is_not_read_back_as_intergenic(self):
-        # The intergenic model accepts any feature_type, so without care a
-        # regulatory consequence parsed from JSON could come back as intergenic
-        # and lose its id and biotype.
+        # The intergenic model accepts any feature_type.
         allele = AlternativeVariantAllele.model_validate(
             {
                 "allele_sequence": "T",

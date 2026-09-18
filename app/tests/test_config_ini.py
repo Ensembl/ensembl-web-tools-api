@@ -1122,9 +1122,6 @@ def test_gerp_off_emits_no_line(monkeypatch, tmp_path):
 
 
 def test_regulatory_features_name_the_grch38_gffs(monkeypatch, tmp_path):
-    """The web pipeline has no VEP cache, so regulatory features come from the
-    regulation team's GFFs. The option writes VEP's regulatory_gff line, with
-    the features and motifs files from the assembly's regulatory directory."""
     lines = build_lines(monkeypatch, tmp_path, regulatory=True)
     base = plugin_data_path("GRCh38.p14")("regulatory")
     assert (
@@ -1150,13 +1147,11 @@ def test_regulatory_features_name_the_grch37_gffs(monkeypatch, tmp_path):
 @pytest.mark.parametrize(
     "assembly,expected",
     [
-        # Mouse has motifs as well as regulatory features.
         (
             "GRCm39",
             "file={base}/Mus_musculus.GRCm39.regulatory_features.v116.gff3.gz,"
             "motifs={base}/Mus_musculus.GRCm39.motif_features.v116.gff3.gz",
         ),
-        # The rest have regulatory features only, so no motifs clause.
         ("ARS-UCD2.0", "file={base}/Bos_taurus.ARS-UCD2.0.regulatory_features.v116.gff3.gz"),
         ("Cypcar_WagV4.0", "file={base}/Cyprinus_carpio_carpio.Cypcar_WagV4.0.regulatory_features.v116.gff3.gz"),
         ("ASM1334776v1", "file={base}/Scophthalmus_maximus.ASM1334776v1.regulatory_features.v116.gff3.gz"),
@@ -1170,8 +1165,6 @@ def test_regulatory_features_name_the_grch37_gffs(monkeypatch, tmp_path):
 def test_species_regulatory_features_name_their_own_gffs(
     monkeypatch, tmp_path, assembly, expected
 ):
-    """Other species take the option from the species table, which names each
-    species' own files. They sit under the shared other_species data tree."""
     from app.vep.utils.spec_loader import resolve_merged_spec
 
     monkeypatch.setattr(

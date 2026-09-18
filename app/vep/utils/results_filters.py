@@ -470,12 +470,11 @@ def _compile_consequence(f: ResultsFilter, index_map: dict[str, int]) -> Compile
 
 def _compile_transcript(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFilter | None:
     """A CSQ entry matches if it is a transcript and its Feature stable id is one
-    of the selected ids. Match is version-insensitive: the '.version' suffix is
-    ignored on both sides, so 'ENST0000012345' and 'ENST0000012345.7' are
-    equivalent.
+    of the selected ids. The match ignores any '.version' suffix, so
+    'ENST0000012345' and 'ENST0000012345.7' are equivalent.
 
-    A regulatory entry keeps its ENSR or ENSM id in the same Feature column, so
-    the Feature_type check is what stops a regulatory id matching its own row.
+    Regulatory entries keep their ENSR or ENSM id in the Feature column too, so
+    the Feature_type check keeps them out.
 
     The stripped id is a substring of the versioned id as it appears in the line,
     so it is still a valid necessary-condition token for the prefilter."""

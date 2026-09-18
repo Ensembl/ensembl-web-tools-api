@@ -294,7 +294,6 @@ def _pool_annotations(variant: model.Variant) -> None:
     variant.annotation_pool = pool
 
 
-# VEP's regulatory feature types. Both become one regulatory consequence kind.
 REGULATORY_FEATURE_TYPES = frozenset({"RegulatoryFeature", "MotifFeature"})
 
 
@@ -445,9 +444,8 @@ def _get_alt_allele_details(
                 )
             )
         elif unhandled_feature_types is not None:
-            # A CSQ row for a feature type the response has no model for.
-            # Dropping it loses the row, so record what was dropped for the
-            # caller to report. It's a gap in the model rather than bad input.
+            # The response has no model for this feature type. Count the
+            # dropped row so the caller can report it.
             unhandled_feature_types[
                 csq_values[index_map["Feature_type"]] or "(none)"
             ] += 1
@@ -1335,8 +1333,6 @@ def _get_results_from_records(
     # all, and which columns a pattern_map matches are all answerable here
     # instead of on every CSQ row. See PluginPlan.
     plans = compile_parsing_spec(prediction_index_map, spec)
-    # CSQ rows dropped for want of a model, counted per feature type so the loss
-    # is reported once for the page rather than per row or not at all.
     unhandled_feature_types: Counter = Counter()
 
     variants = []

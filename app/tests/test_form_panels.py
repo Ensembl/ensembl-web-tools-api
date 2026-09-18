@@ -144,9 +144,6 @@ def test_human_grch37_has_37_38_options_but_not_38_only():
 
 
 def test_mouse_gets_the_base_panels_plus_its_own_data_options():
-    """Mouse carries GO, Phenotypes and regulatory data files, so it is offered
-    those on top of the always-visible panels — and none of the human-only
-    options."""
     panels = get_visible_panels(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
     assert panel_ids(panels) == ALWAYS_VISIBLE_PANEL_IDS | {
         "phenotype_and_disease_associations",
@@ -527,10 +524,6 @@ def test_clinvar_absent_for_non_human():
 
 
 def test_the_regulatory_panel_follows_regulatory_data():
-    """Regulatory features are offered wherever the regulation team publishes
-    GFFs: human GRCh38 and GRCh37, mouse, and several other species. GENCODE
-    promoters stay GRCh38-only, and a genome with no regulatory data gets no
-    Regulatory panel at all."""
     g38 = option_ids(
         get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14")
     )
@@ -544,7 +537,7 @@ def test_the_regulatory_panel_follows_regulatory_data():
     mouse = get_visible_panels(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
     assert "regulatory" in option_ids(mouse)
 
-    # Zebrafish's species table row has GO and Phenotypes but no regulatory data.
+    # Zebrafish has no regulatory data.
     zebrafish = get_visible_panels(species_taxonomy_id="7955", assembly_name="GRCz11")
     assert "regulatory" not in panel_ids(zebrafish)
 

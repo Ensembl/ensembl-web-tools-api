@@ -278,9 +278,8 @@ def _substitute(value: str, substitutions: dict[str, str]) -> str:
 
 
 def species_extra_config_entries(assembly_name: str) -> list[dict]:
-    """A species' dataset config entries (GO, Phenotypes, CADD, regulatory
-    features), built from the shared templates with its own names and files.
-    Empty for a species with no data."""
+    """A species' dataset config entries, built from the shared templates with
+    its own names and files. Empty for a species with no data."""
     row = species_annotation_entry(assembly_name)
     if row is None:
         return []
@@ -300,7 +299,7 @@ def species_extra_config_entries(assembly_name: str) -> list[dict]:
         for key, value in config.get("params", {}).items():
             if isinstance(value, str):
                 config["params"][key] = _substitute(value, substitutions)
-        # A setting carries one value rather than params (regulatory_gff).
+        # A setting such as regulatory_gff has one value and no params.
         if isinstance(config.get("value"), str):
             config["value"] = _substitute(config["value"], substitutions)
         entries.append(entry)

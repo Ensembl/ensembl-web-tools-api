@@ -1,9 +1,8 @@
 """Tests for server-side results filtering (app/vep/utils/results_filters.py and
 the filtered scan path in vcf_results.get_results_from_path).
 
-Filtered requests can't use the BGZF page index, so they scan the whole file
-with gzip.open — meaning a plain gzip VCF fixture is enough here (no BGZF/page
-index needed).
+A full scan needs no page index, so plain gzip fixtures are enough here. Tests
+that seek to a later page need BGZF and live in test_page_index.py.
 """
 
 import gzip
@@ -14,6 +13,7 @@ from pydantic import FilePath
 
 from app.vep.utils import results_filters as rf
 from app.vep.utils import vcf_results
+from app.vep.utils.csq import csq_index_map_from_header
 from app.vep.utils.vcf_results import get_results_from_path
 from vep.models.display_panels_model import to_display_panels
 from app.vep.utils.spec_loader import (
@@ -1475,3 +1475,307 @@ def test_scan_cache_key_separates_filters_that_only_differ_by_match_mode(tmp_pat
         for match in ("any", "all")
     }
     assert len(keys) == 2
+
+
+# --- replay_matches starting part-way through the file -----------------------
+
+
+def _replay_setup(n_records: int):
+    """A missense filter and `n_records` lines where the even ones match."""
+    header = [
+        f'##INFO=<ID=CSQ,Number=.,Type=String,Description="{CSQ_DESC}">\n',
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n",
+    ]
+    index_map = csq_index_map_from_header(header)
+    compiled = rf.compile_filters([_consequence_filter("missense_variant")], index_map)
+    lines = [
+        _record(i, ["missense_variant" if i % 2 == 0 else "synonymous_variant"])
+        for i in range(n_records)
+    ]
+    return compiled, lines
+
+
+def test_replay_from_a_later_ordinal_gives_the_same_page():
+    compiled, lines = _replay_setup(40)
+    matches = [i for i in range(40) if i % 2 == 0]
+
+    from_top = rf.replay_matches(iter(lines), compiled, matches, start=10, count=5)
+    seeked = rf.replay_matches(
+        iter(lines[16:]), compiled, matches, start=10, count=5, first_ordinal=16
+    )
+    assert seeked == from_top
+    assert len(seeked) == 5
+
+
+def test_replay_landing_exactly_on_the_first_wanted_record_is_allowed():
+    compiled, lines = _replay_setup(20)
+    matches = [i for i in range(20) if i % 2 == 0]
+
+    from_top = rf.replay_matches(iter(lines), compiled, matches, start=4, count=3)
+    seeked = rf.replay_matches(
+        iter(lines[8:]), compiled, matches, start=4, count=3, first_ordinal=8
+    )
+    assert matches[4] == 8
+    assert seeked == from_top
+
+
+def test_replay_refuses_a_stream_that_starts_past_the_page():
+    compiled, lines = _replay_setup(20)
+    matches = [i for i in range(20) if i % 2 == 0]
+
+    with pytest.raises(ValueError, match="after the first wanted record"):
+        rf.replay_matches(
+            iter(lines[12:]), compiled, matches, start=4, count=3, first_ordinal=12
+        )
+
+
+# --- reading a score column off the raw payload -------------------------------
+#
+# Under a single score filter, records outside the page skip the CSQ split and
+# match the raw payload with a regex. filter_records with no page window never
+# takes that path, so these tests call _evaluate_record directly.
+
+
+def _verdict(line, conditions, *, need_survivors):
+    """Return (kept, took_shortcut) for one record."""
+    compiled = rf.compile_filters(list(conditions), SCORE_INDEX_MAP)
+    outcome = rf._evaluate_record(
+        line,
+        compiled,
+        [0] * len(compiled),
+        rf.csq_split_bound(compiled),
+        need_survivors=need_survivors,
+    )
+    return outcome is not None, outcome is rf.MATCHED_WITHOUT_SURVIVORS
+
+
+def _agrees_both_ways(line, *conditions, expected):
+    kept_fast, _ = _verdict(line, conditions, need_survivors=False)
+    kept_slow, took_shortcut = _verdict(line, conditions, need_survivors=True)
+    assert not took_shortcut, "the shortcut ran even though survivors were wanted"
+    assert kept_fast == kept_slow == expected
+    return kept_fast
+
+
+def _cadd_ge_20():
+    return _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)
+
+
+def test_the_shortcut_actually_runs_and_agrees():
+    line = _score_record(1, [_cadd_entry("25.0", "1.0")])
+    kept, took_shortcut = _verdict(line, [_cadd_ge_20()], need_survivors=False)
+    assert kept and took_shortcut
+
+    line = _score_record(1, [_cadd_entry("5.0", "1.0")])
+    assert _agrees_both_ways(line, _cadd_ge_20(), expected=False) is False
+
+
+def test_shortcut_handles_an_entry_with_too_few_columns():
+    # Stops short of CADD_PHRED at index 3.
+    truncated = "T|missense_variant|ENST_1"
+
+    # 99 in every other column, so an overrun lands on a matching value.
+    loud = "|".join(
+        "5.0" if name == "CADD_PHRED" else ("T" if i == 0 else "99")
+        for i, name in enumerate(SCORE_COLUMNS_HEADER)
+    )
+    _agrees_both_ways(
+        _score_record(1, [truncated, loud]), _cadd_ge_20(), expected=False
+    )
+
+    # The first entry matches on its own pattern, so the short entry comes second too.
+    ordinary = _cadd_entry("5.0", "1.0")
+    _agrees_both_ways(
+        _score_record(1, [ordinary, truncated, loud]),
+        _cadd_ge_20(),
+        expected=False,
+    )
+
+    _agrees_both_ways(
+        _score_record(1, [truncated, _cadd_entry("25.0", "1.0")]),
+        _cadd_ge_20(),
+        expected=True,
+    )
+    _agrees_both_ways(
+        _score_record(1, [truncated]), _cadd_ge_20(), expected=False
+    )
+
+
+def test_shortcut_ignores_a_decoy_info_key():
+    entry = _cadd_entry("5.0", "1.0")
+    _agrees_both_ways(
+        f"chr1\t101\tid_01\tC\tT\t.\t.\tXCSQ=9|9|9;CSQ={entry};OLD=x|99\n",
+        _cadd_ge_20(),
+        expected=False,
+    )
+
+
+def test_shortcut_finds_csq_when_it_is_not_the_last_info_field():
+    _agrees_both_ways(
+        f"chr1\t101\tid_01\tC\tT\t.\t.\tAC=1;CSQ={_cadd_entry('25.0', '1.0')};DB\n",
+        _cadd_ge_20(),
+        expected=True,
+    )
+
+    # CADD_PHRED is this entry's last column.
+    ends_at_cadd = "T|missense_variant|ENST_1|25.0"
+    _agrees_both_ways(
+        f"chr1\t101\tid_01\tC\tT\t.\t.\tAC=1;CSQ={ends_at_cadd};DB\n",
+        _cadd_ge_20(),
+        expected=True,
+    )
+
+
+def test_the_shortcut_is_offered_only_where_it_is_sound():
+    single = rf.compile_filters([_cadd_ge_20()], SCORE_INDEX_MAP)
+    assert single[0].match_payload is not None
+
+    for condition in (
+        _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=True),
+        _score_filter(rf.SPLICEAI_ANY_FIELD, "ge", 0.5, include_missing=False),
+    ):
+        compiled = rf.compile_filters([condition], SCORE_INDEX_MAP)
+        assert compiled[0].match_payload is None, condition.field
+
+
+def test_two_filters_never_take_the_shortcut():
+    conditions = (
+        _cadd_ge_20(),
+        _score_filter(rf.REVEL_FIELD, "ge", 0.5, include_missing=False),
+    )
+    split_across_entries = _score_record(
+        1,
+        [
+            _score_entry(CADD_PHRED="25.0", REVEL="0.1"),
+            _score_entry(CADD_PHRED="5.0", REVEL="0.9"),
+        ],
+    )
+    kept, took_shortcut = _verdict(split_across_entries, conditions, need_survivors=False)
+    assert not took_shortcut, "the shortcut is unsound for more than one filter"
+    assert not kept
+
+    both_on_one_entry = _score_record(
+        1,
+        [
+            _score_entry(CADD_PHRED="25.0", REVEL="0.9"),
+            _score_entry(CADD_PHRED="5.0", REVEL="0.1"),
+        ],
+    )
+    kept, _ = _verdict(both_on_one_entry, conditions, need_survivors=False)
+    assert kept
+
+
+def test_a_page_window_agrees_whichever_path_each_record_took():
+    lines = [
+        _score_record(pos, [_cadd_entry("25.0" if pos % 3 == 0 else "5.0", "1.0")])
+        for pos in range(30)
+    ]
+    condition = _cadd_ge_20()
+    for start, count in ((0, 2), (2, 2), (5, 3)):
+        fast_ordinals, slow_ordinals = [], []
+        fast = rf.filter_records(
+            iter(lines), rf.compile_filters([condition], SCORE_INDEX_MAP),
+            start=start, count=count, record_matches=fast_ordinals,
+        )
+        stripped = rf.compile_filters([condition], SCORE_INDEX_MAP)
+        stripped[0].match_payload = None
+        slow = rf.filter_records(
+            iter(lines), stripped, start=start, count=count,
+            record_matches=slow_ordinals,
+        )
+        assert fast.matched_total == slow.matched_total == 10
+        assert fast_ordinals == slow_ordinals
+        assert fast.page == slow.page
+        assert [s.removed for s in fast.stats] == [s.removed for s in slow.stats]
+
+
+# --- '&'-joined values in a score column --------------------------------------
+#
+# VEP joins list values with '&'. A '&' in a `scalar` score column means the
+# VEP config packed several values into it, or the spec should say `first`.
+# The entry counts as unscored, and the filter keeps an example for a warning.
+
+
+def test_a_packed_score_counts_as_unscored():
+    entries = [_cadd_entry("1.0&25.0", "3.1")]
+    assert _run_cadd(entries, _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20,
+                                           include_missing=False)) == []
+    assert _run_cadd(entries, _cadd_filter(rf.CADD_PHRED_FIELD, "le", 20,
+                                           include_missing=False)) == []
+    assert _run_cadd(entries, _cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20,
+                                           include_missing=True))
+
+
+def test_a_packed_score_is_recorded_so_it_is_not_silent():
+    lines = [
+        _score_record(1, [_cadd_entry("1.0&25.0", "3.1")]),
+        _score_record(2, [_cadd_entry("0.5&0.9&2.0", "3.1")]),
+        _score_record(3, [_cadd_entry("25.0", "3.1")]),
+    ]
+    compiled = rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)],
+        SCORE_INDEX_MAP,
+    )
+    outcome = rf.filter_records(iter(lines), compiled, start=0, count=None)
+    assert outcome.matched_total == 1, "only the plain 25.0 should match"
+    assert compiled[0].diagnostics["packed_example"] in ("1.0&25.0", "0.5&0.9&2.0")
+
+
+def test_ordinary_non_numeric_scores_are_not_reported_as_packed():
+    lines = [_score_record(1, [_cadd_entry("high", "3.1")])]
+    compiled = rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)],
+        SCORE_INDEX_MAP,
+    )
+    outcome = rf.filter_records(iter(lines), compiled, start=0, count=None)
+    assert outcome.matched_total == 0
+    assert "packed_example" not in compiled[0].diagnostics
+
+
+def test_the_payload_shortcut_records_packed_values_too():
+    lines = [_score_record(pos, [_cadd_entry("1.0&25.0", "3.1")]) for pos in range(5)]
+    compiled = rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)],
+        SCORE_INDEX_MAP,
+    )
+    # count=0 puts every record outside the page, so all take the shortcut.
+    outcome = rf.filter_records(iter(lines), compiled, start=0, count=0)
+    assert outcome.matched_total == 0
+    assert compiled[0].diagnostics["packed_example"] == "1.0&25.0"
+
+
+def test_the_packed_value_warning_reaches_the_log(caplog):
+    import logging
+
+    lines = [
+        _score_record(1, [_cadd_entry("1.0&25.0", "3.1")]),
+        _score_record(2, [_cadd_entry("30.0", "3.1")]),
+    ]
+    compiled = rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)],
+        SCORE_INDEX_MAP,
+    )
+    outcome = rf.filter_records(iter(lines), compiled, start=0, count=None)
+    assert outcome.matched_total == 1, "only the plain 30.0 matches"
+
+    with caplog.at_level(logging.WARNING):
+        vcf_results._log_filter_diagnostics(compiled)
+    warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    packed = [w for w in warnings if "unscored" in w]
+    assert packed, f"no warning about the packed value; got {warnings}"
+    assert "1.0&25.0" in packed[0], "the warning should quote the offending value"
+    assert "cadd_phred" in packed[0], "the warning should name the filter"
+
+
+def test_no_diagnostics_means_no_warning(caplog):
+    import logging
+
+    lines = [_score_record(1, [_cadd_entry("30.0", "3.1")])]
+    compiled = rf.compile_filters(
+        [_cadd_filter(rf.CADD_PHRED_FIELD, "ge", 20, include_missing=False)],
+        SCORE_INDEX_MAP,
+    )
+    rf.filter_records(iter(lines), compiled, start=0, count=None)
+    with caplog.at_level(logging.WARNING):
+        vcf_results._log_filter_diagnostics(compiled)
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]

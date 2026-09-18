@@ -213,3 +213,176 @@ def test_no_sidecar_returns_none(tmp_path):
     plain = tmp_path / "plain.vcf.gz"
     write_bgzf(plain, make_vcf(3))
     assert _load_page_index(FilePath(plain)) is None
+
+
+# --- seeking to a filtered page ----------------------------------------------
+#
+# The first filtered request scans the file and caches the matching ordinals.
+# Later pages of the same filter seek to the nearest checkpoint.
+
+
+def make_mixed_vcf(n_records: int) -> str:
+    """Even records are missense and odd ones synonymous."""
+    header = (
+        "##fileformat=VCFv4.2\n"
+        f'##INFO=<ID=CSQ,Number=.,Type=String,Description="{CSQ_DESC}">\n'
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+    )
+    rows = []
+    for i in range(n_records):
+        cons = "missense_variant" if i % 2 == 0 else "synonymous_variant"
+        csq = f"T|{cons}|MODERATE|GENE{i}|ENSG{i}|Transcript|ENST{i}|protein_coding"
+        rows.append(f"chr1\t{100 + i}\tid_{i:03d}\tC\tT\t.\t.\tCSQ={csq}\n")
+    return header + "".join(rows)
+
+
+def _missense_filter():
+    from app.vep.utils import results_filters as rf
+
+    return rf.ResultsFilter(field="consequence", operator="in", values=["missense_variant"])
+
+
+def _filtered_page(vcf_path, page, page_size):
+    return get_results_from_path(
+        page_size, page, FilePath(vcf_path), [_missense_filter()]
+    )
+
+
+def test_a_seeked_page_shows_the_same_variants_as_an_unseeked_one(tmp_path):
+    from app.vep.utils import vcf_results
+
+    text = make_mixed_vcf(200)
+    vcf_path = write_indexed_vcf(tmp_path, text, stride=10, block_bytes=256)
+    sidecar = tmp_path / "results.vcf.gz.pageidx.json"
+    kept_sidecar = sidecar.read_text()
+
+    def names(page):
+        return [v.name for v in _filtered_page(vcf_path, page, 5).variants]
+
+    for page in (1, 2, 9, 20):
+        vcf_results.clear_scan_cache()
+        sidecar.unlink()
+        _filtered_page(vcf_path, 1, 5)  # warm the match set
+        without_seek = names(page)
+
+        vcf_results.clear_scan_cache()
+        sidecar.write_text(kept_sidecar)
+        _filtered_page(vcf_path, 1, 5)
+        with_seek = names(page)
+
+        assert with_seek == without_seek, f"page {page} differs when seeked"
+        assert with_seek, f"page {page} came back empty"
+
+
+def test_a_deep_page_stops_reading_most_of_the_file(tmp_path):
+    from app.vep.utils import vcf_results
+
+    vcf_path = write_indexed_vcf(tmp_path, make_mixed_vcf(200), stride=10, block_bytes=256)
+    vcf_results.clear_scan_cache()
+    _filtered_page(vcf_path, 1, 5)  # cold scan populates the match ordinals
+
+    reads = {"n": 0}
+    # vcf_results holds its own _BgzfReader; app.vep.utils.bgzf is a different class.
+    reader_class = vcf_results._BgzfReader
+    original = reader_class.readline
+
+    def counting_readline(self):
+        reads["n"] += 1
+        return original(self)
+
+    reader_class.readline = counting_readline
+    try:
+        page = _filtered_page(vcf_path, 18, 5)
+    finally:
+        reader_class.readline = original
+
+    assert [v.name for v in page.variants] == [
+        f"id_{i:03d}" for i in (170, 172, 174, 176, 178)
+    ]
+    assert reads["n"] > 0, "counted nothing; the patch missed the reader in use"
+    # 3 header lines, at most one stride of records, then the page.
+    assert reads["n"] < 40, f"read {reads['n']} lines; the seek did not happen"
+
+
+def test_a_stale_page_index_is_not_used_to_seek(tmp_path):
+    from app.vep.utils import vcf_results
+
+    vcf_path = write_indexed_vcf(tmp_path, make_mixed_vcf(200), stride=10, block_bytes=256)
+    sidecar = tmp_path / "results.vcf.gz.pageidx.json"
+
+    vcf_results.clear_scan_cache()
+    _filtered_page(vcf_path, 1, 5)
+    truthful = [v.name for v in _filtered_page(vcf_path, 15, 5).variants]
+    assert truthful == [f"id_{i:03d}" for i in (140, 142, 144, 146, 148)]
+
+    other = tmp_path / "other"
+    other.mkdir()
+    # A different block size is what makes the checkpoints disagree.
+    write_indexed_vcf(other, make_mixed_vcf(90), stride=10, block_bytes=64)
+    stale = json.loads((other / "results.vcf.gz.pageidx.json").read_text())
+    good = json.loads(sidecar.read_text())
+    assert stale["checkpoints"][:9] != good["checkpoints"][:9], "sidecar is not stale"
+    sidecar.write_text(json.dumps(stale))
+
+    vcf_results.clear_scan_cache()
+    _filtered_page(vcf_path, 1, 5)
+    assert [v.name for v in _filtered_page(vcf_path, 15, 5).variants] == truthful
+
+
+def test_filtering_still_works_without_a_page_index(tmp_path):
+    from app.vep.utils import vcf_results
+    from app.vep.utils.bgzf import is_bgzf
+
+    vcf_path = tmp_path / "results.vcf.gz"
+    with gzip.open(vcf_path, "wt") as handle:
+        handle.write(make_mixed_vcf(60))
+    write_spec_sidecar(tmp_path, load_merged_spec("human_grch38"))
+    write_expected_columns_sidecar(tmp_path, set())
+    write_display_panels_sidecar(
+        tmp_path,
+        to_display_panels([{"id": "general", "label": "General", "options": []}]),
+    )
+    assert not is_bgzf(str(vcf_path))
+
+    vcf_results.clear_scan_cache()
+    first = _filtered_page(vcf_path, 1, 5)
+    assert first.metadata.filters.filtered_total == 30
+    assert [v.name for v in _filtered_page(vcf_path, 4, 5).variants] == [
+        f"id_{i:03d}" for i in (30, 32, 34, 36, 38)
+    ]
+
+
+# --- is_bgzf and checkpoint lookup -------------------------------------------
+
+
+def test_is_bgzf_tells_the_two_gzip_flavours_apart(tmp_path):
+    from app.vep.utils.bgzf import is_bgzf
+
+    plain = tmp_path / "plain.vcf.gz"
+    with gzip.open(plain, "wt") as handle:
+        handle.write("##fileformat=VCFv4.2\n")
+    blocked = tmp_path / "blocked.vcf.gz"
+    write_bgzf(blocked, "##fileformat=VCFv4.2\n")
+
+    assert is_bgzf(str(blocked))
+    assert not is_bgzf(str(plain))
+    assert not is_bgzf(str(tmp_path / "missing.vcf.gz"))
+
+
+def test_checkpoint_covering_never_overshoots():
+    from app.vep.utils.vcf_results import _checkpoint_covering
+
+    index = {"stride": 10, "checkpoints": [1000, 2000, 3000, 4000]}
+    assert _checkpoint_covering(index, 0) == (1000, 0)
+    assert _checkpoint_covering(index, 9) == (1000, 0)
+    assert _checkpoint_covering(index, 10) == (2000, 10)
+    assert _checkpoint_covering(index, 35) == (4000, 30)
+    assert _checkpoint_covering(index, 999) == (4000, 30)
+
+
+def test_checkpoint_covering_gives_up_on_an_unusable_index():
+    from app.vep.utils.vcf_results import _checkpoint_covering
+
+    assert _checkpoint_covering({"stride": 10, "checkpoints": []}, 5) is None
+    assert _checkpoint_covering({"stride": 0, "checkpoints": [1]}, 5) is None
+    assert _checkpoint_covering({}, 5) is None

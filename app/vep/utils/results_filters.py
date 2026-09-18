@@ -8,7 +8,8 @@ entries are removed. Filters short-circuit in order and record removal counts.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from typing import Container, TYPE_CHECKING, Callable, Iterable, Iterator, NamedTuple
 
 from pydantic import BaseModel
@@ -148,12 +149,20 @@ class CompiledFilter:
     are split only that far (see `_find_csq`), which matters: a CSQ entry here has
     135 subfields and a filter typically reads one. None means "reads unknown
     columns" and forces a full split — correctness first.
+
+    `match_payload`, when set, says exactly whether any entry of the record
+    passes, read from the raw CSQ payload. It cannot say which entries passed.
+
+    `diagnostics` collects facts about the data found during the scan (see
+    `_packed_value`).
     """
 
     field: str
     keep_entry: Callable[[list[str]], bool]
     line_prefilter: Callable[[str], bool] | None = None
     max_csq_index: int | None = None
+    match_payload: Callable[[str, int, int], bool] | None = None
+    diagnostics: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -206,6 +215,110 @@ def _split_line(line: str) -> tuple[list[str], bool]:
     """Split a VCF data line into columns, remembering whether it had a newline."""
     has_newline = line.endswith("\n")
     return (line[:-1] if has_newline else line).split("\t"), has_newline
+
+
+# ---------------------------------------------------------------------------
+# Reading one CSQ column without splitting the entry
+#
+# These patterns skip columns inside the regex engine and capture only the
+# wanted one. A blank column produces no match, and most score columns are blank.
+#
+# The skip is `[^|]*+\|`. The engine scans a one-character negated class with
+# memchr, so it is much faster than `[^|,]*+\|`. It can run past the ',' ending
+# a short entry, so every match is checked for a ',' before its value and a
+# record that shows one is rescanned with the safe pattern. Real VEP entries all
+# have the same column count, so only ragged input reaches the rescan.
+# ---------------------------------------------------------------------------
+
+_FAST_COLUMN_PATTERNS: dict[int, tuple[re.Pattern, re.Pattern]] = {}
+_SAFE_COLUMN_PATTERNS: dict[int, tuple[re.Pattern, re.Pattern]] = {}
+
+# Caps each matcher's value -> verdict cache. A file holds few distinct score
+# strings, so the cache skips nearly every float().
+_VERDICT_CACHE_LIMIT = 200_000
+
+
+def _column_patterns(
+    csq_index: int, cache: dict, skip: str
+) -> tuple[re.Pattern, re.Pattern]:
+    """(first-entry, later-entry) patterns for one column, compiled once.
+
+    The skip is repeated in full because a counted repeat `{n}` is slower.
+    """
+    patterns = cache.get(csq_index)
+    if patterns is None:
+        body = skip * csq_index + "([^|,]++)"
+        patterns = (re.compile(body), re.compile("," + body))
+        cache[csq_index] = patterns
+    return patterns
+
+
+def _csq_payload_bounds(line: str) -> tuple[int, int] | None:
+    """The (start, end) offsets of the CSQ payload within `line`, or None.
+
+    "CSQ=" counts only at the start of INFO or after a ';', so XCSQ= is skipped.
+    """
+    position = 0
+    for _ in range(7):
+        position = line.find("\t", position)
+        if position < 0:
+            return None
+        position += 1
+    info_end = line.find("\t", position)
+    if info_end < 0:
+        info_end = len(line)
+    if line.startswith("CSQ=", position):
+        start = position + 4
+    else:
+        found = line.find(";CSQ=", position, info_end)
+        if found < 0:
+            return None
+        start = found + 5
+    end = line.find(";", start, info_end)
+    return (start, info_end if end < 0 else end)
+
+
+def _score_payload_matcher(
+    csq_index: int, passes: Callable[[str], bool]
+) -> Callable[[str, int, int], bool]:
+    """Build a `match_payload` that reads one CSQ column straight out of the line."""
+    fast_first, fast_rest = _column_patterns(csq_index, _FAST_COLUMN_PATTERNS, "[^|]*+\\|")
+    verdicts: dict[str, bool] = {}
+
+    def verdict(value: str) -> bool:
+        known = verdicts.get(value)
+        if known is None:
+            known = passes(value)
+            if len(verdicts) < _VERDICT_CACHE_LIMIT:
+                verdicts[value] = known
+        return known
+
+    def rescan(line: str, start: int, end: int) -> bool:
+        """Answer again with the pattern that cannot cross into the next entry."""
+        safe_first, safe_rest = _column_patterns(
+            csq_index, _SAFE_COLUMN_PATTERNS, "[^|,]*+\\|"
+        )
+        hit = safe_first.match(line, start, end)
+        if hit is not None and verdict(hit.group(1)):
+            return True
+        return any(verdict(h.group(1)) for h in safe_rest.finditer(line, start, end))
+
+    def match_payload(line: str, start: int, end: int) -> bool:
+        hit = fast_first.match(line, start, end)
+        if hit is not None:
+            if line.find(",", start, hit.start(1)) >= 0:
+                # The skip ran past the end of a short first entry.
+                return rescan(line, start, end)
+            if verdict(hit.group(1)):
+                return True
+        for hit in fast_rest.finditer(line, start, end):
+            if line.find(",", hit.start() + 1, hit.start(1)) >= 0:
+                return rescan(line, start, end)
+            if verdict(hit.group(1)):
+                return True
+        return False
+
+    return match_payload
 
 
 def _find_csq(
@@ -627,6 +740,21 @@ def _compile_allele_frequency(f: ResultsFilter, index_map: dict[str, int], spec=
     )
 
 
+def _packed_value(text: str) -> bool:
+    """Does this column hold several values where the spec expects one?
+
+    VEP rewrites ',' and '|' inside a value to '&', so '&' marks a list. In a
+    `scalar` score column it means the VEP config packed several fields into the
+    column (mutfunc with `extended=1` does this), or the spec should declare the
+    column `first` or `list`.
+
+    The display and the filters read such an entry as unscored and give no
+    reason. One recorded example shows the operator why. The payload matcher
+    caches verdicts per value, so a count would cost a retest on every hit.
+    """
+    return "&" in text
+
+
 def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFilter | None":
     """Keep entries whose impact score passes the threshold.
 
@@ -669,6 +797,8 @@ def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFi
         else (lambda value: value >= threshold)
     )
     include_missing = f.include_missing
+    # Shared by keep_entry and the payload matcher so either path fills it.
+    diagnostics: dict = {}
 
     def keep_entry(entry: list[str]) -> bool:
         values: list[float] = []
@@ -677,17 +807,39 @@ def _compile_score(f: "ResultsFilter", index_map: dict[str, int]) -> "CompiledFi
                 try:
                     values.append(float(entry[i]))
                 except ValueError:
-                    pass  # non-numeric -> no score in that column
+                    # Non-numeric means unscored. Keep one packed example.
+                    if _packed_value(entry[i]):
+                        diagnostics.setdefault("packed_example", entry[i])
         if not values:
             # Nothing numeric anywhere: this entry is unscored, so the user's
             # choice decides.
             return include_missing
         return any(map(compare, values))
 
+    # The payload matcher handles only a one-column score that excludes unscored
+    # entries. With `include_missing` an empty entry still matches, and
+    # `spliceai_any` reads four columns.
+    match_payload = None
+    if len(indices) == 1 and not include_missing:
+
+        def passes(value: str) -> bool:
+            if value in ("", "."):
+                return False
+            try:
+                return compare(float(value))
+            except ValueError:
+                if _packed_value(value):
+                    diagnostics.setdefault("packed_example", value)
+                return False
+
+        match_payload = _score_payload_matcher(indices[0], passes)
+
     return CompiledFilter(
         field=f.field,
         keep_entry=keep_entry,
         max_csq_index=max(indices),
+        match_payload=match_payload,
+        diagnostics=diagnostics,
     )
 
 
@@ -732,24 +884,48 @@ def compile_filters(
 # surviving entries, and whether the line had a trailing newline.
 _Survivor = tuple[list[str], int, list[list[str]], bool]
 
+# Returned for a match whose surviving entries the caller did not ask for. It is
+# truthy, and `filter_records` never passes it to `_rebuild_line`.
+MATCHED_WITHOUT_SURVIVORS = ("matched",)
+
 
 def _evaluate_record(
     line: str,
     compiled: list[CompiledFilter],
     removed: list[int],
     max_index: int | None = None,
-) -> _Survivor | None:
+    need_survivors: bool = True,
+) -> _Survivor | tuple | None:
     """Run the ordered pipeline over one record. Returns what's needed to rebuild
     the kept line (its CSQ narrowed to surviving entries), or None if a filter
     dropped it — crediting the removal to that filter in `removed`.
 
     Rebuilding is left to the caller so only the requested page slice pays for it.
     Each filter's cheap `line_prefilter` runs first, on the raw unsplit line, so a
-    record that can't match is rejected before the expensive CSQ split."""
+    record that can't match is rejected before the expensive CSQ split.
+
+    With `need_survivors=False`, as for records outside the page, a lone filter
+    with `match_payload` answers from the raw payload and returns
+    MATCHED_WITHOUT_SURVIVORS without splitting the CSQ.
+
+    The shortcut needs exactly one filter. Several filters must all pass on the
+    same entry, and separate payload checks could pass on different entries."""
     # Necessary-condition rejection on the raw line, before any splitting.
     for i, cf in enumerate(compiled):
         if cf.line_prefilter is not None and not cf.line_prefilter(line):
             removed[i] += 1
+            return None
+
+    if not need_survivors and len(compiled) == 1:
+        matcher = compiled[0].match_payload
+        if matcher is not None:
+            bounds = _csq_payload_bounds(line)
+            if bounds is None:
+                removed[0] += 1
+                return None
+            if matcher(line, bounds[0], bounds[1]):
+                return MATCHED_WITHOUT_SURVIVORS
+            removed[0] += 1
             return None
 
     columns, has_newline = _split_line(line)
@@ -778,30 +954,36 @@ def replay_matches(
     *,
     start: int = 0,
     count: int | None = None,
+    first_ordinal: int = 0,
 ) -> list[str]:
     """Rebuild one page of an already-known match set, without re-filtering.
 
     A filtered page needs the match total, so the first request has to scan the
     whole file. Later pages of the *same* filter set do not: their answer is
     already determined. Given the record ordinals that matched, this walks the
-    line stream and re-runs the filters on only the handful of records the page
-    actually needs — turning a second page from a full evaluation pass into a
-    read plus `count` rebuilds.
+    line stream, re-runs the filters on only the records the page needs, and
+    stops once it has them. Only the page is held in memory.
 
-    Still a read of the file: the ordinals say which records, not where they are.
-    Decompression is ~15% of a scan, so this is the bulk of the saving, and it
-    stays honest about memory (nothing but the page is held).
+    `first_ordinal` is the ordinal of the first line in `data_lines`. A caller
+    with a BGZF page index can seek to the checkpoint covering the page's first
+    match and pass that checkpoint's ordinal, so the walk skips earlier records.
     """
     if count is not None and count <= 0:
         return []
     wanted = matches[start:] if count is None else matches[start : start + count]
     if not wanted:
         return []
+    if first_ordinal > wanted[0]:
+        # A seek past a wanted record would return a silently short page.
+        raise ValueError(
+            f"data_lines starts at record {first_ordinal}, "
+            f"after the first wanted record {wanted[0]}"
+        )
     max_index = csq_split_bound(compiled)
     remaining = set(wanted)
     highest = wanted[-1]
     page: dict[int, str] = {}
-    for ordinal, line in enumerate(data_lines):
+    for ordinal, line in enumerate(data_lines, start=first_ordinal):
         if ordinal not in remaining:
             if ordinal >= highest:
                 break
@@ -851,14 +1033,18 @@ def filter_records(
     stop = None if count is None else start + count
     for line in data_lines:
         scanned += 1
-        survivor = _evaluate_record(line, compiled, removed, max_index)
+        # A match here would be match number `matched`.
+        in_page = matched >= start and (stop is None or matched < stop)
+        survivor = _evaluate_record(
+            line, compiled, removed, max_index, need_survivors=in_page
+        )
         if survivor is None:
             continue
         if record_matches is not None:
             record_matches.append(scanned - 1)
         # Rebuild only the survivors that fall in the requested window; the rest
         # are counted but never reassembled.
-        if matched >= start and (stop is None or matched < stop):
+        if in_page:
             page.append(_rebuild_line(*survivor))
         matched += 1
 

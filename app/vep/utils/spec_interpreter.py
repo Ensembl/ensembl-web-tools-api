@@ -981,15 +981,20 @@ def apply_plugin_spec(
     # deliberately outside this: it is what legitimately differs per row.
     key = None
     if cache is not None:
-        key = (spec.plugin, tuple(csq_values[i] for i in plan.key_indices))
+        # tuple() is faster on a list than a generator, and this path is hot.
+        key = (spec.plugin, tuple([csq_values[i] for i in plan.key_indices]))
         if key in cache:
             return cache[key]
 
     # Raw presence, deliberately: a literal 'NA' counts as present here, which
     # is what the hand-written parsers do.
+    #
+    # Caching this None assumes the gate reads only columns in the cache key.
     if spec.require_any_input and not any(
         csq_values[i] for i in plan.input_indices
     ):
+        if key is not None:
+            cache[key] = None
         return None
 
     output = {

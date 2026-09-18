@@ -2698,3 +2698,32 @@ def test_a_plan_resolves_pattern_map_columns_from_the_header():
     assert compile_plugin(
         index_map_for("gnomAD_exomes_AF"), spec
     ).pattern_columns[target.field] == ()
+
+
+# --- the input gate remembers its answer --------------------------------------
+
+
+def test_the_input_gate_result_is_cached():
+    spec = SPEC.plugin("clinvar_sv")
+    assert spec.require_any_input, "this test needs a plugin with an input gate"
+
+    cache: dict = {}
+    plan = compile_plugin(INDEX_MAP, spec)
+    assert apply_plugin_spec(EMPTY, INDEX_MAP, spec, cache, plan) is None
+    assert cache, "the gate's answer was not cached"
+    assert list(cache.values()) == [None]
+
+    key = next(iter(cache))
+    cache[key] = {"sentinel": True}
+    assert apply_plugin_spec(EMPTY, INDEX_MAP, spec, cache, plan) == {"sentinel": True}
+
+
+def test_a_plugin_with_data_is_unaffected_by_the_gate_caching():
+    row = row_list(ClinVar_SV_CLNSIG="Pathogenic", ClinVar_SV_ORIGIN="germline")
+    cache: dict = {}
+    spec = SPEC.plugin("clinvar_sv")
+    plan = compile_plugin(INDEX_MAP, spec)
+    assert apply_plugin_spec(row, INDEX_MAP, spec, cache, plan) == {
+        "significance": ["Pathogenic"],
+        "origin": ["germline"],
+    }

@@ -322,9 +322,6 @@ def test_transcript_flags_mane_gencode_primary_canonical():
 
 
 def test_an_unmodelled_feature_type_is_counted_rather_than_lost():
-    """A CSQ row whose feature type has no consequence model is dropped, but the
-    caller is told what was dropped, so the loss can be reported. `FutureFeature`
-    stands in for any feature type VEP might add later."""
     from collections import Counter
 
     dropped: Counter = Counter()
@@ -342,7 +339,6 @@ def test_an_unmodelled_feature_type_is_counted_rather_than_lost():
 
 
 def test_the_counter_is_optional():
-    """Callers that don't pass a counter still parse."""
     allele = _get_alt_allele_details(
         "G", "A",
         [row_str(Allele="A", Feature_type="FutureFeature",
@@ -354,8 +350,6 @@ def test_the_counter_is_optional():
 
 
 def test_modelled_rows_are_not_counted():
-    """Transcript, regulatory, motif and intergenic rows all have a model, so
-    none of them is counted as dropped."""
     from collections import Counter
 
     dropped: Counter = Counter()
@@ -384,8 +378,6 @@ def test_modelled_rows_are_not_counted():
 
 
 def test_a_regulatory_feature_row_becomes_a_regulatory_consequence():
-    """A RegulatoryFeature row keeps its id, biotype and consequence terms. If
-    this breaks, enhancer and promoter rows vanish from the results."""
     allele = _get_alt_allele_details(
         "C", "T",
         [row_str(Allele="T", Feature_type="RegulatoryFeature",
@@ -402,8 +394,6 @@ def test_a_regulatory_feature_row_becomes_a_regulatory_consequence():
 
 
 def test_a_motif_row_is_a_regulatory_consequence_without_a_biotype():
-    """VEP leaves BIOTYPE empty on MotifFeature rows. A motif shares the
-    regulatory kind, with a null biotype rather than an empty string."""
     allele = _get_alt_allele_details(
         "G", "C",
         [row_str(Allele="C", Feature_type="MotifFeature",
@@ -420,10 +410,6 @@ def test_a_motif_row_is_a_regulatory_consequence_without_a_biotype():
 
 
 def test_an_allele_keeps_its_transcript_and_regulatory_rows():
-    """A variant near a gene can have transcript and regulatory rows at once.
-    chr1:201396107 C>G, for example, has 15 transcripts, an enhancer and a motif.
-    Every row survives in CSQ order, and the allele-level annotations are still
-    read once for the allele."""
     allele = _get_alt_allele_details(
         "C", "G",
         [
@@ -453,12 +439,6 @@ def test_an_allele_keeps_its_transcript_and_regulatory_rows():
 
 
 def test_a_regulatory_scoped_plugin_attaches_to_the_regulatory_row_only():
-    """A plugin with scope "regulatory" is read from each regulatory row and
-    stored on that consequence, never on the allele or a transcript.
-
-    The probe here is the loeuf plugin re-declared as regulatory-scoped. Both rows
-    carry a LOEUF value, so each plugin's value shows which row it landed on:
-    0.5 belongs to the transcript and 0.7 to the enhancer."""
     loeuf = next(p for p in SPEC.plugins if p.plugin == "loeuf")
     probe = type(loeuf).model_validate(
         {**loeuf.model_dump(), "plugin": "regulatory_probe",
@@ -491,12 +471,8 @@ def test_a_regulatory_scoped_plugin_attaches_to_the_regulatory_row_only():
 
 
 def test_a_motif_rows_details_attach_to_that_row():
-    """A MotifFeature row's five motif columns parse into a `motif` annotation
-    on that row. For chr1:30231804 G>C the motif is ENSPFM0015, bound by FOS,
-    ATF7 and JUN, and the variant sits at position 11. HIGH_INF_POS and
-    MOTIF_SCORE_CHANGE are filled here too, although VEP leaves them empty until
-    it has the motif's weight matrix. An enhancer row next to it has no motif,
-    so it gets no motif annotation."""
+    # VEP leaves HIGH_INF_POS and MOTIF_SCORE_CHANGE empty until it has the
+    # motif's weight matrix.
     motif_cols = [
         "MOTIF_NAME", "MOTIF_POS", "HIGH_INF_POS", "MOTIF_SCORE_CHANGE",
         "TRANSCRIPTION_FACTORS",

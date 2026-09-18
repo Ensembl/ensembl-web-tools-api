@@ -121,19 +121,13 @@ class PredictedTranscriptConsequence(BaseModel):
 
 
 class PredictedRegulatoryConsequence(BaseModel):
-    """A consequence on a regulatory feature.
-
-    VEP's RegulatoryFeature rows (ENSR ids, with a biotype such as enhancer or
-    promoter) and MotifFeature rows (ENSM ids) share this one kind. A motif has
-    no biotype, so `biotype` is null on motif rows.
-    """
+    """A consequence on a RegulatoryFeature (ENSR) or MotifFeature (ENSM) row.
+    A motif has no biotype."""
 
     feature_type: Literal["regulatory"] = "regulatory"
     stable_id: str = Field(..., description="regulatory feature or motif id")
     biotype: str | None = None
     consequences: list[str]
-    # Spec-driven annotations for this feature (scope "regulatory"). Sent as
-    # `annotation_refs` into the variant's pool, as a transcript's are.
     annotations: list[Annotation] = Field(default_factory=list, exclude=True)
     annotation_refs: list[int] = []
 

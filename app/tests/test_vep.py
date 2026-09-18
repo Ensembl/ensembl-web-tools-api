@@ -441,15 +441,11 @@ def test_repeated_alleles_are_still_deduplicated():
 
 
 def _csq(**values):
-    """One CSQ entry in CSQ_DESCRIPTION's column order, blank where not given."""
     columns = CSQ_DESCRIPTION.split("Format: ")[1].split("|")
     return "|".join(values.get(column, "") for column in columns)
 
 
 def _dropped_rows_vcf():
-    """Two variants whose CSQ entries include feature types with no model.
-    Variant 1 has a transcript and two FutureFeature entries. Variant 2 has an
-    intergenic entry and one OtherFeature entry. Three entries are dropped."""
     transcript = _csq(Allele="A", Consequence="missense_variant",
                       Feature_type="Transcript", Feature="ENST00000001.1",
                       BIOTYPE="protein_coding", STRAND="1")
@@ -475,12 +471,6 @@ def _dropped_row_warnings(caplog):
 
 
 def test_a_page_warns_once_about_the_rows_it_dropped(caplog):
-    """Dropped CSQ entries are reported in one warning for the whole page, with
-    the total and a count per feature type. This warning is the only sign that
-    rows went missing, so if it breaks, the loss is silent again.
-
-    Here the page drops two FutureFeature entries from the first variant and one
-    OtherFeature entry from the second, so the warning names 3 rows."""
     with caplog.at_level("WARNING"):
         results = get_results_from_stream(
             100, 1, 2, StringIO(_dropped_rows_vcf()),
@@ -491,7 +481,6 @@ def test_a_page_warns_once_about_the_rows_it_dropped(caplog):
     assert warning.levelname == "WARNING"
     assert "Dropped 3 CSQ row(s)" in warning.getMessage()
     assert "FutureFeature x2, OtherFeature x1" in warning.getMessage()
-    # The modelled entries still come through.
     assert [
         len(variant.alternative_alleles[0].predicted_molecular_consequences)
         for variant in results.variants
@@ -499,8 +488,6 @@ def test_a_page_warns_once_about_the_rows_it_dropped(caplog):
 
 
 def test_a_page_with_nothing_dropped_does_not_warn(caplog):
-    """Transcript and intergenic entries all have a model, so a page of only
-    those logs no dropped-row warning."""
     with caplog.at_level("WARNING"):
         get_results_from_stream(
             100, 1, 3, StringIO(TEST_VCF), PARSING_SPEC, DISPLAY_PANELS, DISPLAY

@@ -140,6 +140,21 @@ def test_af_map_rows_reads_the_overall_beside_the_population_dict():
     assert block.scope == "gnomad_genomes"
 
 
+def test_every_allele_frequency_plugin_a_genome_parses_is_displayed():
+    for genome in ("human_grch38", "human_grch37"):
+        spec = load_merged_spec(genome)
+        displayed = set().union(*(o.plugin_refs() for o in spec.display.options))
+
+        # The rule results_filters uses to find allele-frequency plugins.
+        frequencies = {
+            p.plugin
+            for p in spec.parsing.plugins
+            if p.output.startswith("frequencies.")
+        }
+
+        assert frequencies <= displayed, (genome, sorted(frequencies - displayed))
+
+
 def test_bundled_display_references_resolve():
     """Belt and braces: load_merged_spec already runs the check, but state the
     invariant — every display ref resolves: a fixed row's `plugin.field`, a

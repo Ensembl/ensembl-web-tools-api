@@ -469,19 +469,40 @@ def _compile_consequence(f: ResultsFilter, index_map: dict[str, int]) -> Compile
 
 
 def _compile_transcript(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFilter | None:
-    """A CSQ entry matches if its Feature (transcript) stable id is one of the
-    selected ids. Match is version-insensitive: the '.version' suffix is ignored
-    on both sides, so 'ENST0000012345' and 'ENST0000012345.7' are equivalent.
+    """A CSQ entry matches if it is a transcript and its Feature stable id is one
+    of the selected ids. Match is version-insensitive: the '.version' suffix is
+    ignored on both sides, so 'ENST0000012345' and 'ENST0000012345.7' are
+    equivalent.
+
+    A regulatory entry keeps its ENSR or ENSM id in the same Feature column, so
+    the Feature_type check is what stops a regulatory id matching its own row.
 
     The stripped id is a substring of the versioned id as it appears in the line,
     so it is still a valid necessary-condition token for the prefilter."""
-    return _membership_filter(
+    compiled = _membership_filter(
         f,
         index_map,
         field=TRANSCRIPT_FIELD,
         column="Feature",
         normalise=_strip_version,
     )
+    if compiled is None:
+        return None
+    type_index = index_map.get("Feature_type")
+    if type_index is None:
+        raise FilterError("Feature_type column missing from CSQ header")
+    matches_id = compiled.keep_entry
+
+    def keep_entry(entry: list[str]) -> bool:
+        return (
+            type_index < len(entry)
+            and entry[type_index] == "Transcript"
+            and matches_id(entry)
+        )
+
+    compiled.keep_entry = keep_entry
+    compiled.max_csq_index = max(compiled.max_csq_index, type_index)
+    return compiled
 
 
 def _compile_gene_symbol(f: ResultsFilter, index_map: dict[str, int]) -> CompiledFilter | None:

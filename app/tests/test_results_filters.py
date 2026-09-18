@@ -347,6 +347,28 @@ def test_transcript_filter_matches_ignoring_version():
     assert stats[0].removed == 1
 
 
+def test_transcript_filter_matches_only_transcripts():
+    entries = ",".join(
+        f"T|{consequence}|MODIFIER|||{feature_type}|{feature}|{biotype}"
+        for feature_type, feature, consequence, biotype in (
+            ("Transcript", "ENST00000341065.8", "intron_variant", "protein_coding"),
+            ("RegulatoryFeature", "ENSR1_D37Q", "regulatory_region_variant", "enhancer"),
+            ("MotifFeature", "ENSM00000071889", "TF_binding_site_variant", ""),
+        )
+    )
+    line = f"chr1\t101\tid_01\tC\tT\t.\t.\tCSQ={entries}\n"
+    fi = INDEX_MAP["Feature"]
+
+    for regulatory_id in ("ENSR1_D37Q", "ENSM00000071889"):
+        compiled = rf.compile_filters([_transcript_filter(regulatory_id)], INDEX_MAP)
+        kept, _ = rf.apply_filter_pipeline([line], compiled)
+        assert kept == [], regulatory_id
+
+    compiled = rf.compile_filters([_transcript_filter("ENST00000341065")], INDEX_MAP)
+    kept, _ = rf.apply_filter_pipeline([line], compiled)
+    assert [e[fi] for e in rf.extract_csq_entries(kept[0])] == ["ENST00000341065.8"]
+
+
 def test_transcript_filter_matches_with_version_supplied():
     lines = [_transcript_record(1, [("ENST00000341065.8", "missense_variant")])]
     # a versioned id supplied by the user still matches (version ignored)

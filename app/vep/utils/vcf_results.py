@@ -14,7 +14,7 @@ import threading
 from pathlib import Path
 from pydantic import FilePath
 from vep.models import vcf_results_model as model
-from vep.form_panels import af_max_subpopulation_label
+from vep.form_panels import af_max_subpopulation_label, live_panel_full_width
 from vep.utils import results_filters
 from vep.utils.bgzf import _BgzfReader, is_bgzf
 from vep.utils.csq import (
@@ -933,10 +933,14 @@ def _check_expected_columns(vcf_path: FilePath, expected: set[str]) -> None:
 
 
 def _load_pinned_display_panels(vcf_path: FilePath) -> list[DisplayPanel]:
-    """Load the option panels pinned to this job at submission."""
+    """Load the option panels pinned to this job at submission. A panel pinned
+    without `full_width` takes it from the live panel definitions."""
     panels = load_display_panels_sidecar(vcf_path)
     if not panels:
         raise ValueError(f"empty display-panels sidecar for {vcf_path}")
+    for panel in panels:
+        if panel.full_width is None:
+            panel.full_width = live_panel_full_width(panel.id)
     return panels
 
 

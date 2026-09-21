@@ -165,6 +165,9 @@ class AfSource(BaseModel):
         description="Human label for this population (from the form), e.g. "
         "'Non-Finnish European · Female'; 'All' for the overall AF"
     )
+    source_label: str | None = Field(
+        default=None, description="Human name of the source, e.g. 'gnomAD exomes'"
+    )
 
 
 class Metadata(BaseModel):

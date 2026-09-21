@@ -618,6 +618,8 @@ class PluginSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     plugin: str
+    # The human name of what the plugin reads, used where the results name its source.
+    label: str | None = None
     scope: Literal["allele", "transcript"]
     # Where the result attaches on the response model, e.g. "mavedb".
     output: str

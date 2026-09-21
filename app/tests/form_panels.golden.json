@@ -3,6 +3,7 @@
     {
       "id": "variant_representations",
       "label": "Variant representations",
+      "full_width": false,
       "options": [
         {
           "id": "hgvs",
@@ -37,6 +38,7 @@
     {
       "id": "variant_impact_predictions",
       "label": "Variant impact predictions",
+      "full_width": false,
       "options": [
         {
           "id": "alphamissense",
@@ -173,6 +175,7 @@
     {
       "id": "allele_frequencies",
       "label": "Allele frequencies",
+      "full_width": false,
       "options": [
         {
           "id": "gnomad_exomes",
@@ -1009,6 +1012,7 @@
     {
       "id": "genes_and_transcripts",
       "label": "Genes & transcripts",
+      "full_width": false,
       "options": [
         {
           "id": "tss_distance",
@@ -1198,6 +1202,7 @@
     {
       "id": "protein_and_functional",
       "label": "Protein & functional",
+      "full_width": false,
       "options": [
         {
           "id": "protein",
@@ -1353,6 +1358,7 @@
     {
       "id": "regulatory",
       "label": "Regulatory",
+      "full_width": false,
       "options": [
         {
           "id": "gencode_promoters",
@@ -1373,6 +1379,7 @@
     {
       "id": "phenotype_and_disease_associations",
       "label": "Phenotype & disease associations",
+      "full_width": true,
       "options": [
         {
           "id": "geno2mp",
@@ -1418,6 +1425,7 @@
     {
       "id": "variant_representations",
       "label": "Variant representations",
+      "full_width": false,
       "options": [
         {
           "id": "hgvs",
@@ -1452,6 +1460,7 @@
     {
       "id": "variant_impact_predictions",
       "label": "Variant impact predictions",
+      "full_width": false,
       "options": [
         {
           "id": "alphamissense",
@@ -1533,6 +1542,7 @@
     {
       "id": "allele_frequencies",
       "label": "Allele frequencies",
+      "full_width": false,
       "options": [
         {
           "id": "gnomad_exomes",
@@ -2296,6 +2306,7 @@
     {
       "id": "genes_and_transcripts",
       "label": "Genes & transcripts",
+      "full_width": false,
       "options": [
         {
           "id": "tss_distance",
@@ -2455,6 +2466,7 @@
     {
       "id": "protein_and_functional",
       "label": "Protein & functional",
+      "full_width": false,
       "options": [
         {
           "id": "protein",
@@ -2518,6 +2530,7 @@
     {
       "id": "phenotype_and_disease_associations",
       "label": "Phenotype & disease associations",
+      "full_width": true,
       "options": [
         {
           "id": "geno2mp",
@@ -2549,6 +2562,7 @@
     {
       "id": "variant_representations",
       "label": "Variant representations",
+      "full_width": false,
       "options": [
         {
           "id": "hgvs",
@@ -2583,6 +2597,7 @@
     {
       "id": "genes_and_transcripts",
       "label": "Genes & transcripts",
+      "full_width": false,
       "options": [
         {
           "id": "tss_distance",
@@ -2673,6 +2688,7 @@
     {
       "id": "protein_and_functional",
       "label": "Protein & functional",
+      "full_width": false,
       "options": [
         {
           "id": "protein",
@@ -2688,6 +2704,7 @@
     {
       "id": "phenotype_and_disease_associations",
       "label": "Phenotype & disease associations",
+      "full_width": true,
       "options": [
         {
           "id": "phenotypes",
@@ -2705,6 +2722,7 @@
     {
       "id": "variant_representations",
       "label": "Variant representations",
+      "full_width": false,
       "options": [
         {
           "id": "hgvs",
@@ -2739,6 +2757,7 @@
     {
       "id": "genes_and_transcripts",
       "label": "Genes & transcripts",
+      "full_width": false,
       "options": [
         {
           "id": "tss_distance",
@@ -2829,6 +2848,7 @@
     {
       "id": "protein_and_functional",
       "label": "Protein & functional",
+      "full_width": false,
       "options": [
         {
           "id": "protein",
@@ -2844,6 +2864,7 @@
     {
       "id": "phenotype_and_disease_associations",
       "label": "Phenotype & disease associations",
+      "full_width": true,
       "options": [
         {
           "id": "phenotypes",

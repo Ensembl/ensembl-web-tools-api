@@ -728,6 +728,7 @@
       },
       {
         "plugin": "gnomad_exomes",
+        "label": "gnomAD exomes",
         "scope": "allele",
         "output": "frequencies.gnomad_exomes",
         "csq_fields": [
@@ -757,6 +758,7 @@
       },
       {
         "plugin": "gnomad_genomes",
+        "label": "gnomAD genomes",
         "scope": "allele",
         "output": "frequencies.gnomad_genomes",
         "csq_fields": [
@@ -786,6 +788,7 @@
       },
       {
         "plugin": "all_of_us",
+        "label": "All of Us",
         "scope": "allele",
         "output": "frequencies.all_of_us",
         "csq_fields": [
@@ -821,6 +824,7 @@
       },
       {
         "plugin": "gnomad_sv",
+        "label": "gnomAD SV",
         "scope": "allele",
         "output": "frequencies.gnomad_sv",
         "csq_fields": [
@@ -863,6 +867,7 @@
       },
       {
         "plugin": "gnomad_cnv",
+        "label": "gnomAD CNV",
         "scope": "allele",
         "output": "frequencies.gnomad_cnv",
         "csq_fields": [
@@ -2090,6 +2095,7 @@
       },
       {
         "plugin": "gnomad_exomes_v2",
+        "label": "gnomAD exomes",
         "scope": "allele",
         "output": "frequencies.gnomad_exomes",
         "csq_fields": [
@@ -2119,6 +2125,7 @@
       },
       {
         "plugin": "gnomad_genomes_v2",
+        "label": "gnomAD genomes",
         "scope": "allele",
         "output": "frequencies.gnomad_genomes",
         "csq_fields": [
@@ -2148,6 +2155,7 @@
       },
       {
         "plugin": "gnomad_sv_v2",
+        "label": "gnomAD SV",
         "scope": "allele",
         "output": "frequencies.gnomad_sv",
         "csq_fields": [

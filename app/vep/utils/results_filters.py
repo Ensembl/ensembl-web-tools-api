@@ -10,11 +10,13 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Container, TYPE_CHECKING, Callable, Iterable, Iterator, NamedTuple
 
 from pydantic import BaseModel
 
 from vep.form_panels import af_population_label
+from vep.utils.spec_loader import SPEC_DIR
 from vep.utils.spec_interpreter import pattern_affixes
 
 if TYPE_CHECKING:
@@ -612,10 +614,10 @@ def af_columns(index_map: dict[str, int], spec: ParsingSpec) -> list[str]:
 
 def _af_source_specs(spec: ParsingSpec) -> list[tuple]:
     """Per allele-frequency plugin (output under `frequencies.`):
-    `(source, overall_column, prefix, suffix, exclude)`. `overall_column` is the
-    `field=="overall"` scalar's column; `prefix`/`suffix` bracket the populations
-    `pattern_map`'s placeholder, so a matched column's key is exactly what sits
-    between them — the same key the parse stores the value under."""
+    `(source, label, overall_column, prefix, suffix, exclude)`. `overall_column`
+    is the `field=="overall"` scalar's column; `prefix`/`suffix` bracket the
+    populations `pattern_map`'s placeholder, so a matched column's key is exactly
+    what sits between them, the same key the parse stores the value under."""
     specs: list[tuple] = []
     for plugin in spec.plugins:
         if not plugin.output.startswith("frequencies."):
@@ -645,32 +647,48 @@ def _af_source_specs(spec: ParsingSpec) -> list[tuple]:
         else:
             prefix, suffix = pattern_affixes(pattern.from_pattern)
             exclude = set(pattern.exclude or [])
-        specs.append((source, overall, prefix, suffix, exclude))
+        specs.append((source, plugin.label, overall, prefix, suffix, exclude))
     return specs
 
 
-def _af_descriptor(column: str, source: str, population: str) -> dict:
+@lru_cache(maxsize=1)
+def _live_af_source_labels() -> dict[str, str]:
+    """AF source names from the live annotation library, for pinned specs that
+    predate the plugin `label`."""
+    library = json.loads((SPEC_DIR / "annotation_library.json").read_text())
+    return {
+        plugin["output"].split(".")[-1]: plugin["label"]
+        for plugin in library["parsing"]["plugins"]
+        if plugin["output"].startswith("frequencies.") and plugin.get("label")
+    }
+
+
+def _af_descriptor(
+    column: str, source: str, population: str, source_label: str | None
+) -> dict:
     return {
         "key": column,
         "source": source,
         "population": population,
         "label": af_population_label(source, population),
+        "source_label": source_label or _live_af_source_labels().get(source),
     }
 
 
 def af_source_descriptor(column: str, spec: ParsingSpec) -> dict | None:
-    """Split an AF column into {key, source, population, label} for the results
-    metadata (population "" = the source's overall AF, labelled "All"). The
-    `population` code is exactly the key the parse stores the value under, so the
-    frontend can join a source's populations against each allele's parsed
-    frequencies; the `label` is the human population name (decoded once here, from
-    form_panels). None for a non-AF column.
+    """Split an AF column into {key, source, population, label, source_label}
+    for the results metadata (population "" = the source's overall AF, labelled
+    "All"). The `population` code is exactly the key the parse stores the value
+    under, so the frontend can join a source's populations against each allele's
+    parsed frequencies; the `label` is the human population name (decoded once
+    here, from form_panels). `source_label` names the source, from the pinned
+    plugin or else the live library. None for a non-AF column.
 
     Source + population are derived from the `frequencies.*` plugins, including
     gnomAD v2's subset-before-`AF` grammar (`controls_AF_afr`, not `afr`)."""
-    for source, overall, prefix, suffix, exclude in _af_source_specs(spec):
+    for source, label, overall, prefix, suffix, exclude in _af_source_specs(spec):
         if overall is not None and column == overall:
-            return _af_descriptor(column, source, "")
+            return _af_descriptor(column, source, "", label)
         if (
             prefix is not None
             and column not in exclude
@@ -679,7 +697,7 @@ def af_source_descriptor(column: str, spec: ParsingSpec) -> dict | None:
             and len(column) > len(prefix) + len(suffix)
         ):
             population = column[len(prefix): len(column) - len(suffix)]
-            return _af_descriptor(column, source, population)
+            return _af_descriptor(column, source, population, label)
     return None
 
 

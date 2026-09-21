@@ -25,7 +25,7 @@ _PANELS: list[dict] = [
     {"id": "protein_and_functional", "label": "Protein & functional"},
     {"id": "regulatory", "label": "Regulatory"},
     {"id": "phenotype_and_disease_associations",
-     "label": "Phenotype & disease associations"},
+     "label": "Phenotype & disease associations", "full_width": True},
 ]
 
 # Spacing for legacy coded panel entries; current panels start empty.
@@ -426,6 +426,13 @@ def _place_spec_options(panels: list[dict], assembly_name: str | None) -> None:
         )
 
 
+def live_panel_full_width(panel_id: str) -> bool | None:
+    """Whether the live panel definition lays this panel out full width, or None
+    for a panel id it no longer has."""
+    panel = next((p for p in _PANELS if p["id"] == panel_id), None)
+    return None if panel is None else panel.get("full_width", False)
+
+
 def get_visible_panels(
     *,
     species_taxonomy_id: str | None = None,
@@ -443,7 +450,9 @@ def get_visible_panels(
     panel list, the allele frequencies (still generated), and dropping a panel
     that ended up with nothing in it.
     """
-    panels = [dict(panel, options=[]) for panel in _PANELS]
+    panels = [
+        {"full_width": False, **panel, "options": []} for panel in _PANELS
+    ]
 
     # Every option, placed where its `form` block says — allele frequencies
     # included, their sub-option trees grown from the same tables that write

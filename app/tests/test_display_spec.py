@@ -1113,3 +1113,72 @@ def test_the_fixture_omits_only_what_the_defaults_put_back():
     # those are two different classes, on which pydantic equality is always
     # False.
     assert type(payload).model_validate(lean) == payload
+
+
+# --- column labels ----------------------------------------------------------
+
+
+def _clinvar_classification_rows(spec):
+    """The phenotypes rows that name a column, in spec order."""
+    option = next(o for o in spec.display.options if o.option_id == "phenotypes")
+    return [
+        row
+        for block in option.iter_blocks()
+        if block.kind == "rows"
+        for row in block.rows
+        if row.column_label
+    ]
+
+
+CLINVAR_CELL_COLUMNS = [
+    "Type",
+    "Classification",
+    "Review status",
+    "Supporting submissions",
+]
+
+
+def test_clinvar_classification_rows_name_their_columns():
+    rows = _clinvar_classification_rows(SPEC)
+    assert [row.column_label for row in rows] == [
+        "Germline classification",
+        "Somatic classification",
+    ]
+    for row in rows:
+        assert [c.column_label for c in row.item.cells] == CLINVAR_CELL_COLUMNS
+
+
+def test_column_labels_survive_a_pinned_sidecar(tmp_path):
+    write_spec_sidecar(tmp_path, SPEC)
+    pinned = _load_pinned_merged_spec(_vcf_path(tmp_path))
+    rows = _clinvar_classification_rows(pinned)
+    assert [row.column_label for row in rows] == [
+        "Germline classification",
+        "Somatic classification",
+    ]
+    assert [c.column_label for c in rows[0].item.cells] == CLINVAR_CELL_COLUMNS
+
+
+def test_a_spec_without_column_labels_leaves_them_unset():
+    # What keeps an already-pinned job rendering as it does now.
+    spec = MergedSpec.model_validate(
+        _stacking_row({"from": "kind"}, {"from": "verdict"})
+    )
+    block = spec.display.options[0].blocks[0]
+    row = block.rows[0]
+    assert block.column_label is None
+    assert row.column_label is None
+    assert [c.column_label for c in row.item.cells] == [None, None]
+
+
+def test_a_block_a_row_and_a_cell_can_each_name_a_column():
+    doc = _stacking_row({"from": "kind", "column_label": "Kind"})
+    block = doc["display"]["options"][0]["blocks"][0]
+    block["column_label"] = "Summary"
+    block["rows"][0]["column_label"] = "Classification"
+
+    spec = MergedSpec.model_validate(doc)
+    loaded = spec.display.options[0].blocks[0]
+    assert loaded.column_label == "Summary"
+    assert loaded.rows[0].column_label == "Classification"
+    assert loaded.rows[0].item.cells[0].column_label == "Kind"

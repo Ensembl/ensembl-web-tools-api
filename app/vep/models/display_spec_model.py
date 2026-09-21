@@ -143,6 +143,9 @@ class DisplayRow(BaseModel):
     item: "DisplayItemSpec | None" = None
     # Filter for a stacked list.
     where: "RowFilter | None" = None
+    # The heading this row's values sit under in a view that shows columns. The
+    # detail panel ignores it and renders `label` as before.
+    column_label: str | None = None
 
     @model_validator(mode="after")
     def _exactly_one_source(self) -> "DisplayRow":
@@ -225,6 +228,9 @@ class ValuePiece(BaseModel):
     # links, because the same table links a condition *name* — prose, which must
     # be free to wrap.
     nowrap: bool = False
+    # The heading this value sits under in a view that shows one column per
+    # value. The detail panel ignores it and keeps prefixing with `label`.
+    column_label: str | None = None
 
     @model_validator(mode="after")
     def _prefix_and_split_need_a_link(self) -> "ValuePiece":
@@ -412,6 +418,9 @@ class _GatedBlock(BaseModel):
     when: WhenSpec | None = None
     # Restrict this block to the default view or "Show all" (ProtVar / IntAct).
     view: BlockView | None = None
+    # The heading this block's values sit under in a view that shows columns.
+    # The detail panel ignores it and uses `heading`.
+    column_label: str | None = None
 
 
 class DisplayRowsBlock(_GatedBlock):

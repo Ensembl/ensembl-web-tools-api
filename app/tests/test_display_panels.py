@@ -255,3 +255,28 @@ def test_the_panels_no_longer_depend_on_species_taxonomy_id():
 
 def test_species_taxonomy_id_is_not_a_submission_field():
     assert "species_taxonomy_id" not in ConfigIniParams.model_fields
+
+
+def test_the_form_config_states_the_upload_limit(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.vep import vep_resources
+
+    async def fake_get_genome_genebuild(_genome_id):
+        return {"genebuild.provider_name": "Ensembl"}
+
+    async def fake_get_genome_assembly_name(_genome_id):
+        return "GRCh38"
+
+    monkeypatch.setattr(vep_resources, "get_genome_genebuild", fake_get_genome_genebuild)
+    monkeypatch.setattr(
+        vep_resources, "get_genome_assembly_name", fake_get_genome_assembly_name
+    )
+    app = FastAPI()
+    app.include_router(vep_resources.router, prefix="/vep")
+
+    with TestClient(app) as client:
+        response = client.get("/vep/form_config/genome-id")
+
+    assert response.status_code == 200
+    assert response.json()["max_upload_bytes"] == 250 * 10**6

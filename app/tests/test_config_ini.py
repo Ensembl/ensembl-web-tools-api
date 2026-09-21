@@ -12,10 +12,12 @@ These tests monkeypatch the metadata lookup so no network call is made, build
 the ini into a tmp dir, read it back, and assert on the emitted lines.
 """
 
+import os
 import re
 
 import pytest
 
+from core.config import VEP_DATA_DIR, VEP_PLUGINS_DATA_PATH
 from app.vep.models.pipeline_model import ConfigIniParams, plugin_data_path
 from app.vep.utils.spec_loader import load_merged_spec
 
@@ -230,15 +232,25 @@ def test_per_assembly_plugin_files(monkeypatch, tmp_path, option, markers):
 def test_plugin_data_path_selects_assembly_and_dataset_directories(
     assembly, entry_id, suffix
 ):
-    assert plugin_data_path(assembly)(entry_id).endswith(
-        f"vep-plugins-data/{suffix}"
+    assert plugin_data_path(assembly)(entry_id) == os.path.join(
+        VEP_PLUGINS_DATA_PATH, suffix
     )
+
+
+def test_plugin_data_root_is_derived_from_vep_data_dir():
+    assert VEP_PLUGINS_DATA_PATH == os.path.join(VEP_DATA_DIR, "vep_plugins_data")
 
 
 def test_plugin_lines_use_configured_plugin_data_root(monkeypatch, tmp_path):
     lines = build_lines(monkeypatch, tmp_path, revel=True, go=True)
-    assert find_line(lines, "vep-plugins-data/grch38/new_tabbed_revel_grch38")
-    assert find_line(lines, "vep-plugins-data/grch38/GO_data_files/GO.pm_")
+    assert find_line(
+        lines,
+        os.path.join(VEP_PLUGINS_DATA_PATH, "grch38", "new_tabbed_revel_grch38"),
+    )
+    assert find_line(
+        lines,
+        os.path.join(VEP_PLUGINS_DATA_PATH, "grch38", "GO_data_files", "GO.pm_"),
+    )
 
 
 def test_spliceai_selects_the_assembly_specific_snv_file(monkeypatch, tmp_path):

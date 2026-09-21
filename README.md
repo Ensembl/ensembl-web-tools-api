@@ -19,6 +19,11 @@ Directly:
 pip3 install --no-cache-dir -r requirements.txt
 uvicorn app.main:app --proxy-headers --host 0.0.0.0 --port 80
 ```
+
+VEP data defaults to `VEP_DATA_DIR=/tmpdir`. VEP support files are read from
+`$VEP_DATA_DIR/organism_data`; plugin datasets are read from the derived
+`VEP_PLUGINS_DATA_PATH=$VEP_DATA_DIR/vep_plugins_data`.
+
 ### Usage
 
 See the documentation for usage: `http://localhost/docs`

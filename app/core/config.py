@@ -73,4 +73,4 @@ WEB_METADATA_API = config(
 )
 VEP_DATA_DIR = config("VEP_DATA_DIR", default="/tmpdir")
 VEP_SUPPORT_PATH = os.path.join(VEP_DATA_DIR, "organism_data")
-VEP_PLUGIN_DATA_PATH = os.path.join(VEP_DATA_DIR, "vep_plugins_data")
+VEP_PLUGINS_DATA_PATH = os.path.join(VEP_DATA_DIR, "vep_plugins_data")

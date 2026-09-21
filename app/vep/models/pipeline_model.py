@@ -17,7 +17,7 @@ from pydantic import (
 )
 from requests import HTTPError
 
-from core.config import NF_COMPUTE_ENV_ID, NF_PIPELINE_URL, VEP_PLUGIN_DATA_PATH
+from core.config import NF_COMPUTE_ENV_ID, NF_PIPELINE_URL, VEP_PLUGINS_DATA_PATH
 from core.logging import InterceptHandler
 
 from vep.models.config_spec_model import ConfigSpec
@@ -106,7 +106,7 @@ def plugin_data_path(assembly: str) -> "Callable[[str], str]":
         tree = "grch37"
     else:
         tree = "other_species"
-    base = os.path.join(VEP_PLUGIN_DATA_PATH, tree)
+    base = os.path.join(VEP_PLUGINS_DATA_PATH, tree)
 
     def resolve(entry_id: str) -> str:
         subdir = _PLUGIN_DATA_SUBDIRS.get(entry_id)

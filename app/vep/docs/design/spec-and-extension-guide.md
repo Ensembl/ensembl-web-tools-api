@@ -247,13 +247,13 @@ pointing a config entry at it.
 Config entries never name absolute paths. They write `{path}/my_data.vcf.gz`, and
 `config_interpreter` substitutes it (`config_interpreter.py:42`, `:244`) through
 `pipeline_model.plugin_data_path()`. The configured parent is
-`${VEP_SUPPORT_PATH_ROOT}/vep-plugins-data`; the resolver is a function of both the
-submitted assembly and config-entry id:
+`VEP_PLUGINS_DATA_PATH` (derived from `VEP_DATA_DIR`); the resolver is a
+function of both the submitted assembly and config-entry id:
 
 ```python
-GRCh38* -> vep-plugins-data/grch38
-GRCh37* -> vep-plugins-data/grch37
-other species -> vep-plugins-data/other_species
+GRCh38* -> $VEP_PLUGINS_DATA_PATH/grch38
+GRCh37* -> $VEP_PLUGINS_DATA_PATH/grch37
+other species -> $VEP_PLUGINS_DATA_PATH/other_species
 
 dataset_subdirectories = {        # entry id -> subdir under the assembly tree
     "allofus": "AllOfUs", "go": "GO_data_files", "phenotypes": "Phenotypes_data_files",

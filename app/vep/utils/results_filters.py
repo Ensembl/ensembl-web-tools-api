@@ -653,8 +653,7 @@ def _af_source_specs(spec: ParsingSpec) -> list[tuple]:
 
 @lru_cache(maxsize=1)
 def _live_af_source_labels() -> dict[str, str]:
-    """AF source names from the live annotation library, for pinned specs that
-    predate the plugin `label`."""
+    """AF source labels from the live library, for pinned specs without them."""
     library = json.loads((SPEC_DIR / "annotation_library.json").read_text())
     return {
         plugin["output"].split(".")[-1]: plugin["label"]

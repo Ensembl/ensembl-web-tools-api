@@ -56,7 +56,6 @@ class DisplayPanel(BaseModel):
 
     id: str
     label: str
-    # True for a panel the client lays out full width.
     full_width: bool | None = None
     options: list[DisplayOption] = Field(default_factory=list)
 

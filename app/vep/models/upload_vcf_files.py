@@ -29,7 +29,7 @@ from streaming_form_data.validators import ValidationError
 
 from core.config import NF_WORK_DIR
 
-# 250 MB in SI units, the figure the form shows.
+# The form shows this limit as 250 MB, in SI units.
 MAX_FILE_SIZE = 250 * 10**6
 MAX_REQUEST_BODY_SIZE = MAX_FILE_SIZE + 1024
 SAFE_FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$")

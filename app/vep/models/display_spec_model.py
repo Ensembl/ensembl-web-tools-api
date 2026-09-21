@@ -152,8 +152,7 @@ class DisplayRow(BaseModel):
         if sources > 1:
             raise ValueError("row needs exactly one of `from` or `compose`")
         # No source at all is allowed for one shape only: a builder link that
-        # *is* the value, built from job context rather than a parsed field.
-        # Specs pinned to older jobs still carry such rows.
+        # *is* the value. Only specs pinned to older jobs carry such rows.
         if self.link is not None and self.link.builder:
             return self
         raise ValueError("row needs exactly one of `from` or `compose`")
@@ -368,8 +367,7 @@ class DisplayItemSpec(BaseModel):
     # A trailing link on a label/value item's value (ProtVar's per-pocket icon).
     # Only meaningful with `label` (the row layout).
     link: LinkSpec | None = None
-    # A `<plugin>.<field>` read from the entity, like a row's `link_from`, whose
-    # value fills the link template's `{value}`.
+    # A `<plugin>.<field>` whose value fills the link template's `{value}`.
     link_from: str | None = None
 
     @model_validator(mode="after")

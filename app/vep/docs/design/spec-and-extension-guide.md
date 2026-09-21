@@ -1039,8 +1039,7 @@ Use an option-level `heading` **or** per-block headings, not both.
 | `key` | React key; absent means "use position", which is stable for these fixed lists |
 
 A row needs exactly one of `from` or `compose` — **except** a row whose value
-*is* a named builder link. No current row does this, but specs pinned to older
-jobs still do, so it still loads.
+*is* a named builder link. Only specs pinned to older jobs use this.
 
 ### 10.5 The eight formats
 
@@ -1143,7 +1142,7 @@ One named builder exists, for a link a template cannot express:
 | `protein_popup` | an in-app "View in" Entity Viewer popup, built from the job genome plus the consequence's gene |
 
 ProtVar and OpenTargets links are templates over parsed fields (`protvar.url`,
-`opentargets.variant_id`). A spec pinned to an older job may still name the
+`opentargets.variant_id`). A spec pinned to an older job may name the
 `protvar` or `opentargets_variant` builders; the client renders those values as
 plain text.
 

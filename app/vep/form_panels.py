@@ -427,8 +427,7 @@ def _place_spec_options(panels: list[dict], assembly_name: str | None) -> None:
 
 
 def live_panel_full_width(panel_id: str) -> bool | None:
-    """Whether the live panel definition lays this panel out full width, or None
-    for a panel id it no longer has."""
+    """The live `full_width` for this panel, or None for an unknown panel id."""
     panel = next((p for p in _PANELS if p["id"] == panel_id), None)
     return None if panel is None else panel.get("full_width", False)
 

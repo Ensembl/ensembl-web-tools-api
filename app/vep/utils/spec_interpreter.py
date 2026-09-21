@@ -974,8 +974,8 @@ def compile_plugin(index_map: dict[str, int], spec: PluginSpec) -> PluginPlan:
             **index_map,
             **{name: site_width + i for i, name in enumerate(PSEUDO_COLUMNS)},
         }
-    # A template may read columns the plugin does not own, such as HGVSg, and
-    # its output differs wherever they do.
+    # A template may read columns the plugin does not own, such as HGVSg, so
+    # they join the cache key.
     template_columns = [
         column for target in spec.targets for column in target.template_columns()
     ]

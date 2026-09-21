@@ -315,7 +315,7 @@ def _get_alt_allele_details(
         allele_sequence = ""
     else:
         allele_sequence = alt
-    # What the response reports for this allele, for plugins that read it.
+    # Holds the allele's values in PSEUDO_COLUMNS order.
     site = (
         (location.region_name, str(location.start), ref, allele_sequence)
         if location is not None

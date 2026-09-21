@@ -18,12 +18,10 @@ Transform = Literal[
     "key_value", "records", "stack", "template",
 ]
 
-# Values the parser supplies for the allele being read, beside its CSQ columns.
-# Each is what the results response reports for that allele. The '#' keeps them
-# clear of any CSQ column name.
+# Columns the parser adds for the allele being read, holding what the results
+# response reports for it. The '#' keeps them clear of CSQ column names.
 PSEUDO_COLUMNS = ("#CHROM", "#POS", "#REF", "#ALT")
 
-# `{name}` placeholders in a `template` target.
 TEMPLATE_PLACEHOLDER = re.compile(r"\{([^{}]+)\}")
 
 
@@ -692,7 +690,7 @@ class PluginSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     plugin: str
-    # The human name of what the plugin reads, used where the results name its source.
+    # The results show this name for the plugin's source.
     label: str | None = None
     scope: Literal["allele", "transcript"]
     # Where the result attaches on the response model, e.g. "mavedb".

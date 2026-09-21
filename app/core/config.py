@@ -71,6 +71,6 @@ NF_WORKSPACE_ID = config("NF_WORKSPACE_ID", default="")
 WEB_METADATA_API = config(
     "WEB_METADATA_API", default="https://www.ensembl.org/api/metadata/"
 )
-VEP_SUPPORT_PATH_ROOT = config("VEP_SUPPORT_PATH", default="/tmpdir")
-VEP_SUPPORT_PATH = os.path.join(VEP_SUPPORT_PATH_ROOT, "organisms")
-VEP_PLUGIN_DATA_PATH = os.path.join(VEP_SUPPORT_PATH_ROOT, "vep-plugins-data")
+VEP_DATA_DIR = config("VEP_DATA_DIR", default="/tmpdir")
+VEP_SUPPORT_PATH = os.path.join(VEP_DATA_DIR, "organism_data")
+VEP_PLUGIN_DATA_PATH = os.path.join(VEP_DATA_DIR, "vep_plugins_data")

@@ -28,15 +28,23 @@ stages:
   - deploy
 
 # Templates
-.branch-rules-main:
+.deploy-rules-live:
+  rules:
+    - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"
+      when: manual
+    - when: never
+
+.deploy-rules-test:
   rules:
     - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"
       when: on_success
+    - when: never
 
-.branch-rules-review:
+.deploy-rules-review:
   rules:
-    - if: $CI_COMMIT_BRANCH != "main"
+    - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH != "main"
       when: on_success
+    - when: never
 
 .deploy:
   image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
@@ -51,11 +59,6 @@ stages:
     - sed -i "s#<NFS_PATH>#${NFS_PATH}#g" deployment.yaml
     - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
     - kubectl apply -k ./
-
-.deploy-main:
-  extends:
-    - .deploy
-    - .branch-rules-main
 
 # Run tests
 Test:
@@ -127,7 +130,7 @@ Setup-review:
 Review:
   extends:
     - .deploy
-    - .branch-rules-review
+    - .deploy-rules-review
   stage: deploy-preview
   environment:
     name: development
@@ -161,7 +164,8 @@ Stop_review:
 # Deploy main branch to dev/staging
 Dev:
   extends:
-    - .deploy-main
+    - .deploy
+    - .deploy-rules-test
   stage: deploy-preview
   environment:
     name: development
@@ -171,11 +175,11 @@ Dev:
 
 Staging:
   extends:
-    - .deploy-main
+    - .deploy
+    - .deploy-rules-test
   stage: deploy-preview
   environment:
     name: staging
-
   variables:
     AGENT: ${STAGING_AGENT}
     NS: ${STAGING_NS}
@@ -183,7 +187,8 @@ Staging:
 # Deploy main branch to production
 Production:
   extends:
-    - .deploy-main
+    - .deploy
+    - .deploy-rules-live
   stage: deploy
   environment:
     name: production
@@ -194,7 +199,8 @@ Production:
 
 Fallback:
   extends:
-    - .deploy-main
+    - .deploy
+    - .deploy-rules-live
   stage: deploy
   environment:
     name: fallback

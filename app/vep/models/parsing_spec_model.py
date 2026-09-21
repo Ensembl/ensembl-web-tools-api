@@ -4,6 +4,7 @@ The section maps plugin CSQ columns to structured annotations. Unknown keys are
 rejected so an unsupported spec cannot silently change result parsing.
 """
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -14,8 +15,16 @@ ValueType = Literal["string", "float", "int", "raw"]
 # Transforms implemented by the interpreter.
 Transform = Literal[
     "scalar", "list", "first", "zip", "regex", "pattern_map", "chunk", "positional",
-    "key_value", "records", "stack",
+    "key_value", "records", "stack", "template",
 ]
+
+# Values the parser supplies for the allele being read, beside its CSQ columns.
+# Each is what the results response reports for that allele. The '#' keeps them
+# clear of any CSQ column name.
+PSEUDO_COLUMNS = ("#CHROM", "#POS", "#REF", "#ALT")
+
+# `{name}` placeholders in a `template` target.
+TEMPLATE_PLACEHOLDER = re.compile(r"\{([^{}]+)\}")
 
 
 class DropEntries(BaseModel):
@@ -313,6 +322,14 @@ class TargetSpec(BaseModel):
                    plugin happened to emit. A piece without `kv_delimiter` is
                    dropped rather than raising, since malformed/legacy pieces
                    should not break parsing of an otherwise-good value.
+      template     columns -> one string, filling `template`'s `{name}`
+                   placeholders. Without `from`, each placeholder names a
+                   column (the PSEUDO_COLUMNS included). With `from`, `pattern`
+                   is matched against that one column and each placeholder names
+                   one of its groups. An empty placeholder or a failed match
+                   yields null.
+
+    Every transform can read the PSEUDO_COLUMNS as it reads a CSQ column.
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -344,8 +361,10 @@ class TargetSpec(BaseModel):
     # `zip` / `chunk`: discard produced elements, then reshape the list.
     drop_when: DropWhen | None = None
     post: list[PostOp] | None = None
-    # `regex` only.
+    # `regex`, and `template` with `from`.
     pattern: str | None = None
+    # `template` only.
+    template: str | None = None
     each: bool = False
     # `pattern_map` only: a column-name pattern with one `{placeholder}`, e.g.
     # "gnomAD_exomes_AF_{pop}", plus any matching columns to leave out (the
@@ -444,6 +463,8 @@ class TargetSpec(BaseModel):
                 raise ValueError("stack requires `of` naming its source groups")
             if self.source is not None:
                 raise ValueError("stack reads its columns from `of`, not `from`")
+        elif self.transform == "template":
+            self._check_template()
         else:
             if not isinstance(self.source, str):
                 raise ValueError(f"{self.transform} requires `from` to be a single column")
@@ -452,6 +473,11 @@ class TargetSpec(BaseModel):
                     f"`as` is only valid for zip/regex/chunk/positional, not {self.transform}"
                 )
         # Checked outside the chain above, which each branch leaves early.
+        if self.template is not None and self.transform != "template":
+            raise ValueError(
+                f"`template` is only valid for the template transform, not "
+                f"{self.transform}"
+            )
         if self.record_sep is not None:
             if self.transform != "chunk":
                 raise ValueError(
@@ -460,6 +486,54 @@ class TargetSpec(BaseModel):
             if self.record_sep == self.sep:
                 raise ValueError("chunk `record_sep` must differ from `sep`")
         return self
+
+    def _check_template(self) -> None:
+        if not self.template:
+            raise ValueError("template requires `template`")
+        if self.as_fields:
+            raise ValueError("`as` is not valid for template")
+        names = TEMPLATE_PLACEHOLDER.findall(self.template)
+        if not names:
+            raise ValueError("template needs at least one `{name}` placeholder")
+        if self.source is None:
+            if self.pattern:
+                raise ValueError("template `pattern` needs `from`")
+            return
+        if not isinstance(self.source, str):
+            raise ValueError("template requires `from` to be a single column")
+        if not self.pattern:
+            raise ValueError("template with `from` requires `pattern`")
+        try:
+            groups = re.compile(self.pattern).groupindex
+        except re.error as error:
+            raise ValueError(f"template `pattern` is not a valid regex: {error}") from error
+        missing = [name for name in names if name not in groups]
+        if missing:
+            raise ValueError(
+                f"template placeholders {missing} are not groups of `pattern`"
+            )
+
+    def template_columns(self) -> list[str]:
+        if self.transform != "template":
+            return []
+        if self.source is not None:
+            return [self.source]
+        return TEMPLATE_PLACEHOLDER.findall(self.template)
+
+    def read_columns(self) -> list[str]:
+        if self.transform == "template":
+            columns = self.template_columns()
+        elif isinstance(self.source, list):
+            columns = list(self.source)
+        elif self.source:
+            columns = [self.source]
+        else:
+            columns = []
+        for group in self.of or []:
+            columns += group.source
+        if self.when is not None:
+            columns.append(self.when.field)
+        return columns
 
 
 class JoinSpec(BaseModel):

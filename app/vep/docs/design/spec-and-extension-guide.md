@@ -227,7 +227,7 @@ What genuinely remains code:
 | AF label **decoding** | `form_panels.af_population_label` | a function over a declared table, shared with the results metadata — not presentation data |
 | the always-on VEP invariants (`force_overwrite`, `symbol`, `numbers`, `mane`…) | `pipeline_model.base_config_lines` | invocation invariants, not per-option |
 | plugin-data path resolution | `pipeline_model.py` | see [§3](#3-where-the-data-actually-lives) |
-| named link builders (3 of them) | `displaySpecRenderer.tsx` | they need job context no annotation field carries |
+| the `protein_popup` link builder | `displaySpecRenderer.tsx` | it opens an in-app popup from job context no annotation field carries |
 | formatter functions | `annotationRows.tsx` | the 8 `format` values are names for these |
 | results **filter** fields | `app/vep/utils/results_filters.py` + `resultsFilterFields.ts` | the filter path is a streaming scanner over the VCF, not the spec renderer |
 
@@ -876,6 +876,14 @@ fails loudly at load, which is far cheaper than silently empty annotations.
 | `records` | `from, as[], sep, item_sep` | two levels of separator: records, then a record's fields by index |
 | `stack` | `of[]` | several column groups, each a tagged `zip`, concatenated into one list |
 | `key_value` | `from, pair_delimiter, kv_delimiter` | one column → dict; order-independent by construction |
+| `template` | `template, from?, pattern?` | one string from `{name}` placeholders: columns without `from`, or `pattern`'s groups matched against `from`; any empty part → null |
+
+Every transform can also read four pseudo-columns: `#CHROM`, `#POS`, `#REF` and
+`#ALT`. Each holds what the results response reports for the allele being
+parsed: the location's region and start, the reference allele and this
+alternative allele. Only a plugin that names one pays to have them added to the
+row. OpenTargets builds its variant id this way:
+`"template": "{#CHROM}_{#POS}_{#REF}_{#ALT}"`.
 
 `stack` deserves a note: it exists for a source that publishes the same shape
 several times over in differently-named columns, carrying the distinction only in
@@ -1031,8 +1039,8 @@ Use an option-level `heading` **or** per-block headings, not both.
 | `key` | React key; absent means "use position", which is stable for these fixed lists |
 
 A row needs exactly one of `from` or `compose` — **except** a row whose value
-*is* a named builder link (the OpenTargets variant link is built from the
-variant's coordinates, which no plugin parsed).
+*is* a named builder link. No current row does this, but specs pinned to older
+jobs still do, so it still loads.
 
 ### 10.5 The eight formats
 
@@ -1079,7 +1087,8 @@ reader sees if each part becomes its own link.
   "label": { "from"|"template", "format"?, "wrap"? },  // ⇒ a label/value row
   "cells": [ … ],                                      // XOR
   "rows":  [ {label, from, format?} ],                 // a stack of labelled field-rows
-  "link":  { … }                                       // a trailing builder link (label layout only)
+  "link":  { … },                                      // a trailing link (label layout only)
+  "link_from": "<plugin>.<field>"                      // the href, read from the entity into `{value}`
 }
 ```
 
@@ -1127,14 +1136,16 @@ look like data, so unknown scale names are rejected at load.
 
 ### 10.10 Link builders (the last frontend seam)
 
-Three named builders exist, for links a template cannot express because they need
-job context:
+One named builder exists, for a link a template cannot express:
 
 | builder | produces |
 |---|---|
-| `protvar` | the variant's ProtVar page — icon + the row's own value as the link text |
-| `opentargets_variant` | the variant's OpenTargets page; this **is** the row's value, there being no annotation field behind it |
 | `protein_popup` | an in-app "View in" Entity Viewer popup, built from the job genome plus the consequence's gene |
+
+ProtVar and OpenTargets links are templates over parsed fields (`protvar.url`,
+`opentargets.variant_id`). A spec pinned to an older job may still name the
+`protvar` or `opentargets_variant` builders; the client renders those values as
+plain text.
 
 Everything else should be a `template`. `interpolateUrl` deliberately does *not*
 percent-encode — values carry URL-significant characters that are intended, and

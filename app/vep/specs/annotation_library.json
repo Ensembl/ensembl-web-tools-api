@@ -192,6 +192,13 @@
               "partner",
               "score"
             ]
+          },
+          {
+            "field": "url",
+            "from": "HGVSg",
+            "transform": "template",
+            "pattern": "^(?P<region>[^:]+):g\\.(?P<position>\\d+)(?P<ref>[ACGTN]+)>(?P<alt>[ACGTN]+)$",
+            "template": "https://www.ebi.ac.uk/ProtVar/g/{region}/{position}/{ref}/{alt}?annotation=fun"
           }
         ]
       },
@@ -1063,6 +1070,11 @@
               "beta",
               "p_value"
             ]
+          },
+          {
+            "field": "variant_id",
+            "transform": "template",
+            "template": "{#CHROM}_{#POS}_{#REF}_{#ALT}"
           }
         ]
       },
@@ -3188,9 +3200,10 @@
             "rows": [
               {
                 "label": "",
+                "from": "opentargets.variant_id",
                 "link": {
                   "kind": "external",
-                  "builder": "opentargets_variant"
+                  "template": "https://platform.opentargets.org/variant/{value}"
                 }
               }
             ],
@@ -3307,8 +3320,9 @@
                 },
                 "link": {
                   "kind": "external",
-                  "builder": "protvar"
-                }
+                  "template": "{value}"
+                },
+                "link_from": "protvar.url"
               }
             ]
           },
@@ -3328,8 +3342,9 @@
               ],
               "link": {
                 "kind": "external",
-                "builder": "protvar"
-              }
+                "template": "{value}"
+              },
+              "link_from": "protvar.url"
             }
           },
           {
@@ -3366,8 +3381,9 @@
               ],
               "link": {
                 "kind": "external",
-                "builder": "protvar"
-              }
+                "template": "{value}"
+              },
+              "link_from": "protvar.url"
             }
           },
           {

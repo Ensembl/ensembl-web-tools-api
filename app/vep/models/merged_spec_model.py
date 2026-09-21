@@ -531,6 +531,10 @@ class MergedSpec(BaseModel):
                     if err:
                         errors.append(err)
                         continue
+                    if block.item.link_from:
+                        err = scalar_ref_error(oid, block.item.link_from)
+                        if err:
+                            errors.append(err)
                     refs = list(block.item.item_field_refs())
                     if block.group_by:
                         # The field the items group on is an item field too, and
@@ -616,6 +620,10 @@ class MergedSpec(BaseModel):
                         plugin, list_field = list_ref
                         if field_error(oid, plugin, list_field):
                             continue  # already reported by field_refs above
+                        if row.item.link_from:
+                            err = scalar_ref_error(oid, row.item.link_from)
+                            if err:
+                                errors.append(err)
                         refs = list(row.item.item_field_refs())
                         if row.where:
                             # The table's identical `where` was checked and the

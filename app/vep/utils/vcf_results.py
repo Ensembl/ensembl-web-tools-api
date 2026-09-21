@@ -234,6 +234,7 @@ def _spec_annotations(
     scope: str,
     cache: dict | None = None,
     plans: dict | None = None,
+    site: tuple[str, str, str, str] | None = None,
 ) -> list[model.Annotation]:
     """Build annotations for one CSQ entry and parsing scope.
 
@@ -247,7 +248,7 @@ def _spec_annotations(
         # A plugin without header columns did not run for this VCF.
         if plan is not None and not plan.runnable:
             continue
-        data = apply_plugin_spec(csq_values, index_map, plugin, cache, plan)
+        data = apply_plugin_spec(csq_values, index_map, plugin, cache, plan, site)
         if data is not None:
             annotations.append(
                 model.Annotation(plugin=plugin.plugin, scope=scope, data=data)
@@ -301,12 +302,25 @@ def _get_alt_allele_details(
     spec: ParsingSpec,
     sv: dict | None = None,
     plans: dict | None = None,
+    location: model.Location | None = None,
 ) -> model.AlternativeVariantAllele:
     """Build one alternate allele from matching CSQ entries.
 
     Structural-variant display data overrides the rendered type and allele while
     CSQ matching continues to use VEP's allele value.
     """
+    if sv:
+        allele_sequence = sv["allele"]
+    elif alt == "copy_number_variation":
+        allele_sequence = ""
+    else:
+        allele_sequence = alt
+    # What the response reports for this allele, for plugins that read it.
+    site = (
+        (location.region_name, str(location.start), ref, allele_sequence)
+        if location is not None
+        else None
+    )
     consequences = []
     # Resolve plans once per file; this fallback resolves them once per allele.
     if plans is None and spec is not None:
@@ -330,7 +344,7 @@ def _get_alt_allele_details(
                 get_csq_value(csq_values, "Existing_variation", None, index_map)
             )
             allele_annotations = _spec_annotations(
-                csq_values, index_map, spec, "allele", parse_cache, plans
+                csq_values, index_map, spec, "allele", parse_cache, plans, site
             )
             allele_level_captured = True
 
@@ -397,7 +411,13 @@ def _get_alt_allele_details(
                     ),
                     # Generic spec-driven annotations: everything else.
                     annotations=_spec_annotations(
-                        csq_values, index_map, spec, "transcript", parse_cache, plans
+                        csq_values,
+                        index_map,
+                        spec,
+                        "transcript",
+                        parse_cache,
+                        plans,
+                        site,
                     ),
                 )
             )
@@ -409,12 +429,6 @@ def _get_alt_allele_details(
                 )
             )
 
-    if sv:
-        allele_sequence = sv["allele"]
-    elif alt == "copy_number_variation":
-        allele_sequence = ""
-    else:
-        allele_sequence = alt
     return model.AlternativeVariantAllele(
         allele_sequence=allele_sequence,
         allele_type=allele_type,
@@ -1347,7 +1361,14 @@ def _get_results_from_records(
 
             alt_alleles = [
                 _get_alt_allele_details(
-                    record.REF, alt, csq_strings, prediction_index_map, spec, sv, plans
+                    record.REF,
+                    alt,
+                    csq_strings,
+                    prediction_index_map,
+                    spec,
+                    sv,
+                    plans,
+                    location=location,
                 )
                 for alt in alt_allele_strings
             ]

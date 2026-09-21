@@ -3523,6 +3523,20 @@
         ]
       },
       {
+        "option_id": "gnomad_exomes",
+        "heading": "gnomAD Exomes v2.1.1",
+        "blocks": [
+          {
+            "kind": "map_rows",
+            "from": "gnomad_exomes_v2.populations",
+            "overall_from": "gnomad_exomes_v2.overall",
+            "vocabulary": "af_populations",
+            "scope": "gnomad_exomes",
+            "format": "num"
+          }
+        ]
+      },
+      {
         "option_id": "gnomad_genomes",
         "heading": "gnomAD Genomes v4.1.1",
         "blocks": [
@@ -3530,6 +3544,20 @@
             "kind": "map_rows",
             "from": "gnomad_genomes.populations",
             "overall_from": "gnomad_genomes.overall",
+            "vocabulary": "af_populations",
+            "scope": "gnomad_genomes",
+            "format": "num"
+          }
+        ]
+      },
+      {
+        "option_id": "gnomad_genomes",
+        "heading": "gnomAD Genomes v2.1",
+        "blocks": [
+          {
+            "kind": "map_rows",
+            "from": "gnomad_genomes_v2.populations",
+            "overall_from": "gnomad_genomes_v2.overall",
             "vocabulary": "af_populations",
             "scope": "gnomad_genomes",
             "format": "num"
@@ -3577,6 +3605,35 @@
             "kind": "map_rows",
             "from": "gnomad_sv.populations",
             "overall_from": "gnomad_sv.overall",
+            "vocabulary": "af_populations",
+            "scope": "gnomad_sv",
+            "format": "num"
+          }
+        ]
+      },
+      {
+        "option_id": "gnomad_sv",
+        "heading": "gnomAD SV v2.1",
+        "blocks": [
+          {
+            "kind": "rows",
+            "rows": [
+              {
+                "key": "sv_id",
+                "label": "Structural variant",
+                "from": "gnomad_sv_v2.id"
+              },
+              {
+                "key": "sv_type",
+                "label": "Type",
+                "from": "gnomad_sv_v2.svtype"
+              }
+            ]
+          },
+          {
+            "kind": "map_rows",
+            "from": "gnomad_sv_v2.populations",
+            "overall_from": "gnomad_sv_v2.overall",
             "vocabulary": "af_populations",
             "scope": "gnomad_sv",
             "format": "num"

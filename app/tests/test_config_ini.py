@@ -712,7 +712,7 @@ def test_gnomad_exomes_v2_default_is_overall_af(monkeypatch, tmp_path):
     lines = build_lines_37(monkeypatch, tmp_path, gnomad_exomes=True)
     line = find_line(lines, "short_name=gnomAD_exomes")
     assert line is not None
-    assert "gnomad.exomes.r2.1.sites.chr###CHR###_AF.vcf.gz" in line
+    assert "gnomad.exomes.r2.1.sites.chr###CHR###_noVEP_AF.vcf.gz" in line
     assert gnomad_exomes_v2_fields(lines) == "AF"
 
 

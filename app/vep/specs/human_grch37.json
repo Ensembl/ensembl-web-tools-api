@@ -432,7 +432,7 @@
           "emit": "custom",
           "omit_if_no_fields": true,
           "params": {
-            "file": "{path}/gnomad.exomes.r2.1.sites.chr###CHR###_AF.vcf.gz",
+            "file": "{path}/gnomad.exomes.r2.1.sites.chr###CHR###_noVEP_AF.vcf.gz",
             "short_name": "gnomAD_exomes",
             "format": "vcf",
             "type": "exact"

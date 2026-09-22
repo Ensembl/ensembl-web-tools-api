@@ -20,6 +20,7 @@ import os
 import re
 import tempfile
 import shutil
+import unicodedata
 
 from starlette.requests import ClientDisconnect
 
@@ -29,10 +30,12 @@ from streaming_form_data.validators import ValidationError
 
 from core.config import NF_WORK_DIR
 
-# The form shows this limit as 250 MB, in SI units.
+# 250 MB upload limit.
 MAX_FILE_SIZE = 250 * 10**6
 MAX_REQUEST_BODY_SIZE = MAX_FILE_SIZE + 1024
-SAFE_FILENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$")
+MAX_FILENAME_LENGTH = 255
+UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
+FILENAME_SUFFIX = re.compile(r"(?:\.[A-Za-z0-9_-]{1,16}){1,2}$")
 
 
 class UnsafeFileNameException(Exception):
@@ -57,27 +60,43 @@ class MaxBodySizeValidator:
             raise MaxBodySizeException(body_len=self.body_len)
 
 
+def sanitize_filename(file_name: str | None) -> str:
+    """Return a safe filename without directory components."""
+    if not file_name:
+        raise UnsafeFileNameException(file_name or "")
+
+    basename = re.split(r"[\\/]", file_name)[-1]
+    ascii_name = (
+        unicodedata.normalize("NFKD", basename)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    sanitized = UNSAFE_FILENAME_CHARS.sub("_", ascii_name)
+    sanitized = re.sub(r"_+", "_", sanitized).strip("._-")
+    if len(sanitized) > MAX_FILENAME_LENGTH:
+        suffix_match = FILENAME_SUFFIX.search(sanitized)
+        suffix = suffix_match.group() if suffix_match else ""
+        stem = sanitized[: -len(suffix)] if suffix else sanitized
+        stem = stem[: MAX_FILENAME_LENGTH - len(suffix)].rstrip("._-")
+        sanitized = stem + suffix
+    if not sanitized:
+        raise UnsafeFileNameException(file_name)
+    return sanitized
+
+
 class Streamer:
     def __init__(self, request):
         self.request = request
-        self.filename = self.request.headers.get("Filename", "temp_name")
-        self.file_name_validator(self.filename)
-        self.temp_dir = tempfile.mkdtemp(dir=NF_WORK_DIR or None)
-        self.filepath = os.path.join(
-            str(self.temp_dir), os.path.basename(self.filename)
+        self.filename = sanitize_filename(
+            self.request.headers.get("Filename", "temp_name")
         )
+        self.temp_dir = tempfile.mkdtemp(dir=NF_WORK_DIR or None)
+        self.filepath = os.path.join(str(self.temp_dir), self.filename)
         self._input_file = FileTarget(self.filepath)
 
         self.parser = StreamingFormDataParser(headers=self.request.headers)
         self.parameters = ValueTarget()
         self.genome_id = ValueTarget()
-
-    @staticmethod
-    def file_name_validator(file_name: str | None = None):
-        if not file_name:
-            raise Exception
-        if not SAFE_FILENAME.fullmatch(file_name):
-            raise UnsafeFileNameException(file_name)
 
     async def stream(self):
         body_validator = MaxBodySizeValidator(MAX_REQUEST_BODY_SIZE)
@@ -91,10 +110,9 @@ class Streamer:
                 self.parser.data_received(chunk)
 
             if self.filename == "temp_name":
-                multipart_name = os.path.basename(
+                multipart_name = sanitize_filename(
                     self._input_file.multipart_filename or "input"
                 )
-                self.file_name_validator(multipart_name)
                 os.rename(
                     self.filepath,
                     os.path.join(self.temp_dir, multipart_name),

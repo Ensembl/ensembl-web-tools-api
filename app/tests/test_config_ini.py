@@ -269,6 +269,14 @@ def test_spliceai_selects_the_assembly_specific_snv_file(monkeypatch, tmp_path):
     assert "snv_ensembl=" not in line37
 
 
+def test_geno2mp_asks_for_its_url(monkeypatch, tmp_path):
+    for lines in (
+        build_lines(monkeypatch, tmp_path, geno2mp=True),
+        build_lines_37(monkeypatch, tmp_path, geno2mp=True),
+    ):
+        assert find_line(lines, "plugin Geno2MP").endswith(",url=1")
+
+
 # --- 6. static (assembly-independent) plugins --------------------------------
 
 

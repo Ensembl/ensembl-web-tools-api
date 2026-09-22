@@ -15,7 +15,13 @@ from urllib.parse import unquote
 from functools import lru_cache
 from pathlib import Path
 
-from vep.models.parsing_spec_model import PluginSpec, TargetSpec, WhenSpec
+from vep.models.parsing_spec_model import (
+    PSEUDO_COLUMNS,
+    TEMPLATE_PLACEHOLDER,
+    PluginSpec,
+    TargetSpec,
+    WhenSpec,
+)
 from vep.utils.csq import (
     first_amp,
     get_csq_value,
@@ -587,6 +593,27 @@ def _apply_key_value(csq_values, index_map, target: TargetSpec) -> dict:
     return values
 
 
+def _apply_template(csq_values, index_map, target: TargetSpec) -> str | None:
+    if target.source is None:
+        values = {
+            name: _column(csq_values, name, index_map)
+            for name in target.template_columns()
+        }
+    else:
+        raw = _column(csq_values, target.source, index_map)
+        found = re.match(target.pattern, raw) if raw else None
+        if found is None:
+            return None
+        values = found.groupdict()
+    filled = target.template
+    for name in TEMPLATE_PLACEHOLDER.findall(target.template):
+        value = values.get(name)
+        if value is None or value in _NULLISH:
+            return None
+        filled = filled.replace("{" + name + "}", value)
+    return filled
+
+
 def _when_holds(csq_values, index_map, when: WhenSpec | None) -> bool:
     if when is None:
         return True
@@ -633,6 +660,8 @@ def _build_target(csq_values, index_map, target: TargetSpec, plan=None):
         return _apply_records(csq_values, index_map, target)
     if target.transform == "stack":
         return _apply_stack(csq_values, index_map, target)
+    if target.transform == "template":
+        return _apply_template(csq_values, index_map, target)
 
     raw = _column(csq_values, target.source, index_map)
     if target.transform == "scalar":
@@ -858,15 +887,27 @@ class PluginPlan:
     `runnable` is False when none of the plugin's columns are in the header —
     the plugin never ran, so it can be skipped for every row of the file rather
     than gated on each one.
+
+    `site_index_map` is set only for a plugin that reads a PSEUDO_COLUMN. It is
+    the header's map with the pseudo-columns placed at `site_width` onwards, so
+    only those plugins pay to have the allele's values appended to the row.
     """
 
-    __slots__ = ("runnable", "key_indices", "input_indices", "pattern_columns")
+    __slots__ = (
+        "runnable", "key_indices", "input_indices", "pattern_columns",
+        "site_width", "site_index_map",
+    )
 
-    def __init__(self, runnable, key_indices, input_indices, pattern_columns):
+    def __init__(
+        self, runnable, key_indices, input_indices, pattern_columns,
+        site_width=None, site_index_map=None,
+    ):
         self.runnable = runnable
         self.key_indices = key_indices
         self.input_indices = input_indices
         self.pattern_columns = pattern_columns
+        self.site_width = site_width
+        self.site_index_map = site_index_map
 
 
 def _pattern_columns(
@@ -916,16 +957,41 @@ def _match_columns(spec: PluginSpec) -> list[str]:
     return columns
 
 
+def _reads_site(spec: PluginSpec) -> bool:
+    columns = [column for target in spec.targets for column in target.read_columns()]
+    columns += _match_columns(spec)
+    if spec.applies_to is not None:
+        columns += [spec.applies_to.column, spec.applies_to.listed_in]
+    return any(column in PSEUDO_COLUMNS for column in columns)
+
+
 def compile_plugin(index_map: dict[str, int], spec: PluginSpec) -> PluginPlan:
     """Resolve one plugin against a CSQ header. See PluginPlan."""
+    site_width = site_index_map = None
+    if _reads_site(spec):
+        site_width = max(index_map.values(), default=-1) + 1
+        site_index_map = {
+            **index_map,
+            **{name: site_width + i for i, name in enumerate(PSEUDO_COLUMNS)},
+        }
+    # A template may read columns the plugin does not own, such as HGVSg, so
+    # they join the cache key.
+    template_columns = [
+        column for target in spec.targets for column in target.template_columns()
+    ]
+    if site_index_map is not None:
+        template_columns += PSEUDO_COLUMNS
     # Deduplicated, and in declaration order, so the key is stable across runs.
-    key_columns = list(dict.fromkeys([*spec.csq_fields, *_match_columns(spec)]))
+    key_columns = list(
+        dict.fromkeys([*spec.csq_fields, *_match_columns(spec), *template_columns])
+    )
+    key_map = site_index_map or index_map
     return PluginPlan(
         runnable=has_any_column(index_map, *spec.csq_fields),
         # Absent columns simply drop out: `_column` returned None for them, so
         # they never distinguished one row from another anyway.
         key_indices=tuple(
-            index_map[column] for column in key_columns if column in index_map
+            key_map[column] for column in key_columns if column in key_map
         ),
         input_indices=tuple(
             index_map[column]
@@ -937,7 +1003,18 @@ def compile_plugin(index_map: dict[str, int], spec: PluginSpec) -> PluginPlan:
             for target in spec.targets
             if target.transform == "pattern_map"
         },
+        site_width=site_width,
+        site_index_map=site_index_map,
     )
+
+
+def _with_site(csq_values: list[str], width: int, site) -> list[str]:
+    """The row with the allele's PSEUDO_COLUMNS values appended at `width`."""
+    if len(csq_values) >= width:
+        values = csq_values[:width]
+    else:
+        values = csq_values + [""] * (width - len(csq_values))
+    return values + list(site or ("",) * len(PSEUDO_COLUMNS))
 
 
 def compile_parsing_spec(index_map: dict[str, int], spec) -> dict[str, PluginPlan]:
@@ -952,6 +1029,7 @@ def apply_plugin_spec(
     spec: PluginSpec,
     cache: dict | None = None,
     plan: PluginPlan | None = None,
+    site: tuple[str, str, str, str] | None = None,
 ) -> dict | None:
     """One plugin's annotation for this CSQ entry, or None if there is nothing.
 
@@ -962,12 +1040,18 @@ def apply_plugin_spec(
     `plan` is this plugin resolved against the header (see PluginPlan). It is
     optional so a caller with only an index_map still works; pass one built once
     per file to keep the header work out of the per-row path.
+
+    `site` holds the allele's PSEUDO_COLUMNS values, in that order.
     """
     if plan is None:
         plan = compile_plugin(index_map, spec)
 
     if not plan.runnable:
         return None
+
+    if plan.site_index_map is not None:
+        csq_values = _with_site(csq_values, plan.site_width, site)
+        index_map = plan.site_index_map
 
     if not _row_in_scope(csq_values, index_map, spec.applies_to):
         return None

@@ -533,18 +533,21 @@ def test_af_source_descriptor():
         "source": "gnomad_exomes",
         "population": "",
         "label": "All",
+        "source_label": "gnomAD exomes",
     }
     assert descriptor("gnomAD_genomes_AF_grpmax") == {
         "key": "gnomAD_genomes_AF_grpmax",
         "source": "gnomad_genomes",
         "population": "grpmax",
         "label": "Maximum across all groups",
+        "source_label": "gnomAD genomes",
     }
     assert descriptor("AoU_gvs_all_af") == {
         "key": "AoU_gvs_all_af",
         "source": "all_of_us",
         "population": "",
         "label": "All",
+        "source_label": "All of Us",
     }
     assert descriptor("AoU_gvs_afr_af")["population"] == "afr"
     assert descriptor("AoU_gvs_afr_af")["label"] == "African"
@@ -557,6 +560,7 @@ def test_af_source_descriptor():
         "source": "gnomad_sv",
         "population": "",
         "label": "All",
+        "source_label": "gnomAD SV",
     }
     assert descriptor("gnomAD_SV_AF_rmi")["label"] == "Remaining"
     assert descriptor("gnomAD_SV") is None
@@ -567,6 +571,7 @@ def test_af_source_descriptor():
         "source": "gnomad_cnv",
         "population": "",
         "label": "All",
+        "source_label": "gnomAD CNV",
     }
     assert descriptor("gnomAD_CNV_SF_remaining")["label"] == "Remaining"
     assert descriptor("gnomAD_CNV") is None
@@ -583,6 +588,7 @@ def test_af_source_descriptor_grch37_v2_grammar():
         "source": "gnomad_exomes",
         "population": "controls_AF_afr_male",
         "label": "African & African-American · XY · Controls",
+        "source_label": "gnomAD exomes",
     }
     assert rf.af_source_descriptor("gnomAD_exomes_AF", spec)["population"] == ""
     assert rf.af_source_descriptor("gnomAD_exomes_AF_nfe_seu", spec)["label"] == (
@@ -595,6 +601,64 @@ def test_af_source_descriptor_grch37_v2_grammar():
     assert rf.af_source_descriptor("gnomAD_CNV_SF", spec) is None
 
 
+AF_SOURCE_LABELS = {
+    "gnomad_exomes": "gnomAD exomes",
+    "gnomad_genomes": "gnomAD genomes",
+    "all_of_us": "All of Us",
+    "gnomad_sv": "gnomAD SV",
+    "gnomad_cnv": "gnomAD CNV",
+}
+
+
+def _af_plugin_labels(spec):
+    return {
+        plugin.output.split(".")[-1]: plugin.label
+        for plugin in spec.plugins
+        if plugin.output.startswith("frequencies.")
+    }
+
+
+def test_af_plugins_carry_source_labels_on_both_assemblies():
+    assert _af_plugin_labels(PARSING_SPEC) == AF_SOURCE_LABELS
+    grch37 = _af_plugin_labels(load_merged_spec("human_grch37").parsing)
+    assert grch37 == {
+        source: AF_SOURCE_LABELS[source]
+        for source in ("gnomad_exomes", "gnomad_genomes", "gnomad_sv")
+    }
+
+
+def test_af_source_label_comes_from_the_pinned_plugin():
+    spec = PARSING_SPEC.model_copy(deep=True)
+    plugin = next(p for p in spec.plugins if p.output == "frequencies.gnomad_exomes")
+    plugin.label = "Pinned name"
+    descriptor = rf.af_source_descriptor("gnomAD_exomes_AF_nfe", spec)
+    assert descriptor["source_label"] == "Pinned name"
+
+
+def test_af_source_label_falls_back_to_the_live_library_for_an_older_pin():
+    spec = PARSING_SPEC.model_copy(deep=True)
+    for plugin in spec.plugins:
+        plugin.label = None
+    for column, name in [
+        ("gnomAD_exomes_AF", "gnomAD exomes"),
+        ("gnomAD_genomes_AF_grpmax", "gnomAD genomes"),
+        ("AoU_gvs_afr_af", "All of Us"),
+        ("gnomAD_SV_AF", "gnomAD SV"),
+        ("gnomAD_CNV_SF", "gnomAD CNV"),
+    ]:
+        assert rf.af_source_descriptor(column, spec)["source_label"] == name
+
+
+def test_af_source_label_is_none_for_an_unknown_source():
+    spec = PARSING_SPEC.model_copy(deep=True)
+    plugin = next(p for p in spec.plugins if p.output == "frequencies.gnomad_exomes")
+    plugin.output = "frequencies.unheard_of"
+    plugin.label = None
+    descriptor = rf.af_source_descriptor("gnomAD_exomes_AF", spec)
+    assert descriptor["source"] == "unheard_of"
+    assert descriptor["source_label"] is None
+
+
 def test_af_source_descriptor_grch37_sv_v2_prefix_grammar():
     # gnomAD SV v2 (GRCh37) populations are PREFIX-named (`gnomAD_SV_AFR_AF`, not
     # v4's suffix `gnomAD_SV_AF_afr`); the population code is the bare uppercase
@@ -605,6 +669,7 @@ def test_af_source_descriptor_grch37_sv_v2_prefix_grammar():
         "source": "gnomad_sv",
         "population": "AFR",
         "label": "African",
+        "source_label": "gnomAD SV",
     }
     assert rf.af_source_descriptor("gnomAD_SV_AF", spec)["population"] == ""  # overall
     assert rf.af_source_descriptor("gnomAD_SV_EUR_AF", spec)["label"] == "European"

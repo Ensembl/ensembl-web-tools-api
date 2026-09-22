@@ -45,6 +45,7 @@ from vep.models.pipeline_model import (
 )
 from vep.models.submission_form import Dropdown, FormConfig
 from vep.models.upload_vcf_files import (
+    MAX_FILE_SIZE,
     Streamer,
     MaxBodySizeException,
     UnsafeFileNameException,
@@ -440,6 +441,7 @@ async def get_form_config(
         return {
             "parameters": form_config,
             "panels": get_visible_panels(assembly_name=assembly_name),
+            "max_upload_bytes": MAX_FILE_SIZE,
         }
 
     except HTTPError as e:

@@ -10,6 +10,8 @@ and the panels pinned for a submission are the same ones /form_config returns
 for that assembly.
 """
 
+import json
+
 import pytest
 from pydantic import FilePath
 
@@ -97,6 +99,39 @@ def test_sidecar_round_trips_the_panels(tmp_path):
 
     loaded = load_display_panels_sidecar(_vcf_path(tmp_path))
     assert dump_display_panels(loaded) == panels
+
+
+def _full_width(panels):
+    return {panel["id"]: panel["full_width"] for panel in panels}
+
+
+def test_only_the_phenotype_panel_is_full_width():
+    panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14")
+    widths = _full_width(panels)
+    assert widths.pop("phenotype_and_disease_associations") is True
+    assert widths and not any(widths.values())
+
+
+def test_full_width_survives_the_sidecar(tmp_path):
+    panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14")
+    write_display_panels_sidecar(tmp_path, to_display_panels(panels))
+    loaded = dump_display_panels(load_display_panels_sidecar(_vcf_path(tmp_path)))
+    assert _full_width(loaded) == _full_width(panels)
+
+
+def test_a_panel_pinned_without_full_width_takes_it_from_the_live_definitions(
+    tmp_path,
+):
+    from app.vep.utils.vcf_results import _load_pinned_display_panels
+
+    pinned = [
+        {"id": "phenotype_and_disease_associations", "label": "Phenotypes"},
+        {"id": "allele_frequencies", "label": "Allele frequencies"},
+        {"id": "retired_panel", "label": "Retired"},
+    ]
+    (tmp_path / DISPLAY_PANELS_SIDECAR_FILE).write_text(json.dumps(pinned))
+    panels = _load_pinned_display_panels(_vcf_path(tmp_path))
+    assert [panel.full_width for panel in panels] == [True, False, None]
 
 
 # --- the pin matches what the form was built from ------------------------
@@ -220,3 +255,28 @@ def test_the_panels_no_longer_depend_on_species_taxonomy_id():
 
 def test_species_taxonomy_id_is_not_a_submission_field():
     assert "species_taxonomy_id" not in ConfigIniParams.model_fields
+
+
+def test_the_form_config_states_the_upload_limit(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.vep import vep_resources
+
+    async def fake_get_genome_genebuild(_genome_id):
+        return {"genebuild.provider_name": "Ensembl"}
+
+    async def fake_get_genome_assembly_name(_genome_id):
+        return "GRCh38"
+
+    monkeypatch.setattr(vep_resources, "get_genome_genebuild", fake_get_genome_genebuild)
+    monkeypatch.setattr(
+        vep_resources, "get_genome_assembly_name", fake_get_genome_assembly_name
+    )
+    app = FastAPI()
+    app.include_router(vep_resources.router, prefix="/vep")
+
+    with TestClient(app) as client:
+        response = client.get("/vep/form_config/genome-id")
+
+    assert response.status_code == 200
+    assert response.json()["max_upload_bytes"] == 250 * 10**6

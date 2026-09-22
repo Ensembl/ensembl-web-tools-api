@@ -353,6 +353,36 @@ def test_display_list_item_needs_exactly_one_of_cells_or_rows():
         MergedSpec.model_validate(doc)
 
 
+def _item_linked_from(ref):
+    doc = _go_like_doc([{"from": "id"}])
+    doc["parsing"]["plugins"][0]["targets"].append(
+        {"field": "url", "from": "GO", "transform": "scalar"}
+    )
+    return _set_item(doc, {
+        "cells": [{"from": "id"}],
+        "link": {"kind": "external", "template": "{value}"},
+        "link_from": ref,
+    })
+
+
+def test_display_list_item_link_from_a_declared_field_loads():
+    MergedSpec.model_validate(_item_linked_from("go.url"))
+
+
+def test_display_list_item_link_from_an_undeclared_field_raises():
+    with pytest.raises(ValidationError, match="field 'nope'"):
+        MergedSpec.model_validate(_item_linked_from("go.nope"))
+
+
+def test_display_list_item_link_from_needs_a_template_link():
+    doc = _item_linked_from("go.url")
+    doc["display"]["options"][0]["blocks"][0]["item"]["link"] = {
+        "kind": "external", "builder": "anything",
+    }
+    with pytest.raises(ValidationError, match="needs a template `link`"):
+        MergedSpec.model_validate(doc)
+
+
 def test_bundled_display_has_list_options():
     spec = load_merged_spec("human_grch38")
     ids = {o.option_id for o in spec.display.options}

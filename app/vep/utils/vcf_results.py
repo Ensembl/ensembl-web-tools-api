@@ -14,7 +14,7 @@ import threading
 from pathlib import Path
 from pydantic import FilePath
 from vep.models import vcf_results_model as model
-from vep.form_panels import af_max_subpopulation_label
+from vep.form_panels import af_max_subpopulation_label, live_panel_full_width
 from vep.utils import results_filters
 from vep.utils.bgzf import _BgzfReader, is_bgzf
 from vep.utils.csq import (
@@ -234,6 +234,7 @@ def _spec_annotations(
     scope: str,
     cache: dict | None = None,
     plans: dict | None = None,
+    site: tuple[str, str, str, str] | None = None,
 ) -> list[model.Annotation]:
     """Build annotations for one CSQ entry and parsing scope.
 
@@ -247,7 +248,7 @@ def _spec_annotations(
         # A plugin without header columns did not run for this VCF.
         if plan is not None and not plan.runnable:
             continue
-        data = apply_plugin_spec(csq_values, index_map, plugin, cache, plan)
+        data = apply_plugin_spec(csq_values, index_map, plugin, cache, plan, site)
         if data is not None:
             annotations.append(
                 model.Annotation(plugin=plugin.plugin, scope=scope, data=data)
@@ -301,12 +302,25 @@ def _get_alt_allele_details(
     spec: ParsingSpec,
     sv: dict | None = None,
     plans: dict | None = None,
+    location: model.Location | None = None,
 ) -> model.AlternativeVariantAllele:
     """Build one alternate allele from matching CSQ entries.
 
     Structural-variant display data overrides the rendered type and allele while
     CSQ matching continues to use VEP's allele value.
     """
+    if sv:
+        allele_sequence = sv["allele"]
+    elif alt == "copy_number_variation":
+        allele_sequence = ""
+    else:
+        allele_sequence = alt
+    # Holds the allele's values in PSEUDO_COLUMNS order.
+    site = (
+        (location.region_name, str(location.start), ref, allele_sequence)
+        if location is not None
+        else None
+    )
     consequences = []
     # Resolve plans once per file; this fallback resolves them once per allele.
     if plans is None and spec is not None:
@@ -330,7 +344,7 @@ def _get_alt_allele_details(
                 get_csq_value(csq_values, "Existing_variation", None, index_map)
             )
             allele_annotations = _spec_annotations(
-                csq_values, index_map, spec, "allele", parse_cache, plans
+                csq_values, index_map, spec, "allele", parse_cache, plans, site
             )
             allele_level_captured = True
 
@@ -397,7 +411,13 @@ def _get_alt_allele_details(
                     ),
                     # Generic spec-driven annotations: everything else.
                     annotations=_spec_annotations(
-                        csq_values, index_map, spec, "transcript", parse_cache, plans
+                        csq_values,
+                        index_map,
+                        spec,
+                        "transcript",
+                        parse_cache,
+                        plans,
+                        site,
                     ),
                 )
             )
@@ -409,12 +429,6 @@ def _get_alt_allele_details(
                 )
             )
 
-    if sv:
-        allele_sequence = sv["allele"]
-    elif alt == "copy_number_variation":
-        allele_sequence = ""
-    else:
-        allele_sequence = alt
     return model.AlternativeVariantAllele(
         allele_sequence=allele_sequence,
         allele_type=allele_type,
@@ -933,10 +947,14 @@ def _check_expected_columns(vcf_path: FilePath, expected: set[str]) -> None:
 
 
 def _load_pinned_display_panels(vcf_path: FilePath) -> list[DisplayPanel]:
-    """Load the option panels pinned to this job at submission."""
+    """Load the option panels pinned to this job at submission. A panel pinned
+    without `full_width` takes it from the live panel definitions."""
     panels = load_display_panels_sidecar(vcf_path)
     if not panels:
         raise ValueError(f"empty display-panels sidecar for {vcf_path}")
+    for panel in panels:
+        if panel.full_width is None:
+            panel.full_width = live_panel_full_width(panel.id)
     return panels
 
 
@@ -1343,7 +1361,14 @@ def _get_results_from_records(
 
             alt_alleles = [
                 _get_alt_allele_details(
-                    record.REF, alt, csq_strings, prediction_index_map, spec, sv, plans
+                    record.REF,
+                    alt,
+                    csq_strings,
+                    prediction_index_map,
+                    spec,
+                    sv,
+                    plans,
+                    location=location,
                 )
                 for alt in alt_allele_strings
             ]

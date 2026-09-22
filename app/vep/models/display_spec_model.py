@@ -152,11 +152,7 @@ class DisplayRow(BaseModel):
         if sources > 1:
             raise ValueError("row needs exactly one of `from` or `compose`")
         # No source at all is allowed for one shape only: a builder link that
-        # *is* the value. The OpenTargets variant link is built from the
-        # variant's own coordinates, which are job context rather than anything
-        # a plugin parsed, so there is no `<plugin>.<field>` to name. (A row
-        # with a source may still carry a builder link — that is ProtVar's
-        # trailing icon, which decorates the value rather than being it.)
+        # *is* the value. Only specs pinned to older jobs carry such rows.
         if self.link is not None and self.link.builder:
             return self
         raise ValueError("row needs exactly one of `from` or `compose`")
@@ -369,13 +365,17 @@ class DisplayItemSpec(BaseModel):
     cells: list[CellSpec] | None = Field(default=None, min_length=1)
     rows: list[DisplayItemFieldRow] | None = Field(default=None, min_length=1)
     # A trailing link on a label/value item's value (ProtVar's per-pocket icon).
-    # Only meaningful with `label` (the row layout); a named builder, no refs.
+    # Only meaningful with `label` (the row layout).
     link: LinkSpec | None = None
+    # A `<plugin>.<field>` whose value fills the link template's `{value}`.
+    link_from: str | None = None
 
     @model_validator(mode="after")
     def _cells_xor_rows(self) -> "DisplayItemSpec":
         if bool(self.cells) == bool(self.rows):
             raise ValueError("list item needs exactly one of `cells` or `rows`")
+        if self.link_from and not (self.link and self.link.template):
+            raise ValueError("list item `link_from` needs a template `link`")
         return self
 
     def item_field_refs(self) -> Iterator[str]:

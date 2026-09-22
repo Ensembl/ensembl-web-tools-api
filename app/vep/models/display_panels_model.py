@@ -56,6 +56,7 @@ class DisplayPanel(BaseModel):
 
     id: str
     label: str
+    full_width: bool | None = None
     options: list[DisplayOption] = Field(default_factory=list)
 
 

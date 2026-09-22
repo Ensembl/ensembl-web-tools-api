@@ -620,7 +620,8 @@
                 "GRCh38": "{path}/Geno2MP.variants_GRCh38.vcf.gz",
                 "GRCh37": "{path}/Geno2MP.variants_GRCh37.vcf.gz"
               }
-            }
+            },
+            "url": "1"
           }
         }
       },

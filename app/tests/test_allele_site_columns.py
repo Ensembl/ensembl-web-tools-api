@@ -6,16 +6,10 @@ from io import StringIO
 import pytest
 from pydantic import ValidationError
 
-from app.vep.models.display_panels_model import to_display_panels
 from app.vep.models.parsing_spec_model import ParsingSpec, TargetSpec
 from app.vep.utils.spec_interpreter import apply_plugin_spec, compile_plugin
-from app.vep.utils.spec_loader import (
-    load_merged_spec,
-    write_display_panels_sidecar,
-    write_expected_columns_sidecar,
-    write_spec_sidecar,
-)
-from app.vep.utils.vcf_results import get_results_from_path, get_results_from_stream
+from app.vep.utils.spec_loader import load_merged_spec
+from app.vep.utils.vcf_results import get_results_from_stream
 
 MERGED = load_merged_spec("human_grch38")
 SPEC = MERGED.parsing
@@ -129,15 +123,8 @@ def test_protvar_url_is_absent_for_an_indel():
     assert _data(consequence.annotations, "protvar")["url"] is None
 
 
-def test_a_results_call_ships_both_fields(tmp_path):
-    vcf_path = tmp_path / "input_VEP.vcf"
-    vcf_path.write_text(_vcf(RECORDS))
-    write_spec_sidecar(tmp_path, MERGED)
-    write_expected_columns_sidecar(tmp_path, set())
-    panels = [{"id": "general", "label": "General", "options": []}]
-    write_display_panels_sidecar(tmp_path, to_display_panels(panels))
-
-    response = get_results_from_path(100, 1, vcf_path).model_dump()
+def test_a_results_call_ships_both_fields():
+    response = _results(SPEC).model_dump()
     pool = response["variants"][0]["annotation_pool"]
     by_plugin = {entry["plugin"]: entry["data"] for entry in pool}
 

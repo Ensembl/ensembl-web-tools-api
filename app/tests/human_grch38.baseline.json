@@ -468,9 +468,9 @@
           "go"
         ],
         "form": {
-          "panel": "genes_and_transcripts",
-          "category": "Additional molecular consequence predictions",
-          "order": 900,
+          "panel": "protein_and_functional",
+          "category": "Gene Ontology Annotations",
+          "order": 500,
           "label": "Gene Ontology",
           "type": "boolean",
           "default": false

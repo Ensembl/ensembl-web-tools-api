@@ -96,7 +96,11 @@ def test_human_grch38_category_labels():
         "Splicing",
         "Genome wide",
     }
-    assert categories(panels, "protein_and_functional") == {"Protein", "Functional"}
+    assert categories(panels, "protein_and_functional") == {
+        "Protein",
+        "Functional",
+        "Gene Ontology Annotations",
+    }
 
 
 def test_maxentscan_and_enformer_are_not_offered():
@@ -143,14 +147,21 @@ def test_mouse_gets_the_base_panels_plus_its_own_data_options():
     """Mouse carries GO and Phenotypes data files, so it is offered those two on
     top of the always-visible panels — and none of the human-only options."""
     panels = get_visible_panels(species_taxonomy_id=MOUSE, assembly_name="GRCm39")
-    assert panel_ids(panels) == ALWAYS_VISIBLE_PANEL_IDS | {"phenotype_and_disease_associations"}
+    assert panel_ids(panels) == ALWAYS_VISIBLE_PANEL_IDS | {
+        "phenotype_and_disease_associations",
+        "protein_and_functional",
+    }
 
     genes_opts = option_ids(
         [p for p in panels if p["id"] == "genes_and_transcripts"]
     )
-    assert "go" in genes_opts
     assert "utrannotator" not in genes_opts
     assert "riboseqorfs" not in genes_opts
+
+    protein_opts = option_ids(
+        [p for p in panels if p["id"] == "protein_and_functional"]
+    )
+    assert protein_opts == {"protein", "go"}
 
     associations = option_ids([p for p in panels if p["id"] == "phenotype_and_disease_associations"])
     assert associations == {"phenotypes"}  # not geno2mp / clinvar / opentargets
@@ -836,11 +847,21 @@ def test_genes_and_transcripts_options_are_grouped_into_three_categories():
         "utrannotator",
         "nmd",
         "riboseqorfs",
-        "go",
     ]
     # pLI is GRCh38-only, so it arrives with the GRCh38 additions and lands
     # after the two the 37/38 tier contributes — same group, appended.
     assert grouped["Constraint"] == ["loeuf", "dosage_sensitivity", "pli"]
+
+
+def test_go_has_its_own_section_after_functional():
+    panels = get_visible_panels(species_taxonomy_id=HUMAN, assembly_name="GRCh38.p14")
+    protein = next(panel for panel in panels if panel["id"] == "protein_and_functional")
+    grouped: dict[str, list[str]] = {}
+    for option in protein["options"]:
+        grouped.setdefault(option.get("category"), []).append(option["id"])
+
+    assert list(grouped) == ["Protein", "Functional", "Gene Ontology Annotations"]
+    assert grouped["Gene Ontology Annotations"] == ["go"]
 
 
 def test_gerp_sits_with_cadd_under_genome_wide():
@@ -873,9 +894,12 @@ def test_a_species_with_fewer_options_keeps_the_same_category_names():
         grouped.setdefault(option.get("category"), []).append(option["id"])
 
     assert None not in grouped
-    # Mouse has GO but none of the human-only annotations or conservation data.
-    assert list(grouped) == ["Locations", "Additional molecular consequence predictions"]
-    assert grouped["Additional molecular consequence predictions"] == ["go"]
+    # Mouse has none of the human-only annotations or conservation data.
+    assert list(grouped) == ["Locations"]
+
+    protein = next(panel for panel in panels if panel["id"] == "protein_and_functional")
+    go = next(option for option in protein["options"] if option["id"] == "go")
+    assert go["category"] == "Gene Ontology Annotations"
 
 
 def test_a_non_human_species_gets_neither_the_panel_nor_the_options():

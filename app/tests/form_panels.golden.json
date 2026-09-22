@@ -1164,21 +1164,6 @@
           }
         },
         {
-          "id": "go",
-          "label": "Gene Ontology",
-          "type": "boolean",
-          "default": false,
-          "category": "Additional molecular consequence predictions",
-          "help": {
-            "description": "Annotates transcripts with their Gene Ontology (GO) terms — the molecular functions, biological processes and cellular components associated with the gene product.",
-            "links": [
-              {
-                "href": "https://geneontology.org/"
-              }
-            ]
-          }
-        },
-        {
           "id": "pli",
           "label": "pLI",
           "type": "boolean",
@@ -1344,6 +1329,21 @@
             "links": [
               {
                 "href": "https://www.ebi.ac.uk/research/beltrao/software/"
+              }
+            ]
+          }
+        },
+        {
+          "id": "go",
+          "label": "Gene Ontology",
+          "type": "boolean",
+          "default": false,
+          "category": "Gene Ontology Annotations",
+          "help": {
+            "description": "Annotates transcripts with their Gene Ontology (GO) terms — the molecular functions, biological processes and cellular components associated with the gene product.",
+            "links": [
+              {
+                "href": "https://geneontology.org/"
               }
             ]
           }
@@ -2434,21 +2434,6 @@
               }
             ]
           }
-        },
-        {
-          "id": "go",
-          "label": "Gene Ontology",
-          "type": "boolean",
-          "default": false,
-          "category": "Additional molecular consequence predictions",
-          "help": {
-            "description": "Annotates transcripts with their Gene Ontology (GO) terms — the molecular functions, biological processes and cellular components associated with the gene product.",
-            "links": [
-              {
-                "href": "https://geneontology.org/"
-              }
-            ]
-          }
         }
       ]
     },
@@ -2509,6 +2494,21 @@
             "links": [
               {
                 "href": "https://www.ebi.ac.uk/intact/home"
+              }
+            ]
+          }
+        },
+        {
+          "id": "go",
+          "label": "Gene Ontology",
+          "type": "boolean",
+          "default": false,
+          "category": "Gene Ontology Annotations",
+          "help": {
+            "description": "Annotates transcripts with their Gene Ontology (GO) terms — the molecular functions, biological processes and cellular components associated with the gene product.",
+            "links": [
+              {
+                "href": "https://geneontology.org/"
               }
             ]
           }
@@ -2652,21 +2652,6 @@
               "max": 1000000
             }
           ]
-        },
-        {
-          "id": "go",
-          "label": "Gene Ontology",
-          "type": "boolean",
-          "default": false,
-          "category": "Additional molecular consequence predictions",
-          "help": {
-            "description": "Annotates transcripts with their Gene Ontology (GO) terms — the molecular functions, biological processes and cellular components associated with the gene product.",
-            "links": [
-              {
-                "href": "https://geneontology.org/"
-              }
-            ]
-          }
         }
       ]
     },
@@ -2681,6 +2666,21 @@
           "default": false,
           "help": {
             "description": "The Ensembl protein identifier (ENSP)."
+          }
+        },
+        {
+          "id": "go",
+          "label": "Gene Ontology",
+          "type": "boolean",
+          "default": false,
+          "category": "Gene Ontology Annotations",
+          "help": {
+            "description": "Annotates transcripts with their Gene Ontology (GO) terms — the molecular functions, biological processes and cellular components associated with the gene product.",
+            "links": [
+              {
+                "href": "https://geneontology.org/"
+              }
+            ]
           }
         }
       ]
@@ -2808,21 +2808,6 @@
               "max": 1000000
             }
           ]
-        },
-        {
-          "id": "go",
-          "label": "Gene Ontology",
-          "type": "boolean",
-          "default": false,
-          "category": "Additional molecular consequence predictions",
-          "help": {
-            "description": "Annotates transcripts with their Gene Ontology (GO) terms — the molecular functions, biological processes and cellular components associated with the gene product.",
-            "links": [
-              {
-                "href": "https://geneontology.org/"
-              }
-            ]
-          }
         }
       ]
     },
@@ -2837,6 +2822,21 @@
           "default": false,
           "help": {
             "description": "The Ensembl protein identifier (ENSP)."
+          }
+        },
+        {
+          "id": "go",
+          "label": "Gene Ontology",
+          "type": "boolean",
+          "default": false,
+          "category": "Gene Ontology Annotations",
+          "help": {
+            "description": "Annotates transcripts with their Gene Ontology (GO) terms — the molecular functions, biological processes and cellular components associated with the gene product.",
+            "links": [
+              {
+                "href": "https://geneontology.org/"
+              }
+            ]
           }
         }
       ]

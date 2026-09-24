@@ -1118,7 +1118,7 @@ def test_gerp_off_emits_no_line(monkeypatch, tmp_path):
     assert not [line for line in lines if "Conservation" in line]
 
 
-# --- regulatory features -------------------------------------------------------
+# --- regulatory features -----------------------------------------------------
 
 
 def test_regulatory_features_name_the_grch38_gffs(monkeypatch, tmp_path):

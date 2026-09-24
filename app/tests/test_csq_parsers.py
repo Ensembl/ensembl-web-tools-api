@@ -374,7 +374,7 @@ def test_modelled_rows_are_not_counted():
     assert dropped == Counter()
 
 
-# --- regulatory rows ------------------------------------------------------------
+# --- regulatory rows ---------------------------------------------------------
 
 
 def test_a_regulatory_feature_row_becomes_a_regulatory_consequence():
@@ -471,8 +471,8 @@ def test_a_regulatory_scoped_plugin_attaches_to_the_regulatory_row_only():
 
 
 def test_a_motif_rows_details_attach_to_that_row():
-    # VEP leaves HIGH_INF_POS and MOTIF_SCORE_CHANGE empty until it has the
-    # motif's weight matrix.
+    # HIGH_INF_POS and MOTIF_SCORE_CHANGE are filled here, although VEP leaves
+    # them empty because the regulation GFFs carry no weight matrix.
     motif_cols = [
         "MOTIF_NAME", "MOTIF_POS", "HIGH_INF_POS", "MOTIF_SCORE_CHANGE",
         "TRANSCRIPTION_FACTORS",

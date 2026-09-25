@@ -115,6 +115,34 @@ def test_flatten_vcf_lines_over_a_prefiltered_line_emits_fewer_rows():
     assert len(rows) == 2  # header + one surviving entry
 
 
+
+def test_flatten_vcf_lines_reports_alleles_as_in_the_vcf():
+    def indel(chrom, pos, ref, alts, csq_alleles):
+        entries = ",".join(_entry(a, "intron_variant", "ENST_A") for a in csq_alleles)
+        return f"{chrom}\t{pos}\t.\t{ref}\t{alts}\t.\t.\tCSQ={entries}\n"
+
+    lines = _vcf_lines(
+        [
+            indel("chr2", 70964112, "GTATTTTT", "G", ["-"]),
+            indel("chr2", 94832005, "A", "ACCTTCT", ["CCTTCT"]),
+            indel("chr3", 75238532, "GTAAA", "G,GTAAATAAA", ["-", "TAAATAAA"]),
+            indel("chr4", 100, "A", "AT,*", ["T", "*"]),
+            indel("chr5", 100, "AC", "GT", ["GT"]),
+        ]
+    )
+
+    rows = [r.rstrip("\n").split("\t") for r in flatten_vcf_lines(lines)][1:]
+
+    assert [r[1:4] for r in rows] == [
+        ["2:70964112", "GTATTTTT", "G"],
+        ["2:94832005", "A", "ACCTTCT"],
+        ["3:75238532", "GTAAA", "G"],
+        ["3:75238532", "GTAAA", "GTAAATAAA"],
+        ["4:100", "A", "AT"],
+        ["4:100", "A", "*"],
+        ["5:100", "AC", "GT"],
+    ]
+
 # --- stream_filtered_vcf_text (end to end, from a gzipped file) --------------
 
 

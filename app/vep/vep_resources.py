@@ -21,7 +21,7 @@ from enum import Enum
 import json
 import logging
 import re
-
+import os
 from fastapi import Request, status, APIRouter, Query
 from pydantic import FilePath
 from requests import HTTPError
@@ -32,7 +32,7 @@ from starlette.responses import (
     StreamingResponse,
 )
 from starlette.concurrency import run_in_threadpool
-
+from starlette.background import BackgroundTask
 from core.error_response import response_error_handler
 from core.logging import InterceptHandler
 from vep.models.pipeline_model import (
@@ -163,7 +163,8 @@ async def vep_status(request: Request, submission_id: str):
         )
         if submission_status.status == VepStatus.failed:
             logging.error(
-                f"VEP submission f{submission_id} failed: f{workflow_status['workflow']['errorMessage'] or workflow_status['workflow']['errorReport']}")
+                f"VEP submission f{submission_id} failed: f{workflow_status['workflow']['errorMessage'] or workflow_status['workflow']['errorReport']}"
+            )
         return JSONResponse(
             content=submission_status.model_dump(),
             headers={"Cache-Control": "no-store"},
@@ -193,11 +194,23 @@ def get_vep_results_file_path(
     return input_vcf_path.with_name(result_name)
 
 
-def _gzip_download_response(text_stream, filename: str) -> StreamingResponse:
+def drop_file_cache(path):
+    """POSIX_FADV_DONTNEED prevent FileSystem page cache"""
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+    finally:
+        os.close(fd)
+
+
+def _gzip_download_response(
+    text_stream, filename: str, source_path: FilePath
+) -> StreamingResponse:
     return StreamingResponse(
         gzip_text_stream(text_stream),
         media_type="application/gzip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        background=BackgroundTask(drop_file_cache, source_path),
     )
 
 
@@ -217,18 +230,22 @@ def _results_download_response(
             return _gzip_download_response(
                 flatten_vcf_lines(vcf_text),
                 f"{base}_filtered.{table_extension}.gz",
+                results_path,
             )
-        return _gzip_download_response(vcf_text, f"{base}_filtered.vcf.gz")
+        return _gzip_download_response(
+            vcf_text, f"{base}_filtered.vcf.gz", results_path
+        )
     if is_table:
         # Full results in tabular format
         return _gzip_download_response(
-            stream_vep_tsv(results_path), f"{base}.{table_extension}.gz"
+            stream_vep_tsv(results_path), f"{base}.{table_extension}.gz", results_path
         )
     return FileResponse(
         # Full results in VCF format
         results_path,
         media_type="application/gzip",
         filename=results_path.name,
+        background=BackgroundTask(drop_file_cache, results_path),
     )
 
 
@@ -255,12 +272,8 @@ async def download_results(
         )
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["input"]
-            output_prefix = workflow_status["workflow"]["params"].get(
-                "output_prefix"
-            )
-            results_file_path = get_vep_results_file_path(
-                input_vcf_file, output_prefix
-            )
+            output_prefix = workflow_status["workflow"]["params"].get("output_prefix")
+            results_file_path = get_vep_results_file_path(input_vcf_file, output_prefix)
             if results_file_path.exists():
                 return _results_download_response(
                     results_file_path, format, active_filters
@@ -340,7 +353,7 @@ async def fetch_results(
         def _results(**kwargs):
             """
             `parse_filters` only checks the filter payload shape.
-            `_results_response` compiles the filters to check that the requested 
+            `_results_response` compiles the filters to check that the requested
             columns and operators exist in the result VCF.
             """
             try:
@@ -350,18 +363,15 @@ async def fetch_results(
                     content={"details": f"Invalid filters: {exc}"},
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
+
         workflow_status = await get_workflow_status(submission_id)
         submission_status = PipelineStatus(
             submission_id=submission_id, status=workflow_status
         )
         if submission_status.status == VepStatus.succeeded:
             input_vcf_file = workflow_status["workflow"]["params"]["input"]
-            output_prefix = workflow_status["workflow"]["params"].get(
-                "output_prefix"
-            )
-            results_file_path = get_vep_results_file_path(
-                input_vcf_file, output_prefix
-            )
+            output_prefix = workflow_status["workflow"]["params"].get("output_prefix")
+            results_file_path = get_vep_results_file_path(input_vcf_file, output_prefix)
             if results_file_path.exists():
                 return await run_in_threadpool(
                     _results,
@@ -417,17 +427,18 @@ async def get_form_config(
         annotation_version = attributes.get("genebuild.provider_version", "")
         last_updated_date = attributes.get("genebuild.last_geneset_update", "")
 
-        if (annotation_version or last_updated_date):
-            label = f"{annotation_provider_name} {annotation_version or last_updated_date}"
-            value = f"{annotation_provider_name}_{annotation_version or last_updated_date}"
+        if annotation_version or last_updated_date:
+            label = (
+                f"{annotation_provider_name} {annotation_version or last_updated_date}"
+            )
+            value = (
+                f"{annotation_provider_name}_{annotation_version or last_updated_date}"
+            )
         else:
             label = f"{annotation_provider_name}"
             value = f"{annotation_provider_name}"
 
-        options = [{
-            "label": label,
-            "value": value
-        }]
+        options = [{"label": label, "value": value}]
 
         default_option = options[0]
         transcript_set = Dropdown(

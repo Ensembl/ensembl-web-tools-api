@@ -898,6 +898,15 @@ def test_phenotype_gene_takes_only_the_gene_entries_for_this_row_gene():
     assert theirs is None
 
 
+def test_phenotype_gene_matches_a_non_human_gene():
+    index_map = index_map_for("Allele", "Gene", "PHENOTYPES")
+    column = "Gene+OMIA+Malignant_hyperthermia+ENSSSCG00000058790+OMIA000621+"
+
+    result = run("phenotype_gene", ["C", "ENSSSCG00000058790.3", column], index_map)
+
+    assert [p["phenotype"] for p in result["phenotypes"]] == ["Malignant_hyperthermia"]
+
+
 def test_phenotype_gene_is_not_served_from_a_neighbours_cached_parse():
     """Two rows differing only in `Gene` must not share a cached result.
 

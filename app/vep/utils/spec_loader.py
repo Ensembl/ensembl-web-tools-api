@@ -99,16 +99,41 @@ def _finalize(payload: dict) -> MergedSpec:
     return spec
 
 
+def _without_unreachable_blocks(
+    blocks: list[dict], enabled_plugins: set[str]
+) -> list[dict]:
+    """`blocks` minus those that can never render on this genome.
+
+    A block gated on `when: present <plugin>.<field>` renders only when that
+    plugin produced the field, so it is dead wherever the plugin does not run.
+    A group left with no blocks goes too. An `empty` gate stays, because it
+    renders exactly when the plugin produced nothing.
+    """
+    kept = []
+    for block in blocks:
+        present = (block.get("when") or {}).get("present")
+        if present and present.partition(".")[0] not in enabled_plugins:
+            continue
+        if block.get("kind") == "group" and block["blocks"]:
+            children = _without_unreachable_blocks(block["blocks"], enabled_plugins)
+            if not children:
+                continue
+            block = {**block, "blocks": children}
+        kept.append(block)
+    return kept
+
+
 def _select_library(library: dict, config_entries: list[dict]) -> dict:
     """The subset of the shared library a genome offers, chosen from its config.
 
     A genome's `config` entries name the parse plugins they emit columns for (via
-    `parsed_as`); those are the plugins it runs. A display option belongs only
-    when *every* plugin it reads is among them — so an assembled spec never
-    advertises an option the genome has no data for, and the display↔parsing
-    consistency check still resolves (no dangling plugin ref). GRCh38 enables all
-    of them, so it selects the whole library unchanged; a genome with fewer
-    entries gets a smaller spec.
+    `parsed_as`); those are the plugins it runs. Each display option first drops
+    any block that waits on data from a plugin the genome does not run. It is
+    then kept only when *every* plugin it still reads is among them, so an
+    assembled spec never advertises an option the genome has no data for, and
+    the display↔parsing consistency check still resolves. GRCh38 enables all of
+    them, so it selects the whole library unchanged; a genome with fewer entries
+    gets a smaller spec.
     """
     enabled_plugins = {
         plugin
@@ -120,11 +145,14 @@ def _select_library(library: dict, config_entries: list[dict]) -> dict:
         for plugin in library["parsing"]["plugins"]
         if plugin["plugin"] in enabled_plugins
     ]
-    options = [
-        option
-        for option in library["display"]["options"]
-        if DisplayOptionSpec.model_validate(option).plugin_refs() <= enabled_plugins
-    ]
+    options = []
+    for option in library["display"]["options"]:
+        blocks = _without_unreachable_blocks(option["blocks"], enabled_plugins)
+        if not blocks:
+            continue
+        option = {**option, "blocks": blocks}
+        if DisplayOptionSpec.model_validate(option).plugin_refs() <= enabled_plugins:
+            options.append(option)
     selected = {
         "parsing": {**library["parsing"], "plugins": plugins},
         "display": {**library["display"], "options": options},

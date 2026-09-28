@@ -153,6 +153,54 @@ def test_select_library_drops_an_option_missing_one_of_its_plugins():
     assert selected["display"]["options"] == []  # combo needs cadd -> dropped
 
 
+def _gated_on(plugin: str, *blocks: dict) -> dict:
+    return {
+        "kind": "group",
+        "when": {"present": f"{plugin}.score"},
+        "blocks": list(blocks),
+    }
+
+
+def test_select_library_prunes_blocks_gated_on_a_plugin_the_genome_lacks():
+    from app.vep.utils.spec_loader import _select_library
+
+    phenotypes = _rows_option("phenotypes", "phenotype_data")
+    clinvar_rows = _rows_option("clinvar", "clinvar")["blocks"][0]
+    phenotypes["blocks"].append(_gated_on("clinvar", clinvar_rows))
+    library = {
+        "parsing": {"plugins": [{"plugin": "phenotype_data"}, {"plugin": "clinvar"}]},
+        "display": {"options": [phenotypes]},
+    }
+
+    species = _select_library(
+        library, [{"id": "phenotypes", "parsed_as": ["phenotype_data"]}]
+    )
+    human = _select_library(
+        library, [{"id": "phenotypes", "parsed_as": ["phenotype_data", "clinvar"]}]
+    )
+
+    assert species["display"]["options"] == [
+        {**phenotypes, "blocks": phenotypes["blocks"][:1]}
+    ]
+    assert human["display"]["options"] == [phenotypes]
+
+
+def test_select_library_drops_a_group_and_an_option_left_empty():
+    from app.vep.utils.spec_loader import _select_library
+
+    clinvar = _rows_option("clinvar", "clinvar")
+    gated = _gated_on("clinvar", *clinvar["blocks"])
+    clinvar["blocks"] = [{"kind": "group", "heading": "ClinVar", "blocks": [gated]}]
+    library = {
+        "parsing": {"plugins": [{"plugin": "clinvar"}]},
+        "display": {"options": [clinvar]},
+    }
+
+    selected = _select_library(library, [])
+
+    assert selected["display"]["options"] == []
+
+
 # --- resolve_merged_spec -------------------------------------------------
 
 

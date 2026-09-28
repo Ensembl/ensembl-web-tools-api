@@ -89,18 +89,20 @@ app/vep/specs/
 ```
 
 `spec_loader.load_merged_spec("human_grch38")` assembles one document
-(`_assemble_payload`, `spec_loader.py:162`):
+(`_assemble_payload`, `spec_loader.py:202`):
 
 1. Read the genome document. It is thin — identity plus `config.entries`.
 2. Layer `base.json`'s entries under it (`_with_base_entries`). A genome may
    **override** a base entry by declaring the same `id`; its version wins.
    `order` is one numbering space across both tiers.
 3. Read the `library` the genome names, and **select from it by what the genome
-   enables** (`_select_library`, `spec_loader.py:102`):
+   enables** (`_select_library`, `spec_loader.py:125`):
    - the set of enabled plugins is the union of every config entry's `parsed_as`;
    - a `parsing` plugin is included if it is in that set;
-   - a `display` option is included **only if every plugin it reads** (its
-     `plugin_refs()`) is in that set.
+   - a `display` option loses each block gated on `when: present` of a plugin
+     outside that set, and any group left empty;
+   - it is then included **only if every plugin it still reads** (its
+     `plugin_refs()`) is in that set. An option with no blocks left is dropped.
 4. Validate the whole thing as a `MergedSpec` — this runs the consistency checks
    in [§11](#11-what-fails-at-load-time-and-what-the-error-looks-like).
 5. Compute the content digest from the *validated model's* canonical dump and

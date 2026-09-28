@@ -11,6 +11,8 @@ things have to hold:
     and the allele-vs-transcript answer comes from `parsing`.
 """
 
+import json
+
 import pytest
 from pydantic import FilePath, ValidationError
 
@@ -23,7 +25,13 @@ from app.vep.models.display_spec_model import (
     DisplayTableBlock,
 )
 from app.vep.models.merged_spec_model import MergedSpec
-from app.vep.utils.spec_loader import load_merged_spec, write_spec_sidecar
+from app.vep.utils.spec_loader import (
+    SPEC_DIR,
+    _species_annotations,
+    load_merged_spec,
+    resolve_merged_spec,
+    write_spec_sidecar,
+)
 from app.vep.utils.vcf_results import _load_pinned_merged_spec
 
 SPEC = load_merged_spec("human_grch38")
@@ -153,6 +161,27 @@ def test_every_allele_frequency_plugin_a_genome_parses_is_displayed():
         }
 
         assert frequencies <= displayed, (genome, sorted(frequencies - displayed))
+
+
+def _every_genome_spec():
+    for name in ("base", "human_grch38", "human_grch37"):
+        yield name, load_merged_spec(name)
+    for row in _species_annotations()["species"]:
+        yield row["production_name"], resolve_merged_spec(row["assembly"])
+
+
+def test_every_genome_displays_every_option_it_offers():
+    library = json.loads((SPEC_DIR / "annotation_library.json").read_text())
+    laid_out = {option["option_id"] for option in library["display"]["options"]}
+
+    missing = {}
+    for genome, spec in _every_genome_spec():
+        offered = {entry.id for entry in spec.config.entries if entry.form}
+        displayed = {option.option_id for option in spec.display.options}
+        if gap := (offered & laid_out) - displayed:
+            missing[genome] = sorted(gap)
+
+    assert missing == {}
 
 
 def test_bundled_display_references_resolve():

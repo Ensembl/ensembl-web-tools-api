@@ -101,7 +101,7 @@ app/vep/specs/
    - a `parsing` plugin is included if it is in that set;
    - a `display` option loses each block gated on `when: present` of a plugin
      outside that set, and any group left empty;
-   - it is then included **only if every plugin it still reads** (its
+   - the option is then included **only if every plugin it still reads** (its
      `plugin_refs()`) is in that set. An option with no blocks left is dropped.
 4. Validate the whole thing as a `MergedSpec` — this runs the consistency checks
    in [§11](#11-what-fails-at-load-time-and-what-the-error-looks-like).

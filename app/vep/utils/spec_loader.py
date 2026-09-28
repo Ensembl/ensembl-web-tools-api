@@ -104,8 +104,7 @@ def _without_unreachable_blocks(
 ) -> list[dict]:
     """`blocks` minus those that can never render on this genome.
 
-    A block gated on `when: present <plugin>.<field>` renders only when that
-    plugin produced the field, so it is dead wherever the plugin does not run.
+    A block gated on `when: present <plugin>.<field>` needs that plugin to run.
     A group left with no blocks goes too. An `empty` gate stays, because it
     renders exactly when the plugin produced nothing.
     """
@@ -128,12 +127,12 @@ def _select_library(library: dict, config_entries: list[dict]) -> dict:
 
     A genome's `config` entries name the parse plugins they emit columns for (via
     `parsed_as`); those are the plugins it runs. Each display option first drops
-    any block that waits on data from a plugin the genome does not run. It is
-    then kept only when *every* plugin it still reads is among them, so an
-    assembled spec never advertises an option the genome has no data for, and
-    the display↔parsing consistency check still resolves. GRCh38 enables all of
-    them, so it selects the whole library unchanged; a genome with fewer entries
-    gets a smaller spec.
+    the blocks gated on a plugin the genome does not run (see
+    `_without_unreachable_blocks`). The option stays only when the genome runs
+    *every* plugin it still reads, so an assembled spec never advertises an
+    option the genome has no data for, and the display↔parsing consistency
+    check still resolves. GRCh38 enables every library plugin, so it selects the
+    whole library unchanged; a genome with fewer entries gets a smaller spec.
     """
     enabled_plugins = {
         plugin

@@ -80,6 +80,22 @@ class PredictionWithScore(BaseModel):
     score: float | None = None
 
 
+class ProteinCodingFeatures(BaseModel):
+    """Where the variant falls in the transcript and its protein, as VEP writes
+    it. Exon and intron read "4/13", the number and the total, or "2-3/13" when
+    the variant spans several, and a variant across a boundary has both. A
+    position can be a range such as "340-341". Amino acids read "K/Q", or one letter when the
+    change is synonymous. Codons read "AAa/CAa", with the changed bases in
+    capitals."""
+    exon: str | None = None
+    intron: str | None = None
+    cdna_position: str | None = None
+    cds_position: str | None = None
+    protein_position: str | None = None
+    amino_acids: str | None = None
+    codons: str | None = None
+
+
 class PredictedTranscriptConsequence(BaseModel):
     feature_type: FeatureType
     stable_id: str = Field(..., description="transcript stable id, versioned")
@@ -97,6 +113,7 @@ class PredictedTranscriptConsequence(BaseModel):
     # GENCODE primary (human GRCh38 only): flags the GENCODE primary transcript,
     # from the GENCODE_PRIMARY column produced by `flag_gencode_primary`.
     is_gencode_primary: bool = False
+    protein_coding: ProteinCodingFeatures | None = None
     # Protein & functional annotations (optional; populated when the relevant
     # VEP options/plugins were enabled for the run).
     #

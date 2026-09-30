@@ -173,6 +173,29 @@ def _structural_info(record) -> dict | None:
 
 
 
+_PROTEIN_CODING_COLUMNS = {
+    "exon": "EXON",
+    "intron": "INTRON",
+    "cdna_position": "cDNA_position",
+    "cds_position": "CDS_position",
+    "protein_position": "Protein_position",
+    "amino_acids": "Amino_acids",
+    "codons": "Codons",
+}
+
+
+def _parse_protein_coding(csq_values, index_map) -> model.ProteinCodingFeatures | None:
+    """VEP's exon, intron, position, amino acid and codon columns, or None when
+    all are empty."""
+    values = {
+        field: get_csq_value(csq_values, column, None, index_map)
+        for field, column in _PROTEIN_CODING_COLUMNS.items()
+    }
+    if not any(values.values()):
+        return None
+    return model.ProteinCodingFeatures(**values)
+
+
 def _parse_uniprot(csq_values, index_map) -> model.UniprotIds | None:
     """Build Uniprot cross-references from the SWISSPROT/TREMBL/UNIPARC/isoform
     CSQ columns; returns None if none are present."""
@@ -403,6 +426,7 @@ def _get_alt_allele_details(
                     mane_select_refseq_id=mane_select_refseq,
                     # GENCODE primary
                     is_gencode_primary=is_gencode_primary,
+                    protein_coding=_parse_protein_coding(csq_values, index_map),
                     # Protein & functional annotations (ENSP is now the `protein`
                     # parse plugin, in `annotations`).
                     uniprot=_parse_uniprot(csq_values, index_map),

@@ -16,6 +16,7 @@ from app.vep.utils.spec_loader import load_merged_spec
 from app.vep.utils.vcf_results import (
     _get_alt_allele_details,
     _parse_prediction,
+    _parse_protein_coding,
     _parse_protein_matches,
     _parse_uniprot,
 )
@@ -508,3 +509,98 @@ def test_a_motif_rows_details_attach_to_that_row():
     assert motif.data["score_change"] == -0.021
     assert "motif" not in {a.plugin for a in enhancer_row.annotations}
     assert "motif" not in {a.plugin for a in allele.annotations}
+
+
+# --- protein coding features -------------------------------------------------
+
+CODING_COLS = [
+    "Allele", "Consequence", "Feature", "Feature_type", "BIOTYPE", "Gene", "STRAND",
+    "EXON", "INTRON", "cDNA_position", "CDS_position", "Protein_position",
+    "Amino_acids", "Codons",
+]
+CODING_INDEX_MAP = get_prediction_index_map(
+    "Consequence annotations from Ensembl VEP. Format: " + "|".join(CODING_COLS)
+)
+
+
+def coding_row(**values):
+    return "|".join(str(values.get(col, "")) for col in CODING_COLS)
+
+
+def transcript(**values):
+    return coding_row(
+        Allele="G",
+        Feature="ENST00000250024.9",
+        Feature_type="Transcript",
+        BIOTYPE="protein_coding",
+        Gene="ENSG00000110002",
+        STRAND="-1",
+        **values,
+    )
+
+
+def test_a_coding_transcript_carries_its_positions_amino_acids_and_codons():
+    rows = [
+        transcript(
+            Consequence="missense_variant",
+            EXON="4/13",
+            cDNA_position="847-848",
+            CDS_position="340-341",
+            Protein_position="114",
+            Amino_acids="K/Q",
+            Codons="AAa/CAa",
+        ),
+        transcript(
+            Consequence="synonymous_variant",
+            cDNA_position="1203",
+            CDS_position="1003",
+            Protein_position="335",
+            Amino_acids="P",
+            Codons="ccA/ccG",
+        ),
+        transcript(
+            Consequence="inframe_insertion",
+            cDNA_position="1200-1201",
+            CDS_position="1000-1001",
+            Protein_position="334",
+            Amino_acids="-/A",
+            Codons="-/GCA",
+        ),
+        transcript(Consequence="non_coding_transcript_exon_variant", cDNA_position="412"),
+        transcript(Consequence="intron_variant", INTRON="7/14"),
+        transcript(Consequence="upstream_gene_variant"),
+        transcript(Consequence="splice_acceptor_variant", EXON="4-5/13", INTRON="4/12"),
+    ]
+
+    allele = _get_alt_allele_details("T", "G", rows, CODING_INDEX_MAP, SPEC)
+    missense, synonymous, insertion, non_coding, intron, upstream, boundary = (
+        c.protein_coding for c in allele.predicted_molecular_consequences
+    )
+
+    assert missense.model_dump() == {
+        "exon": "4/13",
+        "intron": None,
+        "cdna_position": "847-848",
+        "cds_position": "340-341",
+        "protein_position": "114",
+        "amino_acids": "K/Q",
+        "codons": "AAa/CAa",
+    }
+    assert synonymous.amino_acids == "P"
+    assert (insertion.amino_acids, insertion.codons) == ("-/A", "-/GCA")
+    assert non_coding.model_dump() == {
+        "exon": None,
+        "intron": None,
+        "cdna_position": "412",
+        "cds_position": None,
+        "protein_position": None,
+        "amino_acids": None,
+        "codons": None,
+    }
+    assert intron.intron == "7/14" and intron.cdna_position is None
+    assert upstream is None
+    assert (boundary.exon, boundary.intron) == ("4-5/13", "4/12")
+
+
+def test_a_header_without_the_coding_columns_gives_no_protein_coding_features():
+    assert _parse_protein_coding(EMPTY, INDEX_MAP) is None

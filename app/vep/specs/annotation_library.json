@@ -1519,7 +1519,7 @@
               "unless_matches": {
                 "field": "id",
                 "equals_column": "Gene",
-                "column_pattern": "^(?P<key>ENSG\\d+)"
+                "column_pattern": "^(?P<key>[^.]+)"
               }
             },
             "item_fields": [

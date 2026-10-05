@@ -82,11 +82,10 @@ class PredictionWithScore(BaseModel):
 
 class ProteinCodingFeatures(BaseModel):
     """Where the variant falls in the transcript and its protein, as VEP writes
-    it. Exon and intron read "4/13", the number and the total, or "2-3/13" when
-    the variant spans several, and a variant across a boundary has both. A
-    position can be a range such as "340-341". Amino acids read "K/Q", or one letter when the
-    change is synonymous. Codons read "AAa/CAa", with the changed bases in
-    capitals."""
+    it. Exon and intron read "4/13", meaning 4 of 13, or "2-3/13" when the
+    variant spans several. A variant across a boundary has both. A position can
+    be a range such as "340-341". Codons read "AAa/CAa", with changed bases in
+    capitals. Amino acids read "K/Q", or one letter for a synonymous change."""
     exon: str | None = None
     intron: str | None = None
     cdna_position: str | None = None

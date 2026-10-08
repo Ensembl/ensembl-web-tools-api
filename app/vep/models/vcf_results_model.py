@@ -204,6 +204,9 @@ class Metadata(BaseModel):
     # section of the job's pinned spec, plus the plugin->scope map derived from
     # its `parsing` half.
     display: DisplayPayload
+    # The options that report regulatory consequences, from the job's pinned
+    # spec, so the frontend shows the Regulatory column only when one was chosen.
+    regulatory_options: list[str] = []
 
 
 class AlternativeVariantAllele(BaseModel):

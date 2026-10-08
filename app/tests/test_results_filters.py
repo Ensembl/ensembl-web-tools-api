@@ -18,6 +18,7 @@ from app.vep.utils.vcf_results import get_results_from_path
 from vep.models.display_panels_model import to_display_panels
 from app.vep.utils.spec_loader import (
     load_merged_spec,
+    resolve_merged_spec,
     write_display_panels_sidecar,
     write_expected_columns_sidecar,
     write_spec_sidecar,
@@ -848,6 +849,31 @@ def test_get_results_filtered_totals_and_metadata(tmp_path):
     assert result.metadata.filters.filtered_total == 3
     assert result.metadata.filters.stats[0].field == "consequence"
     assert result.metadata.filters.stats[0].removed == 2
+
+
+@pytest.mark.parametrize("filters", [None, [_consequence_filter("missense_variant")]])
+def test_get_results_names_the_regulatory_options(tmp_path, filters):
+    vcf_path = _write_vcf(tmp_path, [_record(1, ["missense_variant"])])
+
+    result = get_results_from_path(
+        page_size=10, page=1, vcf_path=FilePath(vcf_path), filters=filters
+    )
+
+    assert result.metadata.regulatory_options == ["regulatory"]
+
+
+def test_a_spec_without_regulatory_options_names_none(tmp_path):
+    vcf_path = _write_vcf(tmp_path, [_record(1, ["missense_variant"])])
+    write_spec_sidecar(tmp_path, resolve_merged_spec("CAU__Wild1.0"))
+
+    result = get_results_from_path(
+        page_size=10,
+        page=1,
+        vcf_path=FilePath(vcf_path),
+        filters=[_consequence_filter("missense_variant")],
+    )
+
+    assert result.metadata.regulatory_options == []
 
 
 def test_get_results_prunes_nonmatching_transcripts(tmp_path):

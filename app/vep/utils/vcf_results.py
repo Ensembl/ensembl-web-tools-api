@@ -1031,6 +1031,7 @@ def _with_display_panels(
     spec: ParsingSpec,
     expected_columns: set[str],
     filter_fields: list[FilterField] | None = None,
+    regulatory_options: list[str] | None = None,
 ) -> model.VepResultsResponse:
     """Finalize the pinned display and filter metadata on a parsed response.
 
@@ -1043,6 +1044,7 @@ def _with_display_panels(
     response.metadata.display_panels = panels
     response.metadata.display = display
     response.metadata.filter_fields = filter_fields
+    response.metadata.regulatory_options = regulatory_options or []
     # AF is allele-scoped, so its annotations hang off the alt alleles.
     alleles = [
         allele
@@ -1202,6 +1204,7 @@ def get_results_from_path(
     filter_fields = _gated_filter_fields(merged, _read_csq_columns(vcf_path))
     display_panels = _drop_form_only_help(_load_pinned_display_panels(vcf_path), merged)
     display = merged.display_payload()
+    regulatory_options = merged.regulatory_option_ids()
 
     # Filtered requests can't use the page index (filtering shifts record
     # positions), so they take a dedicated scan-and-filter path.
@@ -1215,6 +1218,7 @@ def get_results_from_path(
             spec=spec,
             expected_columns=expected_columns,
             filter_fields=filter_fields,
+            regulatory_options=regulatory_options,
         )
 
     # Fast path: if the pipeline emitted a page-index sidecar, seek to the page
@@ -1240,6 +1244,7 @@ def get_results_from_path(
             spec=spec,
             expected_columns=expected_columns,
             filter_fields=filter_fields,
+            regulatory_options=regulatory_options,
         )
 
     # Fallback (no sidecar): scan the file from the top through page*page_size
@@ -1277,6 +1282,7 @@ def get_results_from_path(
         spec=spec,
         expected_columns=expected_columns,
         filter_fields=filter_fields,
+        regulatory_options=regulatory_options,
     )
 
 

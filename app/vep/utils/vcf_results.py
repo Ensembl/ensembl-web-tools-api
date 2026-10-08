@@ -64,6 +64,10 @@ def _set_allele_type(alt_one_bp: bool, ref_one_bp: bool, ref_alt_equal_bp: bool)
         case [False, False, True]:
             allele_type = "substitution"
             so_term = "SO:1000002"
+
+        case _:
+            allele_type = "sequence_alteration"
+            so_term = "SO:0001059"
     return allele_type, so_term
 
 def _get_variant_type(ref: str, alt: str) -> str:
@@ -1325,6 +1329,9 @@ def _get_results_from_records(
     # first record that decides whether a page exists at all.
     if presliced or (page - 1) * page_size < total:
         for record in read_records(data_lines):
+            # A non-variant site (ALT ".") has no allele to report.
+            if not record.ALT:
+                continue
             if record.CHROM.startswith("chr"):
                 record.CHROM = record.CHROM[3:]
 

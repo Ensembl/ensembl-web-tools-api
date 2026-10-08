@@ -208,6 +208,22 @@ def test_get_alt_allele_details_intergenic():
         == "intergenic_variant"
     )
 
+def test_get_results_from_stream_skips_non_variant_sites():
+    variant_count = 3
+    results = get_results_from_stream(
+        100,
+        1,
+        variant_count + 1,
+        StringIO(TEST_VCF.rstrip("\n") + "\nX\t50916059\t.\tC\t.\t.\t.\t.\n"),
+        PARSING_SPEC,
+        DISPLAY_PANELS,
+        DISPLAY,
+    )
+
+    assert len(results.variants) == variant_count
+    assert all(v.location.start != 50916059 for v in results.variants)
+
+
 def test_get_results_from_stream():
     variant_count = 3
     results = get_results_from_stream(

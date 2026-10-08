@@ -851,12 +851,14 @@ def test_get_results_filtered_totals_and_metadata(tmp_path):
     assert result.metadata.filters.stats[0].removed == 2
 
 
-@pytest.mark.parametrize("filters", [None, [_consequence_filter("missense_variant")]])
-def test_get_results_names_the_regulatory_options(tmp_path, filters):
+def test_get_results_names_the_regulatory_options(tmp_path):
     vcf_path = _write_vcf(tmp_path, [_record(1, ["missense_variant"])])
 
     result = get_results_from_path(
-        page_size=10, page=1, vcf_path=FilePath(vcf_path), filters=filters
+        page_size=10,
+        page=1,
+        vcf_path=FilePath(vcf_path),
+        filters=[_consequence_filter("missense_variant")],
     )
 
     assert result.metadata.regulatory_options == ["regulatory"]

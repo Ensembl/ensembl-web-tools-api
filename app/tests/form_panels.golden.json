@@ -1030,14 +1030,6 @@
           "type": "boolean",
           "default": false,
           "category": "Locations",
-          "sub_options": [
-            {
-              "id": "nearest_gene_both_directions",
-              "label": "Both directions",
-              "type": "boolean",
-              "default": false
-            }
-          ],
           "help": {
             "description": "Distance in bases to the nearest gene."
           }
@@ -2333,14 +2325,6 @@
           "type": "boolean",
           "default": false,
           "category": "Locations",
-          "sub_options": [
-            {
-              "id": "nearest_gene_both_directions",
-              "label": "Both directions",
-              "type": "boolean",
-              "default": false
-            }
-          ],
           "help": {
             "description": "Distance in bases to the nearest gene."
           }
@@ -2640,14 +2624,6 @@
           "type": "boolean",
           "default": false,
           "category": "Locations",
-          "sub_options": [
-            {
-              "id": "nearest_gene_both_directions",
-              "label": "Both directions",
-              "type": "boolean",
-              "default": false
-            }
-          ],
           "help": {
             "description": "Distance in bases to the nearest gene."
           }
@@ -2816,14 +2792,6 @@
           "type": "boolean",
           "default": false,
           "category": "Locations",
-          "sub_options": [
-            {
-              "id": "nearest_gene_both_directions",
-              "label": "Both directions",
-              "type": "boolean",
-              "default": false
-            }
-          ],
           "help": {
             "description": "Distance in bases to the nearest gene."
           }

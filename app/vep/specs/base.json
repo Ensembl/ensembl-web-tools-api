@@ -132,15 +132,7 @@
           "order": 100,
           "label": "Nearest gene",
           "type": "boolean",
-          "default": false,
-          "sub_options": [
-            {
-              "id": "nearest_gene_both_directions",
-              "label": "Both directions",
-              "type": "boolean",
-              "default": false
-            }
-          ]
+          "default": false
         },
         "config": {
           "emit": "plugin",
@@ -148,15 +140,8 @@
           "params": {
             "gff3": "{gff}",
             "regulatory": "0",
-            "vep_filter": "1"
-          },
-          "flags": {
-            "options": [
-              {
-                "option": "nearest_gene_both_directions",
-                "keyword": "both_directions"
-              }
-            ]
+            "vep_filter": "1",
+            "both_directions": "1"
           }
         }
       },

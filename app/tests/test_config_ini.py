@@ -510,24 +510,9 @@ def test_tss_distance_reports_both_directions(monkeypatch, tmp_path):
     assert line == "plugin TSSDistance,both_direction=1"
 
 
-def test_nearest_gene_base_line(monkeypatch, tmp_path):
-    # Default (single, upstream): gff3 + regulatory=0 + vep_filter=1, no
-    # both_directions clause.
+def test_nearest_gene_always_reports_both_directions(monkeypatch, tmp_path):
     line = find_line(
         build_lines(monkeypatch, tmp_path, nearest_gene=True), "plugin NearestGene"
-    )
-    assert line == f"plugin NearestGene,gff3={GFF},regulatory=0,vep_filter=1"
-
-
-def test_nearest_gene_both_directions_appended_only_when_selected(monkeypatch, tmp_path):
-    line = find_line(
-        build_lines(
-            monkeypatch,
-            tmp_path,
-            nearest_gene=True,
-            nearest_gene_both_directions=True,
-        ),
-        "plugin NearestGene",
     )
     assert line == (
         f"plugin NearestGene,gff3={GFF},regulatory=0,vep_filter=1,both_directions=1"

@@ -13,6 +13,7 @@ from app.vep.utils.vcf_results import (
     get_results_from_stream,
 )
 from app.vep.utils.csq import get_prediction_index_map, get_csq_value
+from app.tests.test_page_index import write_indexed_vcf
 from app.vep.utils.tsv_export import stream_vep_tsv, gzip_text_stream
 from vep.models.display_panels_model import to_display_panels
 from app.vep.utils.spec_loader import (
@@ -258,9 +259,23 @@ def test_get_results_from_stream():
     assert results.variants[0].alternative_alleles[0].annotations == []
     assert results.variants[1].alternative_alleles[0].annotations == []
 
-def test_paging():
+@pytest.fixture(params=["page_index", "bcftools"])
+def paged_vcf(request, tmp_path):
+    """The test VCF behind the page index, as production serves results, and
+    behind the bcftools fallback where bcftools is installed."""
+    if request.param == "bcftools":
+        if shutil.which("bcftools") is None:
+            pytest.skip("bcftools is not installed")
+        return VCF_PATH
+    indexed = tmp_path / "indexed"
+    indexed.mkdir()
+    with open(VCF_PATH) as handle:
+        return write_indexed_vcf(indexed, handle.read(), stride=4)
+
+
+def test_paging(paged_vcf):
     variant_count = 21
-    results = get_results_from_path(5, 1, VCF_PATH)
+    results = get_results_from_path(5, 1, paged_vcf)
 
     assert(results.metadata.pagination.page == 1)
     assert(results.metadata.pagination.per_page == 5)
@@ -269,32 +284,32 @@ def test_paging():
     assert(results.variants[0].name == "id_01")
     assert(results.variants[-1].name == "id_05")
 
-    results = get_results_from_path(5, 2, VCF_PATH)
+    results = get_results_from_path(5, 2, paged_vcf)
     assert(results.variants[0].name == "id_06")
     assert(results.variants[-1].name == "id_10")
 
-    results = get_results_from_path(5, 3, VCF_PATH)
+    results = get_results_from_path(5, 3, paged_vcf)
     assert(results.variants[0].name == "id_11")
     assert(results.variants[-1].name == "id_15")
 
-    results = get_results_from_path(5, 4, VCF_PATH)
+    results = get_results_from_path(5, 4, paged_vcf)
     assert(results.variants[0].name == "id_16")
     assert(results.variants[-1].name == "id_20")
 
     # The last page holds the one record that does not fill it. This used to
     # come back empty — the guard asked whether the page *ended* within the
     # file — so it was commented out rather than failing.
-    results = get_results_from_path(5, 5, VCF_PATH)
+    results = get_results_from_path(5, 5, paged_vcf)
     assert(results.variants[0].name == "id_21")
     assert(len(results.variants) == 1)
 
-def test_negative_paging():
-    results = get_results_from_path(5, 6, VCF_PATH)
+def test_negative_paging(paged_vcf):
+    results = get_results_from_path(5, 6, paged_vcf)
     assert(len(results.variants) == 0)
     assert(results.metadata.pagination.total == 21)
 
 
-def test_every_record_is_reachable_exactly_once_by_paging():
+def test_every_record_is_reachable_exactly_once_by_paging(paged_vcf):
     """The boundary the old guard got wrong, stated as a whole: paging through
     a file whose record count is not a multiple of the page size must yield
     every record, once, and then stop.
@@ -305,18 +320,18 @@ def test_every_record_is_reachable_exactly_once_by_paging():
     """
     seen = []
     for page in range(1, 8):
-        seen += [v.name for v in get_results_from_path(5, page, VCF_PATH).variants]
+        seen += [v.name for v in get_results_from_path(5, page, paged_vcf).variants]
     assert seen == [f"id_{n:02}" for n in range(1, 22)]
 
 
-def test_a_page_larger_than_the_file_is_one_page():
+def test_a_page_larger_than_the_file_is_one_page(paged_vcf):
     """Asking for more per page than the file holds is the common case for a
     small result set — the whole file on page 1, nothing after it."""
-    first = get_results_from_path(100, 1, VCF_PATH)
+    first = get_results_from_path(100, 1, paged_vcf)
     assert len(first.variants) == 21
     assert first.variants[0].name == "id_01"
     assert first.variants[-1].name == "id_21"
-    assert len(get_results_from_path(100, 2, VCF_PATH).variants) == 0
+    assert len(get_results_from_path(100, 2, paged_vcf).variants) == 0
 
 
 @pytest.mark.skip(reason="Used to test against a real VCF file")

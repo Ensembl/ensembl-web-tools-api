@@ -378,7 +378,6 @@ def test_nearest_gene_both_directions_splits_and_types():
 
 
 def test_nearest_gene_single_without_direction():
-    # Non-both_directions mode omits the direction suffix (upstream is the default).
     result = run("nearest_gene", row_list(NearestGene="ENSG00000186092:7522"))
     assert result["nearest_genes"] == [
         {"gene_id": "ENSG00000186092", "distance": 7522, "direction": None}

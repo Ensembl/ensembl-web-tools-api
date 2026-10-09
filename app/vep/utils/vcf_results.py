@@ -3,7 +3,7 @@
 from collections import Counter, deque, OrderedDict
 from dataclasses import dataclass
 from io import StringIO
-from typing import Iterable, Iterator
+from typing import Container, Iterable, Iterator
 import gzip
 import itertools
 import json
@@ -239,14 +239,16 @@ def _spec_annotations(
     cache: dict | None = None,
     plans: dict | None = None,
     site: tuple[str, str, str, str] | None = None,
+    skip: Container[str] = (),
 ) -> list[model.Annotation]:
     """Build annotations for one CSQ entry and parsing scope.
 
     Plans are resolved once from the VCF header and skip unavailable plugins.
+    Plugins named in `skip` are not parsed.
     """
     annotations: list[model.Annotation] = []
     for plugin in spec.plugins:
-        if plugin.scope != scope:
+        if plugin.scope != scope or plugin.plugin in skip:
             continue
         plan = plans.get(plugin.plugin) if plans else None
         # A plugin without header columns did not run for this VCF.
@@ -334,10 +336,11 @@ def _get_alt_allele_details(
     if plans is None and spec is not None:
         plans = compile_parsing_spec(index_map, spec)
     allele_type = sv["type_word"] if sv else _get_variant_type(ref, alt)
-    # Allele-scoped annotations are identical across matching CSQ rows.
+    # Most allele-scoped columns repeat on every matching CSQ row, but some
+    # appear on one row kind only (NearestGene on the intergenic row). Each
+    # plugin is read from the first row where it has output.
     colocated_variants: list[str] = []
-    allele_annotations: list[model.Annotation] = []
-    allele_level_captured = False
+    allele_annotations: dict[str, model.Annotation] = {}
     # Cache plugin output per allele; row-specific `applies_to` checks still run.
     parse_cache: dict = {}
 
@@ -347,14 +350,21 @@ def _get_alt_allele_details(
         if csq_values[index_map["Allele"]] != alt:
             continue
 
-        if not allele_level_captured:
+        if not colocated_variants:
             colocated_variants = split_amp(
                 get_csq_value(csq_values, "Existing_variation", None, index_map)
             )
-            allele_annotations = _spec_annotations(
-                csq_values, index_map, spec, "allele", parse_cache, plans, site
-            )
-            allele_level_captured = True
+        for annotation in _spec_annotations(
+            csq_values,
+            index_map,
+            spec,
+            "allele",
+            parse_cache,
+            plans,
+            site,
+            skip=allele_annotations,
+        ):
+            allele_annotations[annotation.plugin] = annotation
 
         cons = get_csq_value(csq_values, "Consequence", "", index_map)
         if len(cons) == 0:
@@ -454,12 +464,23 @@ def _get_alt_allele_details(
                 csq_values[index_map["Feature_type"]] or "(none)"
             ] += 1
 
+    # Keep spec order whatever row each annotation came from.
+    ordered_annotations = (
+        [
+            allele_annotations[plugin.plugin]
+            for plugin in spec.plugins
+            if plugin.plugin in allele_annotations
+        ]
+        if allele_annotations
+        else []
+    )
+
     return model.AlternativeVariantAllele(
         allele_sequence=allele_sequence,
         allele_type=allele_type,
         structural_variant_detail=sv["detail"] if sv else None,
         colocated_variants=colocated_variants,
-        annotations=allele_annotations,
+        annotations=ordered_annotations,
         predicted_molecular_consequences=consequences,
     )
 

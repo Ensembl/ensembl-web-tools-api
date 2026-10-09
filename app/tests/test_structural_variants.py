@@ -122,6 +122,11 @@ def test_simple_variants_are_not_structural():
     assert _get_variant_type("ATT", "A") == "deletion"
 
 
+def test_an_empty_allele_gets_the_generic_type():
+    assert _get_variant_type("C", "") == "sequence_alteration"
+    assert _get_variant_type("", "C") == "sequence_alteration"
+
+
 # --- _get_alt_allele_details applies the sv override ------------------------
 
 

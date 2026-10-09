@@ -18,6 +18,7 @@ from app.vep.utils.vcf_results import get_results_from_path
 from vep.models.display_panels_model import to_display_panels
 from app.vep.utils.spec_loader import (
     load_merged_spec,
+    resolve_merged_spec,
     write_display_panels_sidecar,
     write_expected_columns_sidecar,
     write_spec_sidecar,
@@ -345,6 +346,28 @@ def test_transcript_filter_matches_ignoring_version():
     # only the matching transcript survives; the other transcript is pruned
     assert kept_features == ["ENST00000341065.8"]
     assert stats[0].removed == 1
+
+
+def test_transcript_filter_matches_only_transcripts():
+    entries = ",".join(
+        f"T|{consequence}|MODIFIER|||{feature_type}|{feature}|{biotype}"
+        for feature_type, feature, consequence, biotype in (
+            ("Transcript", "ENST00000341065.8", "intron_variant", "protein_coding"),
+            ("RegulatoryFeature", "ENSR1_D37Q", "regulatory_region_variant", "enhancer"),
+            ("MotifFeature", "ENSM00000071889", "TF_binding_site_variant", ""),
+        )
+    )
+    line = f"chr1\t101\tid_01\tC\tT\t.\t.\tCSQ={entries}\n"
+    fi = INDEX_MAP["Feature"]
+
+    for regulatory_id in ("ENSR1_D37Q", "ENSM00000071889"):
+        compiled = rf.compile_filters([_transcript_filter(regulatory_id)], INDEX_MAP)
+        kept, _ = rf.apply_filter_pipeline([line], compiled)
+        assert kept == [], regulatory_id
+
+    compiled = rf.compile_filters([_transcript_filter("ENST00000341065")], INDEX_MAP)
+    kept, _ = rf.apply_filter_pipeline([line], compiled)
+    assert [e[fi] for e in rf.extract_csq_entries(kept[0])] == ["ENST00000341065.8"]
 
 
 def test_transcript_filter_matches_with_version_supplied():
@@ -826,6 +849,33 @@ def test_get_results_filtered_totals_and_metadata(tmp_path):
     assert result.metadata.filters.filtered_total == 3
     assert result.metadata.filters.stats[0].field == "consequence"
     assert result.metadata.filters.stats[0].removed == 2
+
+
+def test_get_results_names_the_regulatory_options(tmp_path):
+    vcf_path = _write_vcf(tmp_path, [_record(1, ["missense_variant"])])
+
+    result = get_results_from_path(
+        page_size=10,
+        page=1,
+        vcf_path=FilePath(vcf_path),
+        filters=[_consequence_filter("missense_variant")],
+    )
+
+    assert result.metadata.regulatory_options == ["regulatory"]
+
+
+def test_a_spec_without_regulatory_options_names_none(tmp_path):
+    vcf_path = _write_vcf(tmp_path, [_record(1, ["missense_variant"])])
+    write_spec_sidecar(tmp_path, resolve_merged_spec("CAU__Wild1.0"))
+
+    result = get_results_from_path(
+        page_size=10,
+        page=1,
+        vcf_path=FilePath(vcf_path),
+        filters=[_consequence_filter("missense_variant")],
+    )
+
+    assert result.metadata.regulatory_options == []
 
 
 def test_get_results_prunes_nonmatching_transcripts(tmp_path):

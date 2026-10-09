@@ -2226,6 +2226,52 @@
             "type": "int"
           }
         ]
+      },
+      {
+        "plugin": "motif",
+        "scope": "regulatory",
+        "output": "motif",
+        "csq_fields": [
+          "MOTIF_NAME",
+          "MOTIF_POS",
+          "HIGH_INF_POS",
+          "MOTIF_SCORE_CHANGE",
+          "TRANSCRIPTION_FACTORS"
+        ],
+        "require_any_output": [
+          "name"
+        ],
+        "targets": [
+          {
+            "field": "name",
+            "from": "MOTIF_NAME",
+            "transform": "scalar",
+            "type": "string"
+          },
+          {
+            "field": "transcription_factors",
+            "from": "TRANSCRIPTION_FACTORS",
+            "transform": "list"
+          },
+          {
+            "field": "position",
+            "from": "MOTIF_POS",
+            "transform": "scalar",
+            "type": "int"
+          },
+          {
+            "field": "high_information_position",
+            "from": "HIGH_INF_POS",
+            "transform": "scalar",
+            "type": "string"
+          },
+          {
+            "field": "score_change",
+            "from": "MOTIF_SCORE_CHANGE",
+            "transform": "scalar",
+            "type": "float"
+          }
+        ]
       }
     ]
   },
@@ -3517,6 +3563,38 @@
         ]
       },
       {
+        "option_id": "regulatory",
+        "blocks": [
+          {
+            "kind": "rows",
+            "heading": "Binding motif",
+            "rows": [
+              {
+                "label": "Motif",
+                "from": "motif.name"
+              },
+              {
+                "label": "Transcription factors",
+                "from": "motif.transcription_factors",
+                "format": "join"
+              },
+              {
+                "label": "Position in motif",
+                "from": "motif.position"
+              },
+              {
+                "label": "High information position",
+                "from": "motif.high_information_position"
+              },
+              {
+                "label": "Score change",
+                "from": "motif.score_change"
+              }
+            ]
+          }
+        ]
+      },
+      {
         "option_id": "tss_distance",
         "blocks": [
           {
@@ -3953,6 +4031,10 @@
             "href": "https://www.gencodegenes.org/pages/promoter_windows/"
           }
         ]
+      },
+      {
+        "option_id": "regulatory",
+        "description": "Reports consequences on regulatory features, such as promoters and enhancers, and on transcription factor binding motifs where Ensembl has them. A motif shows the transcription factors that bind it and where the variant falls within it."
       },
       {
         "option_id": "gnomad_exomes",

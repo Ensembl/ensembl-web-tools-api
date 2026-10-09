@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -32,7 +32,7 @@ class Annotation(BaseModel):
     not run / no data"."""
 
     plugin: str  # spec plugin id, e.g. "mavedb", "gnomad_exomes"
-    scope: str  # "allele" | "transcript"
+    scope: str  # "allele" | "transcript" | "regulatory"
     data: dict[str, Any]
 
 
@@ -120,6 +120,18 @@ class PredictedTranscriptConsequence(BaseModel):
     annotation_refs: list[int] = []
 
 
+class PredictedRegulatoryConsequence(BaseModel):
+    """A consequence on a RegulatoryFeature (ENSR) or MotifFeature (ENSM) row.
+    A motif has no biotype."""
+
+    feature_type: Literal["regulatory"] = "regulatory"
+    stable_id: str = Field(..., description="regulatory feature or motif id")
+    biotype: str | None = None
+    consequences: list[str]
+    annotations: list[Annotation] = Field(default_factory=list, exclude=True)
+    annotation_refs: list[int] = []
+
+
 class ReferenceVariantAllele(BaseModel):
     allele_sequence: str
 
@@ -192,6 +204,9 @@ class Metadata(BaseModel):
     # section of the job's pinned spec, plus the plugin->scope map derived from
     # its `parsing` half.
     display: DisplayPayload
+    # The options that report regulatory consequences, from the job's pinned
+    # spec, so the frontend shows the Regulatory column only when one was chosen.
+    regulatory_options: list[str] = []
 
 
 class AlternativeVariantAllele(BaseModel):
@@ -218,7 +233,9 @@ class AlternativeVariantAllele(BaseModel):
     annotations: list[Annotation] = Field(default_factory=list, exclude=True)
     annotation_refs: list[int] = []
     predicted_molecular_consequences: list[
-        PredictedTranscriptConsequence | PredictedIntergenicConsequence
+        PredictedTranscriptConsequence
+        | PredictedRegulatoryConsequence
+        | PredictedIntergenicConsequence
     ]
 
 

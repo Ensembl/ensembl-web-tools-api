@@ -4,8 +4,8 @@ Since the go-flat cutover the plugin annotations are produced by the spec
 interpreter, not by a bank of hand-written parsers; only the unspecced tail
 (uniprot / protein_matches / sift / polyphen) is still parsed by hand here. A
 modern CSQ header (with the plugin columns) builds the index_map, and the
-end-to-end tests check an allele built from a transcript row and from an
-intergenic row.
+end-to-end tests check an allele built from a transcript row, an intergenic
+row and regulatory rows.
 
 The header fixtures below (ALL_COLS / INDEX_MAP / row_list / EMPTY) are shared
 with test_spec_interpreter.
@@ -316,3 +316,195 @@ def test_transcript_flags_mane_gencode_primary_canonical():
     assert plain_cons.is_canonical is False
     assert plain_cons.is_mane_select is False
     assert plain_cons.is_gencode_primary is False
+
+
+# --- feature types with no consequence model ---------------------------------
+
+
+def test_an_unmodelled_feature_type_is_counted_rather_than_lost():
+    from collections import Counter
+
+    dropped: Counter = Counter()
+    allele = _get_alt_allele_details(
+        "G",
+        "A",
+        [row_str(Allele="A", Feature_type="FutureFeature", Feature="X1",
+                 Consequence="future_variant")],
+        INDEX_MAP,
+        SPEC,
+        unhandled_feature_types=dropped,
+    )
+    assert allele.predicted_molecular_consequences == []
+    assert dropped == Counter({"FutureFeature": 1})
+
+
+def test_the_counter_is_optional():
+    allele = _get_alt_allele_details(
+        "G", "A",
+        [row_str(Allele="A", Feature_type="FutureFeature",
+                 Consequence="future_variant")],
+        INDEX_MAP,
+        SPEC,
+    )
+    assert allele.predicted_molecular_consequences == []
+
+
+def test_modelled_rows_are_not_counted():
+    from collections import Counter
+
+    dropped: Counter = Counter()
+    _get_alt_allele_details(
+        "G", "A",
+        [
+            row_str(Allele="A", Feature_type="Transcript", Feature="ENST1",
+                    BIOTYPE="protein_coding", Consequence="missense_variant",
+                    STRAND="1"),
+            row_str(Allele="A", Feature_type="RegulatoryFeature",
+                    Feature="ENSR1_D37Q", BIOTYPE="enhancer",
+                    Consequence="regulatory_region_variant"),
+            row_str(Allele="A", Feature_type="MotifFeature",
+                    Feature="ENSM00000018397",
+                    Consequence="TF_binding_site_variant"),
+            row_str(Allele="A", Feature_type="", Consequence="intergenic_variant"),
+        ],
+        INDEX_MAP,
+        SPEC,
+        unhandled_feature_types=dropped,
+    )
+    assert dropped == Counter()
+
+
+# --- regulatory rows ---------------------------------------------------------
+
+
+def test_a_regulatory_feature_row_becomes_a_regulatory_consequence():
+    allele = _get_alt_allele_details(
+        "C", "T",
+        [row_str(Allele="T", Feature_type="RegulatoryFeature",
+                 Feature="ENSR1_D37Q", BIOTYPE="enhancer",
+                 Consequence="regulatory_region_variant")],
+        INDEX_MAP,
+        SPEC,
+    )
+    [consequence] = allele.predicted_molecular_consequences
+    assert consequence.feature_type == "regulatory"
+    assert consequence.stable_id == "ENSR1_D37Q"
+    assert consequence.biotype == "enhancer"
+    assert consequence.consequences == ["regulatory_region_variant"]
+
+
+def test_a_motif_row_is_a_regulatory_consequence_without_a_biotype():
+    allele = _get_alt_allele_details(
+        "G", "C",
+        [row_str(Allele="C", Feature_type="MotifFeature",
+                 Feature="ENSM00000018397",
+                 Consequence="TF_binding_site_variant")],
+        INDEX_MAP,
+        SPEC,
+    )
+    [consequence] = allele.predicted_molecular_consequences
+    assert consequence.feature_type == "regulatory"
+    assert consequence.stable_id == "ENSM00000018397"
+    assert consequence.biotype is None
+    assert consequence.consequences == ["TF_binding_site_variant"]
+
+
+def test_an_allele_keeps_its_transcript_and_regulatory_rows():
+    allele = _get_alt_allele_details(
+        "C", "G",
+        [
+            row_str(Allele="G", Feature_type="Transcript",
+                    Feature="ENST00000367313.5", BIOTYPE="protein_coding",
+                    Consequence="intron_variant", STRAND="1", CADD_PHRED="5.579"),
+            row_str(Allele="G", Feature_type="RegulatoryFeature",
+                    Feature="ENSR1_94XXBC", BIOTYPE="enhancer",
+                    Consequence="regulatory_region_variant", CADD_PHRED="5.579"),
+            row_str(Allele="G", Feature_type="MotifFeature",
+                    Feature="ENSM00000071889",
+                    Consequence="TF_binding_site_variant", CADD_PHRED="5.579"),
+        ],
+        INDEX_MAP,
+        SPEC,
+    )
+    rows = [
+        (type(c).__name__, c.stable_id)
+        for c in allele.predicted_molecular_consequences
+    ]
+    assert rows == [
+        ("PredictedTranscriptConsequence", "ENST00000367313.5"),
+        ("PredictedRegulatoryConsequence", "ENSR1_94XXBC"),
+        ("PredictedRegulatoryConsequence", "ENSM00000071889"),
+    ]
+    assert {a.plugin: a.data for a in allele.annotations}["cadd"]["phred"] == 5.579
+
+
+def test_a_regulatory_scoped_plugin_attaches_to_the_regulatory_row_only():
+    loeuf = next(p for p in SPEC.plugins if p.plugin == "loeuf")
+    probe = type(loeuf).model_validate(
+        {**loeuf.model_dump(), "plugin": "regulatory_probe",
+         "output": "regulatory_probe", "scope": "regulatory"}
+    )
+    spec = SPEC.model_copy(update={"plugins": [*SPEC.plugins, probe]})
+    allele = _get_alt_allele_details(
+        "C", "G",
+        [
+            row_str(Allele="G", Feature_type="Transcript", Feature="ENST1",
+                    BIOTYPE="protein_coding", Consequence="intron_variant",
+                    STRAND="1", LOEUF="0.5"),
+            row_str(Allele="G", Feature_type="RegulatoryFeature",
+                    Feature="ENSR1_94XXBC", BIOTYPE="enhancer",
+                    Consequence="regulatory_region_variant", LOEUF="0.7"),
+        ],
+        INDEX_MAP,
+        spec,
+    )
+    transcript, regulatory = allele.predicted_molecular_consequences
+    on_transcript = {a.plugin: a for a in transcript.annotations}
+    on_regulatory = {a.plugin: a for a in regulatory.annotations}
+
+    assert on_regulatory["regulatory_probe"].scope == "regulatory"
+    assert on_regulatory["regulatory_probe"].data == {"score": 0.7}
+    assert "loeuf" not in on_regulatory
+    assert on_transcript["loeuf"].data == {"score": 0.5}
+    assert "regulatory_probe" not in on_transcript
+    assert "regulatory_probe" not in {a.plugin for a in allele.annotations}
+
+
+def test_a_motif_rows_details_attach_to_that_row():
+    # HIGH_INF_POS and MOTIF_SCORE_CHANGE are filled here, although VEP leaves
+    # them empty because the regulation GFFs carry no weight matrix.
+    motif_cols = [
+        "MOTIF_NAME", "MOTIF_POS", "HIGH_INF_POS", "MOTIF_SCORE_CHANGE",
+        "TRANSCRIPTION_FACTORS",
+    ]
+    cols = ALL_COLS + motif_cols
+    index_map = get_prediction_index_map(
+        "Consequence annotations from Ensembl VEP. Format: " + "|".join(cols)
+    )
+
+    def row(**values):
+        return "|".join(str(values.get(col, "")) for col in cols)
+
+    allele = _get_alt_allele_details(
+        "G", "C",
+        [
+            row(Allele="C", Feature_type="MotifFeature", Feature="ENSM00000018397",
+                Consequence="TF_binding_site_variant", MOTIF_NAME="ENSPFM0015",
+                MOTIF_POS="11", HIGH_INF_POS="N", MOTIF_SCORE_CHANGE="-0.021",
+                TRANSCRIPTION_FACTORS="FOS&ATF7&JUN"),
+            row(Allele="C", Feature_type="RegulatoryFeature", Feature="ENSR1_D37Q",
+                BIOTYPE="enhancer", Consequence="regulatory_region_variant"),
+        ],
+        index_map,
+        SPEC,
+    )
+    motif_row, enhancer_row = allele.predicted_molecular_consequences
+    motif = {a.plugin: a for a in motif_row.annotations}["motif"]
+    assert motif.scope == "regulatory"
+    assert motif.data["name"] == "ENSPFM0015"
+    assert motif.data["transcription_factors"] == ["FOS", "ATF7", "JUN"]
+    assert motif.data["position"] == 11
+    assert motif.data["high_information_position"] == "N"
+    assert motif.data["score_change"] == -0.021
+    assert "motif" not in {a.plugin for a in enhancer_row.annotations}
+    assert "motif" not in {a.plugin for a in allele.annotations}

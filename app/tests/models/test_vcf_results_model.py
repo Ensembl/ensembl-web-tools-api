@@ -1,3 +1,4 @@
+import json
 import unittest
 from pydantic import ValidationError
 
@@ -5,6 +6,7 @@ from vep.models.vcf_results_model import (
     Annotation,
     PaginationMetadata,
     PredictedIntergenicConsequence,
+    PredictedRegulatoryConsequence,
     PredictedTranscriptConsequence,
     FeatureType,
     Strand,
@@ -28,6 +30,43 @@ class TestVCFResultModel(unittest.TestCase):
         consequence = PredictedIntergenicConsequence()
         self.assertIsNone(consequence.feature_type)
         self.assertEqual(consequence.consequences, ["intergenic_variant"])
+
+    def test_predicted_regulatory_consequence(self):
+        consequence = PredictedRegulatoryConsequence(
+            stable_id="ENSM00000018397",
+            consequences=["TF_binding_site_variant"],
+        )
+        self.assertIsNone(consequence.biotype)
+        self.assertEqual(
+            json.loads(consequence.model_dump_json()),
+            {
+                "feature_type": "regulatory",
+                "stable_id": "ENSM00000018397",
+                "biotype": None,
+                "consequences": ["TF_binding_site_variant"],
+                "annotation_refs": [],
+            },
+        )
+
+    def test_a_regulatory_consequence_is_not_read_back_as_intergenic(self):
+        # The intergenic model accepts any feature_type.
+        allele = AlternativeVariantAllele.model_validate(
+            {
+                "allele_sequence": "T",
+                "allele_type": "SNV",
+                "predicted_molecular_consequences": [
+                    {
+                        "feature_type": "regulatory",
+                        "stable_id": "ENSR1_D37Q",
+                        "biotype": "enhancer",
+                        "consequences": ["regulatory_region_variant"],
+                    }
+                ],
+            }
+        )
+        [consequence] = allele.predicted_molecular_consequences
+        self.assertIsInstance(consequence, PredictedRegulatoryConsequence)
+        self.assertEqual(consequence.stable_id, "ENSR1_D37Q")
 
     def test_predicted_transcript_consequence(self):
         consequence = PredictedTranscriptConsequence(

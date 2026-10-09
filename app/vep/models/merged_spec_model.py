@@ -174,8 +174,17 @@ class MergedSpec(BaseModel):
         return self.config.entries
 
     def plugin_scopes(self) -> dict[str, str]:
-        """Map plugin ids to their allele or transcript parsing scope."""
+        """Map plugin ids to their parsing scope."""
         return {plugin.plugin: plugin.scope for plugin in self.parsing.plugins}
+
+    def regulatory_option_ids(self) -> list[str]:
+        """Ids of the options parsed as a regulatory-scoped plugin, in config order."""
+        scopes = self.plugin_scopes()
+        return [
+            entry.id
+            for entry in self.config_entries()
+            if any(scopes.get(plugin) == "regulatory" for plugin in entry.parsed_as)
+        ]
 
     def display_payload(self) -> DisplayPayload:
         """The display spec plus its derived scopes, as served on results."""

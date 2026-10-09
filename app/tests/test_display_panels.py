@@ -174,6 +174,7 @@ def test_form_config_uses_explain_metadata_for_non_human_panels():
         "genes_and_transcripts",
         "protein_and_functional",
         "phenotype_and_disease_associations",
+        "regulatory",
     }
 
 

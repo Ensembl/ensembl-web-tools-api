@@ -1,6 +1,6 @@
 """Load a VEP VCF and convert it to the results response model."""
 
-from collections import deque, OrderedDict
+from collections import Counter, deque, OrderedDict
 from dataclasses import dataclass
 from io import StringIO
 from typing import Iterable, Iterator
@@ -294,6 +294,9 @@ def _pool_annotations(variant: model.Variant) -> None:
     variant.annotation_pool = pool
 
 
+REGULATORY_FEATURE_TYPES = frozenset({"RegulatoryFeature", "MotifFeature"})
+
+
 def _get_alt_allele_details(
     ref: str,
     alt: str,
@@ -303,6 +306,7 @@ def _get_alt_allele_details(
     sv: dict | None = None,
     plans: dict | None = None,
     location: model.Location | None = None,
+    unhandled_feature_types: Counter | None = None,
 ) -> model.AlternativeVariantAllele:
     """Build one alternate allele from matching CSQ entries.
 
@@ -421,6 +425,17 @@ def _get_alt_allele_details(
                     ),
                 )
             )
+        elif csq_values[index_map["Feature_type"]] in REGULATORY_FEATURE_TYPES:
+            consequences.append(
+                model.PredictedRegulatoryConsequence(
+                    stable_id=get_csq_value(csq_values, "Feature", "", index_map),
+                    biotype=get_csq_value(csq_values, "BIOTYPE", None, index_map),
+                    consequences=cons,
+                    annotations=_spec_annotations(
+                        csq_values, index_map, spec, "regulatory", parse_cache, plans
+                    ),
+                )
+            )
         elif "intergenic_variant" in cons:
             consequences.append(
                 model.PredictedIntergenicConsequence(
@@ -428,6 +443,12 @@ def _get_alt_allele_details(
                     consequences=["intergenic_variant"],
                 )
             )
+        elif unhandled_feature_types is not None:
+            # The response has no model for this feature type. Count the
+            # dropped row so the caller can report it.
+            unhandled_feature_types[
+                csq_values[index_map["Feature_type"]] or "(none)"
+            ] += 1
 
     return model.AlternativeVariantAllele(
         allele_sequence=allele_sequence,
@@ -1010,6 +1031,7 @@ def _with_display_panels(
     spec: ParsingSpec,
     expected_columns: set[str],
     filter_fields: list[FilterField] | None = None,
+    regulatory_options: list[str] | None = None,
 ) -> model.VepResultsResponse:
     """Finalize the pinned display and filter metadata on a parsed response.
 
@@ -1022,6 +1044,7 @@ def _with_display_panels(
     response.metadata.display_panels = panels
     response.metadata.display = display
     response.metadata.filter_fields = filter_fields
+    response.metadata.regulatory_options = regulatory_options or []
     # AF is allele-scoped, so its annotations hang off the alt alleles.
     alleles = [
         allele
@@ -1181,6 +1204,7 @@ def get_results_from_path(
     filter_fields = _gated_filter_fields(merged, _read_csq_columns(vcf_path))
     display_panels = _drop_form_only_help(_load_pinned_display_panels(vcf_path), merged)
     display = merged.display_payload()
+    regulatory_options = merged.regulatory_option_ids()
 
     # Filtered requests can't use the page index (filtering shifts record
     # positions), so they take a dedicated scan-and-filter path.
@@ -1194,6 +1218,7 @@ def get_results_from_path(
             spec=spec,
             expected_columns=expected_columns,
             filter_fields=filter_fields,
+            regulatory_options=regulatory_options,
         )
 
     # Fast path: if the pipeline emitted a page-index sidecar, seek to the page
@@ -1219,6 +1244,7 @@ def get_results_from_path(
             spec=spec,
             expected_columns=expected_columns,
             filter_fields=filter_fields,
+            regulatory_options=regulatory_options,
         )
 
     # Fallback (no sidecar): scan the file from the top through page*page_size
@@ -1256,6 +1282,7 @@ def get_results_from_path(
         spec=spec,
         expected_columns=expected_columns,
         filter_fields=filter_fields,
+        regulatory_options=regulatory_options,
     )
 
 
@@ -1312,6 +1339,7 @@ def _get_results_from_records(
     # all, and which columns a pattern_map matches are all answerable here
     # instead of on every CSQ row. See PluginPlan.
     plans = compile_parsing_spec(prediction_index_map, spec)
+    unhandled_feature_types: Counter = Counter()
 
     variants = []
     # populate variants page. `presliced` means the stream already contains
@@ -1369,6 +1397,7 @@ def _get_results_from_records(
                     sv,
                     plans,
                     location=location,
+                    unhandled_feature_types=unhandled_feature_types,
                 )
                 for alt in alt_allele_strings
             ]
@@ -1392,6 +1421,17 @@ def _get_results_from_records(
             # One pool per variant, once it holds every allele and consequence.
             _pool_annotations(variant)
             variants.append(variant)
+
+    if unhandled_feature_types:
+        logging.warning(
+            "Dropped %d CSQ row(s) with no consequence model: %s. "
+            "Their annotations do not reach the response.",
+            sum(unhandled_feature_types.values()),
+            ", ".join(
+                f"{name} x{count}"
+                for name, count in sorted(unhandled_feature_types.items())
+            ),
+        )
 
     available_af_sources = [
         model.AfSource(**descriptor)

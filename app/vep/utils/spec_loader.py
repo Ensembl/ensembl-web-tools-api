@@ -298,9 +298,15 @@ def species_annotation_entry(assembly_name: str) -> dict | None:
     return None
 
 
+def _substitute(value: str, substitutions: dict[str, str]) -> str:
+    for token, replacement in substitutions.items():
+        value = value.replace(token, replacement)
+    return value
+
+
 def species_extra_config_entries(assembly_name: str) -> list[dict]:
-    """The GO / Phenotypes config entries for a species, built from the shared
-    templates with its own production name. Empty for a species with no data."""
+    """A species' dataset config entries, built from the shared templates with
+    its own names and files. Empty for a species with no data."""
     row = species_annotation_entry(assembly_name)
     if row is None:
         return []
@@ -316,11 +322,13 @@ def species_extra_config_entries(assembly_name: str) -> list[dict]:
             "{production_name}": row["production_name"],
             "{file}": (row.get("files") or {}).get(dataset, ""),
         }
-        for key, value in entry["config"]["params"].items():
+        config = entry["config"]
+        for key, value in config.get("params", {}).items():
             if isinstance(value, str):
-                for token, replacement in substitutions.items():
-                    value = value.replace(token, replacement)
-                entry["config"]["params"][key] = value
+                config["params"][key] = _substitute(value, substitutions)
+        # A setting such as regulatory_gff has one value and no params.
+        if isinstance(config.get("value"), str):
+            config["value"] = _substitute(config["value"], substitutions)
         entries.append(entry)
     return entries
 

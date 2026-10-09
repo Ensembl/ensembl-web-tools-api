@@ -187,6 +187,11 @@ def test_get_results_page_via_index(indexed_vcf):
     assert result.variants[0].location.region_name == "1"
 
 
+def test_get_results_via_index_names_the_regulatory_options(indexed_vcf):
+    result = get_results_from_path(5, 1, FilePath(indexed_vcf))
+    assert result.metadata.regulatory_options == ["regulatory"]
+
+
 def test_get_results_last_partial_page_via_index(indexed_vcf):
     result = get_results_from_path(5, 3, FilePath(indexed_vcf))
     assert [v.name for v in result.variants] == ["id_11", "id_12"]

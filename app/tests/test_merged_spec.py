@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from app.vep.models.merged_spec_model import MergedSpec
 from app.vep.models.pipeline_model import ConfigIniParams
-from app.vep.utils.spec_loader import load_merged_spec
+from app.vep.utils.spec_loader import load_merged_spec, resolve_merged_spec
 
 SPEC = load_merged_spec("human_grch38")
 
@@ -59,11 +59,11 @@ def _doc(config_entries, parse_plugins):
 def test_bundled_merged_spec_is_consistent():
     # load_merged_spec runs the consistency check; a bad spec would raise here.
     spec = load_merged_spec("human_grch38")
-    assert len(spec.config_entries()) == 38
+    assert len(spec.config_entries()) == 39
     # One more parse plugin than config entries: the Phenotypes option feeds two,
     # splitting gene-associated phenotypes (narrowed to the row's own gene) from
     # variant-associated ones (narrowed to the row's allele).
-    assert len(spec.parse_plugins()) == 39
+    assert len(spec.parse_plugins()) == 40
 
 
 # --- reference integrity ----------------------------------------------------
@@ -692,3 +692,45 @@ def test_stacked_row_cell_format_must_suit_its_type():
     assert found, "no stacked cell over a counted field left to probe"
     with pytest.raises(ValidationError, match="as 'humanize'"):
         MergedSpec.model_validate(doc)
+
+
+# --- options that report regulatory consequences ----------------------------
+
+
+@pytest.mark.parametrize("assembly", ["GRCh38.p14", "GRCh37.p13", "ARS-UCD2.0"])
+def test_regulatory_options_come_from_the_regulatory_dataset(assembly):
+    assert resolve_merged_spec(assembly).regulatory_option_ids() == ["regulatory"]
+
+
+def test_a_species_without_the_regulatory_dataset_has_no_regulatory_options():
+    assert resolve_merged_spec("CAU__Wild1.0").regulatory_option_ids() == []
+
+
+def test_only_options_parsed_as_a_regulatory_plugin_count():
+    doc = _doc(
+        [
+            {
+                "id": "cadd",
+                "order": 1,
+                "parsed_as": ["cadd"],
+                "config": {"emit": "flag", "keyword": "cadd"},
+            },
+            {
+                "id": "motifs",
+                "order": 2,
+                "parsed_as": ["motif"],
+                "config": {"emit": "flag", "keyword": "motifs"},
+            },
+            {
+                "id": "spdi",
+                "order": 3,
+                "parsed_as": [],
+                "config": {"emit": "flag", "keyword": "spdi"},
+            },
+        ],
+        [
+            _plugin("cadd", ["CADD_PHRED"], scope="allele"),
+            _plugin("motif", ["MOTIF_NAME"], scope="regulatory"),
+        ],
+    )
+    assert MergedSpec.model_validate(doc).regulatory_option_ids() == ["motifs"]

@@ -107,6 +107,46 @@ def test_annotations_are_the_only_annotation_data():
     assert by_consequence["clinvar"]["significance"] == ["Pathogenic"]
 
 
+# --- allele-scope columns written on one row kind -----------------------------
+# An intergenic variant inside a regulatory feature. VEP writes NearestGene on
+# the intergenic row only, and the regulatory row can come first.
+
+_NEAREST_COLUMNS = [
+    "Allele", "Feature_type", "Consequence", "Feature", "BIOTYPE",
+    "gnomAD_exomes_AF", "NearestGene",
+]
+_NEAREST_INDEX = {column: i for i, column in enumerate(_NEAREST_COLUMNS)}
+_REGULATORY_ROW = "|".join([
+    "T", "RegulatoryFeature", "regulatory_region_variant", "ENSR00000000001",
+    "enhancer", "0.01", "",
+])
+_INTERGENIC_ROW = "|".join([
+    "T", "", "intergenic_variant", "", "", "0.01",
+    "ENSG00000186092:7522:upstream&ENSG00000187634:1200:downstream",
+])
+
+
+def test_allele_scope_annotation_is_read_from_the_row_that_carries_it():
+    allele = _get_alt_allele_details(
+        "A", "T", [_REGULATORY_ROW, _INTERGENIC_ROW], _NEAREST_INDEX, SPEC
+    )
+    by_plugin = {a.plugin: a.data for a in allele.annotations}
+
+    assert by_plugin["nearest_gene"]["nearest_genes"] == [
+        {"gene_id": "ENSG00000186092", "distance": 7522, "direction": "upstream"},
+        {"gene_id": "ENSG00000187634", "distance": 1200, "direction": "downstream"},
+    ]
+
+
+def test_allele_scope_annotations_do_not_depend_on_row_order():
+    rows = [_REGULATORY_ROW, _INTERGENIC_ROW]
+    forward = _get_alt_allele_details("A", "T", rows, _NEAREST_INDEX, SPEC)
+    reverse = _get_alt_allele_details("A", "T", rows[::-1], _NEAREST_INDEX, SPEC)
+
+    assert [a.plugin for a in forward.annotations] == ["gnomad_exomes", "nearest_gene"]
+    assert forward.annotations == reverse.annotations
+
+
 # --- AF-population emission gate ---------------------------------------------
 # A full-cache VCF carries every ancestry; a job that selected only some AF
 # populations must still show only those. The parser's pattern_map reads every

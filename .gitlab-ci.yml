@@ -14,6 +14,16 @@
 #    limitations under the License.
 #
 
+# include template to setup review app
+include:
+  - project: 'ensembl-web/ensembl-gitlab-ci-templates'
+    ref: 'main'
+    file:
+      - 'branch-rules/.branch-rules-template.yaml'
+      - 'deploy/.deploy-main-template.yaml'
+      - 'deploy/.deploy-review-template.yaml'
+      - 'review/.setup-BE-review-template.yaml'
+
 variables:
   DOCKER_TLS_CERTDIR: ""
   DOCKER_IMAGE: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}
@@ -24,41 +34,10 @@ stages:
   - setup
   - test
   - build
-  - deploy-preview
-  - deploy
-
-# Templates
-.deploy-rules-live:
-  rules:
-    - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"
-      when: manual
-    - when: never
-
-.deploy-rules-test:
-  rules:
-    - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH == "main"
-      when: on_success
-    - when: never
-
-.deploy-rules-review:
-  rules:
-    - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH != "main"
-      when: on_success
-    - when: never
-
-.deploy:
-  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
-  before_script:
-    - kubectl config use-context ${AGENT}
-    - kubectl config set-context --current --namespace=${NS}
-  script:
-    - git clone https://gitlab.ebi.ac.uk/ensembl-web/ensembl-k8s-manifests.git
-    - git -C ensembl-k8s-manifests/ checkout k8s123-migration
-    - cd ensembl-k8s-manifests/ensembl-web-tools-api
-    - sed -i "s#<NFS_SERVER>#${NFS_SERVER}#g" deployment.yaml
-    - sed -i "s#<NFS_PATH>#${NFS_PATH}#g" deployment.yaml
-    - kustomize edit set image DOCKER_IMAGE=${DOCKER_IMAGE}
-    - kubectl apply -k ./
+  - deploy-review
+  - deploy-test
+  - deploy-stage
+  - deploy-prod
 
 # Run tests
 Test:
@@ -92,92 +71,65 @@ Docker:
     - docker rmi ${DOCKER_IMAGE}
     - docker logout $CI_REGISTRY
 
-# Deploy feature branch (for custom backend review apps)
-Setup-review:
+# Jobs extended from templates to setup and deploy review environment, dev, staging, prod and fallback environments
+# Create a review deployment (runs once per new branch)
+Setup Review:
+  extends: .setup-review-newk8s
   stage: setup
-  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
-  environment:
-    name: development
-  variables:
-    GIT_STRATEGY: none # ToolsAPI repo not needed here
-    AGENT: ${DEV_AGENT}
-    NS: ${CI_COMMIT_REF_SLUG}
-  rules: # Run once (when a feature branch is created)
-    - if: $CI_COMMIT_BRANCH != "main" &&
-          $CI_PIPELINE_SOURCE == "push" &&
-          $CI_COMMIT_BEFORE_SHA == "0000000000000000000000000000000000000000"
-      when: always
-  script:
-    - kubectl config use-context ${AGENT}
-    # When needed: remove existing ingress, add review namespace & envvars
-    - kubectl config set-context --current --namespace=${DEV_NS}
-    - kubectl delete ingress ensembl-web-tools-api-ingress-${NS} || true
-    - kubectl create namespace ${NS} || true
-    - kubectl config set-context --current --namespace=${NS}
-    - kubectl create secret docker-registry ensemblweb-pull-secret --docker-server=${GITLAB_REGISTRY_URL} 
-      --docker-username=${WEB_PULL_DOCKER_USER} --docker-password=${WEB_PULL_DOCKER_SECRET} --docker-email=${WEB_PULL_DOCKER_EMAIL} || true
-    # Setup ToolsAPI resources in review namespace (service, ingress, secret) + proxy config
-    - git clone --depth 1 --branch k8s123-migration https://gitlab.ebi.ac.uk/ensembl-web/ensembl-k8s-manifests.git
-    - cd ensembl-k8s-manifests/ensembl-web-tools-api
-    - kubectl apply -f service.yaml
-    - sed -i "s#HOST#${NS}.review.ensembl.org#" ingress.yaml
-    - kubectl apply -f ingress.yaml
-    - git clone https://config-ro-user:${CONFIG_RO_TOKEN}@gitlab.ebi.ac.uk/ensembl-web/newsite-api-config-setup.git
-    - cd newsite-api-config-setup
-    - kubectl create secret generic ensembl-web-tools-api-secret --from-env-file=review/tools-api.secret --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl create configmap proxy-configmap --from-env-file=dev/hl/http-proxy.config --dry-run=client -o yaml | kubectl apply -f -
-
-Review:
-  extends:
-    - .deploy
-    - .deploy-rules-review
-  stage: deploy-preview
-  environment:
-    name: development
-    url: http://${NS}.review.ensembl.org
-  variables:
-    AGENT: ${DEV_AGENT}
-    NS: ${CI_COMMIT_REF_SLUG}
-
-# Stop review app (cleanup backend resources)
-Stop_review:
-  stage: deploy-preview
-  image: dockerhub.ebi.ac.uk/ensembl-web/deploy-tools:latest
-  when: manual
-  rules:
-    - if: $CI_COMMIT_BRANCH != "main"
   environment:
     name: development
   variables:
     GIT_STRATEGY: none
     AGENT: ${DEV_AGENT}
-    NS: ${CI_COMMIT_REF_SLUG}
-  script:
-    - kubectl config use-context ${AGENT}
-    - kubectl config set-context --current --namespace=${DEV_NS}
-    - kubectl delete ingress ensembl-web-tools-api-ingress
-    - kubectl delete service ensembl-web-tools-api-svc
-    - kubectl delete deploy ensembl-web-tools-api-deployment
-    - kubectl delete secret ensembl-web-tools-api-secret
-    - kubectl -n ${DEV_NS} delete namespace ${NS} || echo "Please delete ${NS} branch in Ensembl-client to cleanup the review namespace"
+    DEV_NS: ${DEV_NS}
+    REVIEW_NS: ${CI_COMMIT_REF_SLUG}
+    BE_INGRESS: ""
 
-# Deploy main branch to dev/staging
+# Deploy review environment
+Deploy Review:
+  extends: .deploy-review
+  stage: deploy-review
+  variables:
+    AGENT: ${DEV_AGENT}
+    REVIEW_NS: ${CI_COMMIT_REF_SLUG}
+    REVIEW_CONFIGMAP_FILE: "http-proxy.config"
+  environment:
+    name: development
+    url: https://${REVIEW_NS}.review.ensembl.org
+    on_stop: Stop Review
+
+
+Stop Review:
+  extends: .stop-review
+  stage: deploy-review
+  variables:
+    # Must match deploy-review; its job variables are not inherited here.
+    AGENT: ${DEV_AGENT}
+    REVIEW_NS: ${CI_COMMIT_REF_SLUG}
+    GIT_STRATEGY: none
+  rules:
+    - if: $CI_DEPLOY_FREEZE == null && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "main" && $CI_COMMIT_BRANCH != "dev"
+      when: manual
+      allow_failure: true
+  environment:
+    name: development
+    action: stop
+
+#Deploy to k8s
+# Deploy Dev
 Dev:
-  extends:
-    - .deploy
-    - .deploy-rules-test
-  stage: deploy-preview
+  stage: deploy-test
+  extends: .deploy-main
   environment:
     name: development
   variables:
     AGENT: ${DEV_AGENT}
     NS: ${DEV_NS}
 
+# Deploy Stage
 Staging:
-  extends:
-    - .deploy
-    - .deploy-rules-test
-  stage: deploy-preview
+  stage: deploy-stage
+  extends: .deploy-main
   environment:
     name: staging
   variables:
@@ -186,10 +138,8 @@ Staging:
 
 # Deploy main branch to production
 Production:
-  extends:
-    - .deploy
-    - .deploy-rules-live
-  stage: deploy
+  stage: deploy-prod
+  extends: .deploy-main
   environment:
     name: production
   when: manual
@@ -198,10 +148,8 @@ Production:
     NS: ${PROD_NS}
 
 Fallback:
-  extends:
-    - .deploy
-    - .deploy-rules-live
-  stage: deploy
+  stage: deploy-prod
+  extends: .deploy-main
   environment:
     name: fallback
   when: manual

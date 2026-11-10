@@ -23,6 +23,7 @@ include:
       - 'deploy/.deploy-main-template.yaml'
       - 'deploy/.deploy-review-template.yaml'
       - 'review/.setup-BE-review-template.yaml'
+      - 'security-scan/.ensembl-security-jobs.yaml'
 
 variables:
   DOCKER_TLS_CERTDIR: ""
@@ -31,9 +32,11 @@ variables:
   NFS_PATH: ${HL_NFS_OPPATH_CODON}
 
 stages:
+  - security-scan
   - setup
   - test
   - build
+  - container-scan
   - deploy-review
   - deploy-test
   - deploy-stage
@@ -83,7 +86,7 @@ Setup Review:
     AGENT: ${DEV_AGENT}
     DEV_NS: ${DEV_NS}
     REVIEW_NS: ${CI_COMMIT_REF_SLUG}
-    BE_INGRESS: ""
+    BE_INGRESS: ensembl-web-tools-api-ingress-${CI_COMMIT_REF_SLUG}
 
 # Deploy review environment
 Deploy Review:

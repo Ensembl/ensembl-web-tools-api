@@ -97,6 +97,7 @@ Deploy Review:
     REVIEW_NS: ${CI_COMMIT_REF_SLUG}
     REVIEW_CONFIGMAP_FILE: "http-proxy.config"
   environment:
+    name: development
     url: https://${REVIEW_NS}.review.ensembl.org
     on_stop: Stop Review
 
@@ -114,6 +115,7 @@ Stop Review:
       when: manual
       allow_failure: true
   environment:
+    name: development
     action: stop
 
 #Deploy to k8s

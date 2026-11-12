@@ -11,6 +11,7 @@ import gzip
 import zlib
 from typing import Iterable, Iterator
 from pydantic import FilePath
+from vep.utils.vcf_text import VCF_TEXT
 
 
 def _parse_csq_format(info_line: str) -> list[str]:
@@ -106,5 +107,5 @@ def flatten_vcf_lines(lines: Iterable[str]) -> Iterator[str]:
 def stream_vep_tsv(vcf_path: FilePath) -> Iterator[str]:
     """Yield the whole VEP output VCF flattened to tab-separated rows (with
     header). Reads the file directly (bgzip is gzip-readable)."""
-    with gzip.open(vcf_path, "rt") as vcf:
+    with gzip.open(vcf_path, "rt", **VCF_TEXT) as vcf:
         yield from flatten_vcf_lines(vcf)

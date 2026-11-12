@@ -26,6 +26,7 @@ from vep.utils.csq import (
 )
 from vep.utils.vcf_meta import _get_vcf_meta
 from vep.utils.vcf_reader import read_records
+from vep.utils.vcf_text import VCF_TEXT
 from vep.utils.spec_loader import (
     load_display_panels_sidecar,
     load_expected_columns_sidecar,
@@ -563,7 +564,10 @@ def _read_indexed_page(
                     break
                 rows.append(line)
 
-    return b"".join(header_lines).decode(), b"".join(rows).decode()
+    return (
+        b"".join(header_lines).decode(**VCF_TEXT),
+        b"".join(rows).decode(**VCF_TEXT),
+    )
 
 
 class _RecordSource:
@@ -576,7 +580,11 @@ class _RecordSource:
     def __init__(self, vcf_path: FilePath):
         path = str(vcf_path)
         self.seekable = is_bgzf(path)
-        self._reader = _BgzfReader(path) if self.seekable else gzip.open(path, "rt")
+        self._reader = (
+            _BgzfReader(path)
+            if self.seekable
+            else gzip.open(path, "rt", **VCF_TEXT)
+        )
 
     def lines(self) -> Iterator[str]:
         """Text lines from the current position, which earlier calls advance."""
@@ -589,7 +597,7 @@ class _RecordSource:
             line = self._reader.readline()
             if not line:
                 return
-            yield line.decode()
+            yield line.decode(**VCF_TEXT)
 
     def seek(self, voffset: int) -> None:
         self._reader.seek(voffset)
@@ -886,7 +894,7 @@ def stream_filtered_vcf_text(
     as a lazy line stream and survivors are yielded one at a time, never
     collected."""
     header_lines: list[str] = []
-    with gzip.open(vcf_path, "rt") as handle:
+    with gzip.open(vcf_path, "rt", **VCF_TEXT) as handle:
         # Every '#' line is header and all precede the data records; stop at the
         # first data line (the header is tiny — a cheap eager read for compile).
         for line in handle:
@@ -900,7 +908,7 @@ def stream_filtered_vcf_text(
 
     def generate() -> Iterator[str]:
         yield from header_lines
-        with gzip.open(vcf_path, "rt") as handle:
+        with gzip.open(vcf_path, "rt", **VCF_TEXT) as handle:
             data_lines = (line for line in handle if not line.startswith("#"))
             yield from results_filters.stream_filtered_lines(data_lines, compiled)
 
@@ -972,7 +980,7 @@ def _read_csq_columns(vcf_path: FilePath) -> set[str] | None:
     the file can't be read."""
     header_lines: list[str] = []
     try:
-        with gzip.open(vcf_path, "rt") as handle:
+        with gzip.open(vcf_path, "rt", **VCF_TEXT) as handle:
             for line in handle:
                 if not line.startswith("#"):
                     break
@@ -1214,7 +1222,7 @@ def _read_row_slice(vcf_path: FilePath, row_offset: int, page_size: int) -> str:
     process = subprocess.Popen(
         ["bcftools", "view", str(vcf_path)],
         stdout=subprocess.PIPE,
-        text=True,
+        **VCF_TEXT,
     )
     try:
         for line_number, line in enumerate(process.stdout, start=1):
@@ -1317,7 +1325,7 @@ def get_results_from_path(
     last_record = min(page * page_size, total)
     row_offset = last_record + vcf_info.header_count
     vcf_headers = subprocess.check_output(  # fetch all header rows
-        ["bcftools", "view", "-h", str(vcf_path)], text=True
+        ["bcftools", "view", "-h", str(vcf_path)], **VCF_TEXT
     )
     vcf_slice = _read_row_slice(vcf_path, row_offset, last_record - first_record)
     vcf_stream = StringIO(vcf_headers + vcf_slice)

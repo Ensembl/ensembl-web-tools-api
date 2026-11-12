@@ -56,12 +56,14 @@ def _bgzf_block(payload: bytes) -> bytes:
     return header + cdata + trailer
 
 
-def write_bgzf(path, text: str, block_bytes: int = 64) -> list[int]:
+def write_bgzf(
+    path, text: str, block_bytes: int = 64, encoding: str = "utf-8"
+) -> list[int]:
     """Write `text` as BGZF, splitting the *uncompressed* stream into blocks of
     `block_bytes` (small, so lines cross block boundaries). Returns the packed
     virtual offset of the start of each line (ground truth, computed from block
     layout — independent of the reader under test)."""
-    data = text.encode()
+    data = text.encode(encoding)
     blocks = [data[i : i + block_bytes] for i in range(0, len(data), block_bytes)] or [b""]
 
     out = bytearray()
@@ -80,14 +82,23 @@ def write_bgzf(path, text: str, block_bytes: int = 64) -> list[int]:
     line_voffsets, cursor = [], 0
     for line in text.splitlines(keepends=True):
         line_voffsets.append(voffset(cursor))
-        cursor += len(line.encode())
+        cursor += len(line.encode(encoding))
     return line_voffsets
 
 
-def write_indexed_vcf(tmp_path, text: str, *, stride: int, block_bytes: int = 64):
+def write_indexed_vcf(
+    tmp_path,
+    text: str,
+    *,
+    stride: int,
+    block_bytes: int = 64,
+    encoding: str = "utf-8",
+):
     """Write text as BGZF + its `.pageidx.json` sidecar; return the vcf path."""
     vcf_path = tmp_path / "results.vcf.gz"
-    line_voffsets = write_bgzf(vcf_path, text, block_bytes=block_bytes)
+    line_voffsets = write_bgzf(
+        vcf_path, text, block_bytes=block_bytes, encoding=encoding
+    )
 
     lines = text.splitlines(keepends=True)
     data_voffsets = [

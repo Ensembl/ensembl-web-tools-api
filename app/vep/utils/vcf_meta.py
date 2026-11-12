@@ -7,6 +7,7 @@ get_results_from_path when no page-index sidecar is present.
 import subprocess
 from pydantic import FilePath
 from vep.models import vcf_results_model as model
+from vep.utils.vcf_text import VCF_TEXT
 
 META_FILE = "results_meta.json"
 
@@ -29,14 +30,14 @@ def _get_vcf_meta(vcf_path: FilePath) -> model.VcfMetadata:
         # filename like `a$(...).vcf` run whatever it liked. The `grep` and
         # `wc -l` the pipeline used are done here instead.
         stats_output = subprocess.check_output(
-            ["bcftools", "stats", str(vcf_path)], text=True
+            ["bcftools", "stats", str(vcf_path)], **VCF_TEXT
         )
         variant_count_str = next(
             (line for line in stats_output.splitlines() if "number of records:" in line),
             "",
         )
         header_output = subprocess.check_output(
-            ["bcftools", "view", "-h", str(vcf_path)], text=True
+            ["bcftools", "view", "-h", str(vcf_path)], **VCF_TEXT
         )
         header_count_str = str(len(header_output.splitlines()))
         try:

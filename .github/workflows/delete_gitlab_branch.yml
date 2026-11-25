@@ -3,6 +3,8 @@ name: Delete removed GitHub branch from GitLab remote
 on:
   delete:
 
+permissions: {}
+
 jobs:
   branch-delete:
     if: >-

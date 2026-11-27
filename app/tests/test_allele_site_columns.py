@@ -67,7 +67,7 @@ RECORDS = [
     ("chr19", 82664, "C", "T", [_row("T", "19:g.82664C>T")]),
     ("1", 1000, "AT", "A", [_row("-", "1:g.1001del")]),
     ("2", 500, "CA", "C,CAA", [
-        _row("-", "2:g.501del"), _row("A", "2:g.501dup"),
+        _row("-", "2:g.501del"), _row("AA", "2:g.501dup"),
     ]),
 ]
 
@@ -82,27 +82,31 @@ def _data(annotations, plugin):
     return next(a.data for a in annotations if a.plugin == plugin)
 
 
-def test_pseudo_columns_carry_the_responses_own_values():
+def test_pseudo_columns_carry_the_location_and_the_vcf_alleles():
     variants = _results(PROBE).variants
 
-    seen = []
-    for variant in variants:
-        for allele in variant.alternative_alleles:
-            expected = "|".join([
-                variant.location.region_name,
-                str(variant.location.start),
-                variant.reference_allele.allele_sequence,
-                allele.allele_sequence,
-            ])
-            assert _data(allele.annotations, "probe") == {"site": expected}
-            seen.append(expected)
+    seen = [
+        _data(allele.annotations, "probe")["site"]
+        for variant in variants
+        for allele in variant.alternative_alleles
+    ]
 
     assert seen == [
         "19|82664|C|T",
-        "1|1000|AT|-",
-        "2|500|CA|-",
-        "2|500|CA|A",
+        "1|1000|AT|A",
+        "2|500|CA|C",
+        "2|500|CA|CAA",
     ]
+
+
+def test_the_response_keeps_veps_allele_beside_the_vcf_alt():
+    alleles = [
+        allele.allele_sequence
+        for variant in _results(PROBE).variants
+        for allele in variant.alternative_alleles
+    ]
+
+    assert alleles == ["T", "-", "-", "AA"]
 
 
 def test_opentargets_variant_id_and_protvar_url_for_a_substitution():
@@ -119,8 +123,19 @@ def test_protvar_url_is_absent_for_an_indel():
     allele = _results(SPEC).variants[1].alternative_alleles[0]
     consequence = allele.predicted_molecular_consequences[0]
 
-    assert _data(allele.annotations, "opentargets")["variant_id"] == "1_1000_AT_-"
     assert _data(consequence.annotations, "protvar")["url"] is None
+
+
+def test_opentargets_variant_id_uses_the_vcf_alt_for_indels():
+    variants = _results(SPEC).variants
+
+    ids = [
+        _data(allele.annotations, "opentargets")["variant_id"]
+        for variant in variants[1:]
+        for allele in variant.alternative_alleles
+    ]
+
+    assert ids == ["1_1000_AT_A", "2_500_CA_C", "2_500_CA_CAA"]
 
 
 def test_a_results_call_ships_both_fields():

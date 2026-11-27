@@ -881,10 +881,11 @@ fails loudly at load, which is far cheaper than silently empty annotations.
 | `template` | `template, from?, pattern?` | one string from `{name}` placeholders: columns without `from`, or `pattern`'s groups matched against `from`; any empty part → null |
 
 Every transform can also read four pseudo-columns: `#CHROM`, `#POS`, `#REF` and
-`#ALT`. Each holds what the results response reports for the allele being
-parsed: the location's region and start, the reference allele and this
-alternative allele. Only a plugin that names one pays to have them added to the
-row. OpenTargets builds its variant id this way:
+`#ALT`. They describe the allele being parsed: the location's region and start,
+the VCF's REF and the VCF's ALT for this allele. `#ALT` is the VCF's value and
+not VEP's `Allele`, which drops an indel's first base, so `T` to `TGC` reads
+`TGC` here and `GC` in the response. Only a plugin that names one pays to have
+them added to the row. OpenTargets builds its variant id this way:
 `"template": "{#CHROM}_{#POS}_{#REF}_{#ALT}"`.
 
 `stack` deserves a note: it exists for a source that publishes the same shape

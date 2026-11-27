@@ -26,6 +26,7 @@ from vep.utils.csq import (
 )
 from vep.utils.vcf_meta import _get_vcf_meta
 from vep.utils.vcf_reader import read_records
+from vep.utils.tsv_export import _vcf_alts_by_csq_allele
 from vep.utils.spec_loader import (
     load_display_panels_sidecar,
     load_expected_columns_sidecar,
@@ -336,6 +337,7 @@ def _get_alt_allele_details(
     plans: dict | None = None,
     location: model.Location | None = None,
     unhandled_feature_types: Counter | None = None,
+    vcf_alt: str | None = None,
 ) -> model.AlternativeVariantAllele:
     """Build one alternate allele from matching CSQ entries.
 
@@ -348,9 +350,11 @@ def _get_alt_allele_details(
         allele_sequence = ""
     else:
         allele_sequence = alt
-    # Holds the allele's values in PSEUDO_COLUMNS order.
+    # Holds the allele's values in PSEUDO_COLUMNS order. #ALT is the VCF's ALT
+    # for a sequence allele, which keeps the base VEP strips from an indel.
+    site_alt = vcf_alt if vcf_alt and allele_sequence == alt else allele_sequence
     site = (
-        (location.region_name, str(location.start), ref, allele_sequence)
+        (location.region_name, str(location.start), ref, site_alt)
         if location is not None
         else None
     )
@@ -1418,11 +1422,14 @@ def _get_results_from_records(
                 end=record.POS + len(record.REF),
             )
 
+            alt_values = [_alt_value(a) for a in record.ALT]
             if "CSQ" not in record.INFO:
                 csq_strings = []
-                alt_allele_strings = [_alt_value(alt) for alt in record.ALT]
+                alt_allele_strings = alt_values
+                vcf_alts = {}
             else:
                 csq_strings = record.INFO["CSQ"]
+                vcf_alts = _vcf_alts_by_csq_allele(record.REF, alt_values)
                 # `dict.fromkeys`, not `set`: both deduplicate, but a set's
                 # iteration order depends on string hashes, which Python
                 # randomises per process. The alleles came back in a different
@@ -1450,11 +1457,11 @@ def _get_results_from_records(
                     plans,
                     location=location,
                     unhandled_feature_types=unhandled_feature_types,
+                    vcf_alt=vcf_alts.get(alt),
                 )
                 for alt in alt_allele_strings
             ]
 
-            alt_values = [_alt_value(a) for a in record.ALT]
             longest_alt = max(alt_values, key=len) if alt_values else ""
 
             variant = model.Variant(
